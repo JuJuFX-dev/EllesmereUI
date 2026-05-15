@@ -331,7 +331,7 @@ function Calc:GetPlayerCrests()
                     cap         = (info.maxQuantity and info.maxQuantity > 0) and info.maxQuantity or nil,
                     earned      = info.totalEarned or 0,
                     weeklyEarned = info.quantityEarnedThisWeek or 0,
-                    weeklyCap   = (info.maxEarnablePerWeek and info.maxEarnablePerWeek > 0) and info.maxEarnablePerWeek or nil,
+                    weeklyCap   = (info.canEarnPerWeek and info.maxWeeklyQuantity > 0) and info.maxWeeklyQuantity or nil,
                 }
             end
         end
@@ -1090,17 +1090,6 @@ summaryLbl:SetText("Missing Upgrades: -   Gold Needed: -")
 local refreshBtn               = MakeButton(crestSection, "Refresh",            140, 22, 0, 0)
 local scanBtn, scanBtnTxt      = MakeButton(crestSection, "Update at Upgrader", 160, 22, 0, 150)
 
--- ── FormatCost helper ─────────────────────────────────────────────────────────
-local function FormatCost(cAmt, gAmt, trackName)
-    if cAmt == 0 and gAmt == 0 then return "|cff20c020Max|r" end
-    local td = trackName and Data.tracks[trackName]
-    local cn = (td and td.crestName) or "Crest"
-    local parts = {}
-    if cAmt > 0 then parts[#parts + 1] = cAmt .. " " .. cn end
-    if gAmt  > 0 then parts[#parts + 1] = gAmt .. "g"    end
-    return table.concat(parts, "  ")
-end
-
 -- ── PopulateGear ──────────────────────────────────────────────────────────────
 PopulateGear = function()
     local gear  = Calc:GetEquippedGear()
@@ -1160,14 +1149,14 @@ PopulateGear = function()
             local pOk, pa, pb, pc, pd, pe, pf = pcall(Calc.GetItemUpgradeCost, Calc, item)
             local track, rank, crestCost, goldCost, maxIlvl, craftLabel
             if pOk then track, rank, crestCost, goldCost, maxIlvl, craftLabel = pa, pb, pc, pd, pe, pf end
-            local dt, dc, dm, du = "-", "-", "-", "-"
+            local dt, dm, du = "-", "-", "-"
             local isAtMax, shouldAdd = false, true
 
             if track == "Crafted" then
                 if hideCrafted then
                     shouldAdd = false
                 else
-                    dt = craftLabel or "Crafted"; dm = maxIlvl or item.ilvl; dc = "|cff888888Crafted|r"
+                    dt = craftLabel or "Crafted"; dm = maxIlvl or item.ilvl
                     isAtMax = true
                     du = "Crafted"
                 end
@@ -1185,11 +1174,10 @@ PopulateGear = function()
                 end
                 dt = track; dm = maxIlvl or item.ilvl
                 du = rank and (rank .. "/" .. (td and #td.ranks or 6)) or "-"
-                dc = FormatCost(crestCost or 0, goldCost or 0, track)
                 isAtMax = (rank == (td and #td.ranks or 6))
             else
                 if Calc:IsVoidforged(item.link) then
-                    dt = "Voidforged"; dm = item.ilvl; du = "Max"; dc = "|cff20c020Max|r"; isAtMax = true
+                    dt = "Voidforged"; dm = item.ilvl; du = "Max"; isAtMax = true
                 elseif item.ilvl >= 200 then
                     -- Use the shared helper so thresholds stay in one place.
                     local band, maxI = CraftedBandFromIlvl(item.ilvl)
@@ -1197,7 +1185,6 @@ PopulateGear = function()
                                or band == "Hero" and "Hero Craft" or "Crafted"
                     dt = label; dm = maxI
                     du = item.ilvl >= maxI and "Max" or "-"
-                    dc = item.ilvl >= maxI and "|cff20c020Max|r" or "|cff888888Crafted|r"
                     isAtMax = item.ilvl >= maxI
                 else
                     dm = item.ilvl; isAtMax = true
@@ -1208,9 +1195,9 @@ PopulateGear = function()
                 tileEntries[#tileEntries + 1] = {
                     slotName = sn,       slotID  = item.slot,
                     ilvl     = item.ilvl, max    = dm,
-                    upgrade  = du,       trackName = dt, cost = dc,
+                    upgrade  = du,       trackName = dt,
                     isAtMax  = isAtMax,  trackKey  = track,
-                    rank     = rank,     crestCost = crestCost, goldCost = goldCost,
+                    crestCost = crestCost, goldCost = goldCost,
                 }
             end
         end
