@@ -267,14 +267,27 @@ initFrame:SetScript("OnEvent", function(self)
             do
                 local currencyItems = {}
                 if C_CurrencyInfo and C_CurrencyInfo.GetCurrencyListSize then
-                    local listSize = C_CurrencyInfo.GetCurrencyListSize()
-                    for idx = 1, listSize do
+                    -- Expand all collapsed headers so we can see every currency,
+                    -- then restore them after scanning.
+                    local collapsedHeaders = {}
+                    local idx = 1
+                    while idx <= C_CurrencyInfo.GetCurrencyListSize() do
                         local info = C_CurrencyInfo.GetCurrencyListInfo(idx)
+                        if info and info.isHeader and not info.isHeaderExpanded then
+                            collapsedHeaders[#collapsedHeaders + 1] = idx
+                            C_CurrencyInfo.ExpandCurrencyList(idx, true)
+                        end
+                        idx = idx + 1
+                    end
+
+                    local listSize = C_CurrencyInfo.GetCurrencyListSize()
+                    for i = 1, listSize do
+                        local info = C_CurrencyInfo.GetCurrencyListInfo(i)
                         if info then
                             if info.isHeader then
                                 currencyItems[#currencyItems + 1] = { isHeader = true, label = info.name }
                             else
-                                local link = C_CurrencyInfo.GetCurrencyListLink(idx)
+                                local link = C_CurrencyInfo.GetCurrencyListLink(i)
                                 if link then
                                     local cID = C_CurrencyInfo.GetCurrencyIDFromLink(link)
                                     if cID then
@@ -287,6 +300,11 @@ initFrame:SetScript("OnEvent", function(self)
                                 end
                             end
                         end
+                    end
+
+                    -- Restore collapsed headers (iterate in reverse so indices stay valid)
+                    for i = #collapsedHeaders, 1, -1 do
+                        C_CurrencyInfo.ExpandCurrencyList(collapsedHeaders[i], false)
                     end
                 end
 

@@ -9,6 +9,7 @@ local PAGE_REMINDERS = "Auras, Buffs & Consumables"
 local PAGE_TALENTS   = "Talent Reminders"
 local PAGE_UNLOCK    = "Unlock Mode"
 
+local SECTION_CORE         = "CORE"
 local SECTION_DISPLAY      = "DISPLAY"
 local SECTION_RAID_BUFFS   = "RAID BUFFS"
 local SECTION_AURAS        = "AURAS"
@@ -735,12 +736,12 @@ initFrame:SetScript("OnEvent", function(self)
         parent._showRowDivider = true
 
         -----------------------------------------------------------------------
-        --  DISPLAY section
+        --  CORE section
         -----------------------------------------------------------------------
-        local displaySection
-        displaySection, h = W:SectionHeader(parent, SECTION_DISPLAY, y);  y = y - h
+        local coreSection
+        coreSection, h = W:SectionHeader(parent, SECTION_CORE, y);  y = y - h
 
-        -- Row 1: Enable Reminders | Glow Type (+ inline swatch)
+        -- Row 1: Enable Reminders | Scale
         local row1
         row1, h = W:DualRow(parent, y,
             { type="toggle", text="Enable AuraBuff Reminders",
@@ -749,6 +750,75 @@ initFrame:SetScript("OnEvent", function(self)
               setValue=function(v)
                   local d = DDB(); if not d then return end; d.remindersEnabled = v
                   RefreshAll()
+                  EllesmereUI:RefreshPage()
+              end },
+            { type="slider", text="Scale", min=0.5, max=3.0, step=0.05,
+              getValue=function() local d = DDB(); return d and d.scale or 1.0 end,
+              setValue=function(v)
+                  local d = DDB(); if not d then return end; d.scale = v
+                  RefreshAll()
+                  UpdatePreviewHeader()
+              end }
+        );  y = y - h
+
+        -- Row 2: Party Show Consumes Below | Raid Show Consumes Below
+        local threshRow
+        threshRow, h = W:DualRow(parent, y,
+            { type="slider", text="Party: Show Consumes Below", min=0, max=60, step=1,
+              trackWidth=120,
+              tooltip="In Mythic Dungeons, show consumables reminders\nwhen the remaining buff time is less than this amount",
+              getValue=function() local d = DDB(); return d and d.showUnderDurationDungeon or 0 end,
+              setValue=function(v)
+                  local d = DDB(); if not d then return end; d.showUnderDurationDungeon = v
+                  RefreshAll()
+                  EllesmereUI:RefreshPage()
+              end },
+            { type="slider", text="Raid: Show Consumes Below", min=0, max=15, step=1,
+              trackWidth=120,
+              tooltip="In Raids, show consumables reminders\nwhen the remaining buff time is less than this amount",
+              getValue=function() local d = DDB(); return d and d.showUnderDurationRaid or 0 end,
+              setValue=function(v)
+                  local d = DDB(); if not d then return end; d.showUnderDurationRaid = v
+                  RefreshAll()
+                  EllesmereUI:RefreshPage()
+              end }
+        );  y = y - h
+
+        -- Add "(min)" suffix in smaller, dimmer text on both sliders
+        for _, rgn in ipairs({threshRow._leftRegion, threshRow._rightRegion}) do
+            local labelText = rgn == threshRow._leftRegion
+                and "Party: Show Consumes Below" or "Raid: Show Consumes Below"
+            local suffix = rgn:CreateFontString(nil, "OVERLAY")
+            suffix:SetFont(EllesmereUI.EXPRESSWAY, 11, "")
+            suffix:SetTextColor(1, 1, 1, 0.35)
+            local found
+            for i = 1, rgn:GetNumRegions() do
+                local reg = select(i, rgn:GetRegions())
+                if reg and reg.GetText and reg:GetText() == labelText then
+                    found = reg; break
+                end
+            end
+            if found then
+                suffix:SetPoint("LEFT", found, "RIGHT", 5, -1)
+            end
+            suffix:SetText("(min)")
+        end
+
+        -----------------------------------------------------------------------
+        --  DISPLAY section
+        -----------------------------------------------------------------------
+        local displaySection
+        displaySection, h = W:SectionHeader(parent, SECTION_DISPLAY, y);  y = y - h
+
+        -- Row 1: Show Text (+ inline swatch + cog) | Glow Type (+ inline swatch)
+        local row2
+        row2, h = W:DualRow(parent, y,
+            { type="toggle", text="Show Text",
+              getValue=function() local d = DDB(); return d and d.showText end,
+              setValue=function(v)
+                  local d = DDB(); if not d then return end; d.showText = v
+                  RefreshAll()
+                  UpdatePreviewHeader()
                   EllesmereUI:RefreshPage()
               end },
             { type="dropdown", text="Glow Type",
@@ -762,9 +832,9 @@ initFrame:SetScript("OnEvent", function(self)
               end }
         );  y = y - h
 
-        -- Inline color swatch on Glow Type (right of row 1)
+        -- Inline color swatch on Glow Type (right of row 3)
         do
-            local rgn = row1._rightRegion
+            local rgn = row2._rightRegion
             local swatch = EllesmereUI.BuildColorSwatch(rgn, rgn:GetFrameLevel()+5,
                 function()
                     local d = DDB()
@@ -802,26 +872,6 @@ initFrame:SetScript("OnEvent", function(self)
             UpdateSwatchDisabled()
             EllesmereUI.RegisterWidgetRefresh(UpdateSwatchDisabled)
         end
-
-        -- Row 2: Show Text (+ inline swatch + cog) | Scale
-        local row2
-        row2, h = W:DualRow(parent, y,
-            { type="toggle", text="Show Text",
-              getValue=function() local d = DDB(); return d and d.showText end,
-              setValue=function(v)
-                  local d = DDB(); if not d then return end; d.showText = v
-                  RefreshAll()
-                  UpdatePreviewHeader()
-                  EllesmereUI:RefreshPage()
-              end },
-            { type="slider", text="Scale", min=0.5, max=3.0, step=0.05,
-              getValue=function() local d = DDB(); return d and d.scale or 1.0 end,
-              setValue=function(v)
-                  local d = DDB(); if not d then return end; d.scale = v
-                  RefreshAll()
-                  UpdatePreviewHeader()
-              end }
-        );  y = y - h
 
         -- Inline color swatch + cog on Show Text (left of row 2)
         do
@@ -897,7 +947,7 @@ initFrame:SetScript("OnEvent", function(self)
             EllesmereUI.RegisterWidgetRefresh(UpdateTextInlinesDisabled)
         end
 
-        -- Row 3: Icon Spacing (+ directions cog) | Attach Important Buffs to Cursor
+        -- Row 4: Icon Spacing (+ directions cog) | Attach Important Buffs to Cursor
         local row3
         row3, h = W:DualRow(parent, y,
             { type="slider", text="Icon Spacing", min=0, max=50, step=1,
@@ -908,6 +958,7 @@ initFrame:SetScript("OnEvent", function(self)
                   RelayoutPreviewIcons()
               end },
             { type="toggle", text="Attach Important Buffs to Cursor",
+              tooltip="This option only affects Raid Buffs and Paladin Beacons",
               getValue=function() local d = DDB(); return d and d.cursorAttach end,
               setValue=function(v) local d = DDB(); if not d then return end; d.cursorAttach = v; RefreshAll() end }
         );  y = y - h
@@ -927,7 +978,7 @@ initFrame:SetScript("OnEvent", function(self)
             MakeCogBtn(rgn, cogShow, nil, EllesmereUI.DIRECTIONS_ICON)
         end
 
-        -- Row 4: Opacity | Frame Strata
+        -- Row 5: Opacity | Frame Strata
         _, h = W:DualRow(parent, y,
             { type="slider", text="Opacity", min=0, max=1, step=0.05,
               getValue=function() local d = DDB(); return d and d.opacity or 1 end,
@@ -942,31 +993,6 @@ initFrame:SetScript("OnEvent", function(self)
               setValue=function(v)
                   local d = DDB(); if not d then return end; d.frameStrata = v
                   if _G._EABR_ApplyStrata then _G._EABR_ApplyStrata() end
-              end }
-        );  y = y - h
-
-        -- Row 5: Opacity | Frame Strata
-        _, h = W:DualRow(parent, y,
-            { type="slider", text="Dungeon: Show Buffs With Duration Less Than:", min=0, max=60, step=1,
-              tooltip="In a Mythic 0 dungeon, Show buffs when the duration is less than this many minutes. Set to 0 to disable.",
-              getValue=function() local d = DDB(); return  d and d.showUnderDurationDungeon or 0 end,
-              setValue=function(v)
-                  local d = DDB(); if not d then return end; d.showUnderDurationDungeon = v
-                  RefreshAll()
-                  EllesmereUI:RefreshPage()
-              end }
-        );  y = y - h
-
-        
-        -- Row 6: Opacity | Frame Strata
-        _, h = W:DualRow(parent, y,
-            { type="slider", text="Raid: Show Buffs With Duration Less Than:", min=0, max=15, step=1,
-              tooltip="In a Raid, Show buffs when the duration is less than this many minutes. Set to 0 to disable.",
-              getValue=function() local d = DDB(); return  d and d.showUnderDurationRaid or 0 end,
-              setValue=function(v)
-                  local d = DDB(); if not d then return end; d.showUnderDurationRaid = v
-                  RefreshAll()
-                  EllesmereUI:RefreshPage()
               end }
         );  y = y - h
 

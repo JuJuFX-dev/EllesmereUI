@@ -1159,8 +1159,8 @@ local defaults = {
             opacity = 1.0,
             frameStrata = "MEDIUM",
             cursorAttach = false,
-            showUnderDurationDungeon = 0,
-            showUnderDurationRaid = 0,
+            showUnderDurationDungeon = 20,
+            showUnderDurationRaid = 10,
         },
         raidBuffs = {
             showNonInstanced = false,
@@ -1852,8 +1852,14 @@ local specialsActive = inInstance or co.showSpecialsNonInstanced
             if playerClass == "PALADIN" then
                 for _, rite in ipairs(PALADIN_RITES) do
                     if co.enabled[rite.key] and Known(rite.castSpell) then
-                        local hasMH = GetWeaponEnchantInfo()
+                        local hasMH, mhExpire = GetWeaponEnchantInfo()
+                        local show = false
                         if not hasMH then
+                            show = true
+                        elseif mhExpire and mhExpire > 0 and IsUnderDuration(3600, mhExpire / 1000 + GetTime()) then
+                            show = true
+                        end
+                        if show then
                             local e = AcquireEntry()
                             e.mode = "spell"; e.spellID = rite.castSpell
                             e.label = ShortLabel(rite.name)
@@ -1877,13 +1883,15 @@ local specialsActive = inInstance or co.showSpecialsNonInstanced
                         if imbue.wepEnchID then
                             for _, eid in ipairs(imbue.wepEnchID) do
                                 if eid > 0 and ((hasMH and mhEnchID == eid) or (hasOH and ohEnchID == eid)) then
-                                    if not mhExpire then
-                                        mhExpire = math.huge -- if expiration is missing, assume it's active (pre-9.2 client versions)
+                                    -- Use the matched hand's expire time, not min of both.
+                                    -- Unenchanted hand returns 0, which would always trigger.
+                                    local matchExpire
+                                    if hasMH and mhEnchID == eid then
+                                        matchExpire = mhExpire
+                                    else
+                                        matchExpire = ohExpire
                                     end
-                                    if not ohExpire then
-                                        ohExpire = math.huge
-                                    end
-                                    if IsUnderDuration(3600, math.min(mhExpire, ohExpire)/1000 + GetTime()) then -- the expire duration is different than this function assumes given in ms remaining. Convert to the expected value by dividing by 1000 adding time 
+                                    if matchExpire and matchExpire > 0 and IsUnderDuration(3600, matchExpire / 1000 + GetTime()) then
                                         found = false
                                     else
                                         found = true
@@ -2228,6 +2236,7 @@ end
 -- Reusable tables wiped each Refresh() call to avoid per-call allocation.
 -- Wrapped to save file-scope local slots (200 limit).
 local _refreshMissing, _wasResting = {}, false
+local UpdateDurationTicker  -- forward-declare; defined after RequestRefresh
 
 local function Refresh()
     _cachedOutline = nil
@@ -2477,6 +2486,8 @@ local function Refresh()
             _memProbe.display = 0; _memProbe.total = 0
         end
     end
+
+    UpdateDurationTicker()
 end
 
 local REFRESH_THROTTLE_COMBAT = 0.5
@@ -2499,6 +2510,35 @@ local function RequestRefresh()
     elseif not _refreshTimerActive then
         _refreshTimerActive = true
         C_Timer.After(throttle - elapsed, _doRefresh)
+    end
+end
+
+-- Duration-threshold ticker: polls every 15s so expiring buffs trigger
+-- reminders even when no event fires. Only runs when OOC, in a dungeon
+-- or raid, not in an active keystone, and a threshold is set.
+local _durationTicker
+UpdateDurationTicker = function()
+    local shouldTick = false
+    if db and not InCombat() and not InMythicPlusKey() then
+        local d = db.profile.display
+        if d and ((d.showUnderDurationDungeon or 0) > 0
+              or  (d.showUnderDurationRaid or 0) > 0) then
+            if (_cachedIType == "party" or _cachedIType == "raid") then
+                shouldTick = true
+            end
+        end
+    end
+    if shouldTick and not _durationTicker then
+        _durationTicker = C_Timer.NewTicker(15, function()
+            if InCombat() or InMythicPlusKey() then
+                if _durationTicker then _durationTicker:Cancel(); _durationTicker = nil end
+                return
+            end
+            RequestRefresh()
+        end)
+    elseif not shouldTick and _durationTicker then
+        _durationTicker:Cancel()
+        _durationTicker = nil
     end
 end
 

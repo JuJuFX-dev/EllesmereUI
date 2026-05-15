@@ -3986,12 +3986,12 @@ local function SkinCharacterSheet()
     end
 
     local socketWatcher = CreateFrame("Frame")
+    -- Low-frequency events: always registered (equip changes, login).
     socketWatcher:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
     socketWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
-    socketWatcher:RegisterEvent("UNIT_INVENTORY_CHANGED")
-    socketWatcher:RegisterEvent("GET_ITEM_INFO_RECEIVED")
-    socketWatcher:RegisterEvent("SOCKET_INFO_UPDATE")
-    socketWatcher:RegisterEvent("TOOLTIP_DATA_UPDATE")
+    -- High-frequency events (TOOLTIP_DATA_UPDATE, GET_ITEM_INFO_RECEIVED,
+    -- UNIT_INVENTORY_CHANGED, SOCKET_INFO_UPDATE) are registered in OnShow
+    -- and unregistered in OnHide so they cost zero when the sheet is closed.
     socketWatcher:SetScript("OnEvent", function(_, event, arg1)
         if EllesmereUIDB and EllesmereUIDB.themedCharacterSheet == false then return end
         if event == "UNIT_INVENTORY_CHANGED" and arg1 ~= "player" then return end
@@ -4010,16 +4010,16 @@ local function SkinCharacterSheet()
 
     -- Hook frame show/hide
     frame:HookScript("OnShow", function()
+        -- Register high-frequency events only while the sheet is visible.
+        socketWatcher:RegisterEvent("TOOLTIP_DATA_UPDATE")
+        socketWatcher:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+        socketWatcher:RegisterEvent("UNIT_INVENTORY_CHANGED")
+        socketWatcher:RegisterEvent("SOCKET_INFO_UPDATE")
         -- Only refresh sockets and show container if on character tab
         local isCharacterTab = (frame.selectedTab or 1) == 1
         if isCharacterTab then
             RefreshAllSocketIcons()
             QueueSocketRefresh()
-            C_Timer.After(0.75, function()
-                if frame and frame:IsShown() and (frame.selectedTab or 1) == 1 then
-                    RefreshAllSocketIcons()
-                end
-            end)
             globalSocketContainer:Show()
         else
             globalSocketContainer:Hide()
@@ -4041,6 +4041,11 @@ local function SkinCharacterSheet()
     end)
 
     frame:HookScript("OnHide", function()
+        -- Unregister high-frequency events so they cost zero while closed.
+        socketWatcher:UnregisterEvent("TOOLTIP_DATA_UPDATE")
+        socketWatcher:UnregisterEvent("GET_ITEM_INFO_RECEIVED")
+        socketWatcher:UnregisterEvent("UNIT_INVENTORY_CHANGED")
+        socketWatcher:UnregisterEvent("SOCKET_INFO_UPDATE")
         if _socketRefreshTimer then
             _socketRefreshTimer:Cancel()
             _socketRefreshTimer = nil

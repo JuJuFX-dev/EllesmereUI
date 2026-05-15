@@ -5637,11 +5637,79 @@ function EllesmereUI.BuildVisOptsCBDropdown(parentFrame, ddW, fLevel, items, get
         child:SetWidth(ddW - 2)
         child:SetHeight(contentH)
         sf:SetScrollChild(child)
+        -- Thin scrollbar track (4px, right side, matching standard dropdown)
+        local cbTrack = CreateFrame("Frame", nil, sf)
+        cbTrack:SetWidth(4)
+        cbTrack:SetPoint("TOPRIGHT", sf, "TOPRIGHT", -4, -4)
+        cbTrack:SetPoint("BOTTOMRIGHT", sf, "BOTTOMRIGHT", -4, 4)
+        cbTrack:SetFrameLevel(sf:GetFrameLevel() + 2)
+        local cbTrackBg = cbTrack:CreateTexture(nil, "BACKGROUND")
+        cbTrackBg:SetAllPoints()
+        cbTrackBg:SetColorTexture(1, 1, 1, 0.02)
+
+        local cbThumb = CreateFrame("Button", nil, cbTrack)
+        cbThumb:SetWidth(4)
+        cbThumb:SetFrameLevel(cbTrack:GetFrameLevel() + 1)
+        cbThumb:EnableMouse(true)
+        cbThumb:RegisterForDrag("LeftButton")
+        local cbThumbBg = cbThumb:CreateTexture(nil, "ARTWORK")
+        cbThumbBg:SetAllPoints()
+        cbThumbBg:SetColorTexture(1, 1, 1, 0.27)
+
+        local function SafeMaxScroll()
+            return math.max(0, child:GetHeight() - sf:GetHeight())
+        end
+
+        local function UpdateCBThumb()
+            local maxScroll = SafeMaxScroll()
+            if maxScroll <= 0 then cbTrack:Hide(); return end
+            cbTrack:Show()
+            local trackH = cbTrack:GetHeight()
+            local visH = sf:GetHeight()
+            local ratio = visH / (visH + maxScroll)
+            local thumbH = math.max(20, trackH * ratio)
+            cbThumb:SetHeight(thumbH)
+            local scrollRatio = (tonumber(sf:GetVerticalScroll()) or 0) / maxScroll
+            local maxTravel = trackH - thumbH
+            cbThumb:ClearAllPoints()
+            cbThumb:SetPoint("TOP", cbTrack, "TOP", 0, -(scrollRatio * maxTravel))
+        end
+
+        -- Thumb drag
+        cbThumb:SetScript("OnMouseDown", function(self, button)
+            if button ~= "LeftButton" then return end
+            local _, cursorY = GetCursorPosition()
+            local dragStartY = cursorY / self:GetEffectiveScale()
+            local dragStartScroll = sf:GetVerticalScroll()
+            self:SetScript("OnUpdate", function(self2)
+                if not IsMouseButtonDown("LeftButton") then
+                    self2:SetScript("OnUpdate", nil)
+                    return
+                end
+                local _, cy = GetCursorPosition()
+                cy = cy / self2:GetEffectiveScale()
+                local deltaY = dragStartY - cy
+                local trackH = cbTrack:GetHeight()
+                local maxTravel = trackH - self2:GetHeight()
+                if maxTravel <= 0 then return end
+                local maxScroll = SafeMaxScroll()
+                local newScroll = math.max(0, math.min(maxScroll,
+                    dragStartScroll + (deltaY / maxTravel) * maxScroll))
+                sf:SetVerticalScroll(newScroll)
+                UpdateCBThumb()
+            end)
+        end)
+        cbThumb:SetScript("OnMouseUp", function(self, button)
+            if button ~= "LeftButton" then return end
+            self:SetScript("OnUpdate", nil)
+        end)
+
         sf:SetScript("OnMouseWheel", function(self, delta)
-            local maxScroll = child:GetHeight() - self:GetHeight()
+            local maxScroll = SafeMaxScroll()
             if maxScroll <= 0 then return end
             local cur = self:GetVerticalScroll()
             self:SetVerticalScroll(math.max(0, math.min(maxScroll, cur - delta * ITEM_H)))
+            UpdateCBThumb()
         end)
         local itemParent = child
 
@@ -5795,12 +5863,16 @@ function EllesmereUI.BuildVisOptsCBDropdown(parentFrame, ddW, fLevel, items, get
                 if lastHdr and not hdrHasVisible then lastHdr:Hide() end
                 child:SetHeight(math.max(1, math.abs(visY)))
                 sf:SetVerticalScroll(0)
+                UpdateCBThumb()
             end)
             menu:HookScript("OnShow", function()
                 searchEdit:SetText("")
                 searchEdit:SetFocus()
+                UpdateCBThumb()
             end)
         end
+
+        menu:HookScript("OnShow", UpdateCBThumb)
 
         ddBtn._ddMenu = menu
     end

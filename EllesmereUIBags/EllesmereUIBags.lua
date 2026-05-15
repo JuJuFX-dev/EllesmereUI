@@ -5054,42 +5054,66 @@ local function StartAddon()
     EUI_Bags:RegisterEvent("ITEM_LOCK_CHANGED")
     EUI_Bags:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
 
-    -- When the user toggles "Show on Backpack" in Blizzard's currency tab,
-    -- auto-add newly tracked currencies to our internal order table
-    -- Sync our internal currency list FROM Blizzard when user changes tracking
-    -- in the Blizzard currency tab (never write TO Blizzard)
+    -- Seed currencyOrder from Blizzard's tracked currencies on first load
+    if EllesmereUIDB and C_CurrencyInfo and C_CurrencyInfo.GetBackpackCurrencyInfo then
+        if not EllesmereUIDB.currencyOrder then EllesmereUIDB.currencyOrder = {} end
+        local co = EllesmereUIDB.currencyOrder
+        -- Only seed if our table is empty (first install or fresh profile)
+        local hasAny = false
+        for _ in pairs(co) do hasAny = true; break end
+        if not hasAny then
+            local order = 0
+            for i = 1, 20 do
+                local info = C_CurrencyInfo.GetBackpackCurrencyInfo(i)
+                if not info then break end
+                order = order + 1
+                co[info.currencyTypesID] = order
+            end
+        end
+    end
+
+    -- Snapshot Blizzard's tracked currencies so we can diff on change.
+    local _lastBlizzSet = {}
+    local function ReadBlizzSet()
+        local s = {}
+        if C_CurrencyInfo and C_CurrencyInfo.GetBackpackCurrencyInfo then
+            for i = 1, 20 do
+                local info = C_CurrencyInfo.GetBackpackCurrencyInfo(i)
+                if not info then break end
+                s[info.currencyTypesID] = true
+            end
+        end
+        return s
+    end
+    _lastBlizzSet = ReadBlizzSet()
+
+    -- Sync our currency list when user checks/unchecks in Blizzard's currency tab.
+    -- Newly checked currencies get added. Newly unchecked currencies get removed.
+    -- Currencies added through our dropdown (never in Blizzard's set) are untouched.
     if EventRegistry and EventRegistry.RegisterCallback then
         EventRegistry:RegisterCallback("TokenFrame.OnTokenWatchChanged", function()
             if not EllesmereUIDB then return end
             if not EllesmereUIDB.currencyOrder then EllesmereUIDB.currencyOrder = {} end
             local co = EllesmereUIDB.currencyOrder
-            if C_CurrencyInfo and C_CurrencyInfo.GetBackpackCurrencyInfo then
-                -- Build set of what Blizzard currently tracks
-                local blizzSet = {}
-                for i = 1, 20 do
-                    local info = C_CurrencyInfo.GetBackpackCurrencyInfo(i)
-                    if not info then break end
-                    blizzSet[info.currencyTypesID] = true
-                end
-                -- Add newly tracked currencies
-                for cID in pairs(blizzSet) do
-                    if not co[cID] then
-                        local maxOrder = 0
-                        for _, ord in pairs(co) do
-                            if type(ord) == "number" and ord > maxOrder then maxOrder = ord end
-                        end
-                        co[cID] = maxOrder + 1
+            local blizzSet = ReadBlizzSet()
+            -- Add newly checked currencies
+            for cID in pairs(blizzSet) do
+                if not co[cID] then
+                    local maxOrder = 0
+                    for _, ord in pairs(co) do
+                        if type(ord) == "number" and ord > maxOrder then maxOrder = ord end
                     end
-                end
-                -- Remove currencies the user untracked in Blizzard
-                for cID in pairs(co) do
-                    if not blizzSet[cID] then
-                        co[cID] = nil
-                    end
+                    co[cID] = maxOrder + 1
                 end
             end
+            -- Remove currencies that were in Blizzard's set before but aren't now
+            for cID in pairs(_lastBlizzSet) do
+                if not blizzSet[cID] then
+                    co[cID] = nil
+                end
+            end
+            _lastBlizzSet = blizzSet
             if EUI_Bags:IsVisible() then UpdateCurrencyDisplays() end
-            -- Refresh options dropdown if open
             if EllesmereUI and EllesmereUI.RefreshPage then EllesmereUI:RefreshPage() end
         end, EUI_Bags)
     end

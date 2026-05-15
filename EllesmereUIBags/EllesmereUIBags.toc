@@ -4,9 +4,9 @@
 ## Group: EllesmereUI
 ## Notes: Custom inventory UI with categories, item levels, and quality borders
 ## Author: Ellesmere
-## Version: 7.7.1
+## Version: 7.7.2
 ## Dependencies: EllesmereUI
-## SavedVariables: EllesmereUIDB
+## SavedVariables: EllesmereUIBagsDB
 ## IconTexture: Interface\AddOns\EllesmereUI\media\eg-logo.tga
 
 # Options
