@@ -109,6 +109,9 @@ local _euicProfileRef = nil
 -- every subsequent DB()/Opts() call is a simple local read with no table traversal.
 local _dbCache   = nil
 local _optsCache = nil
+-- Character key ("Name - Realm") set at PLAYER_LOGIN; used to scope DB() data
+-- per character so alts on the same profile don't share queue/scan data.
+local _charKey   = nil
 
 local function DB()
     if _dbCache then return _dbCache end
@@ -1649,23 +1652,25 @@ _firstRunEvt:SetScript("OnEvent", function(self)
         local profileDB = EllesmereUI.Lite.NewDB("EllesmereUIQoLDB", {
             profile = {
                 upgradeCalcOpts = {},
-                upgradeCalc     = {
-                    cache      = { slots = {}, ts = 0 },
-                    calibrated = false,
-                },
+                chars           = {},
             },
         })
         _euicProfileRef = profileDB.profile
-        -- Populate the direct sub-table caches now so DB()/Opts() are O(1)
-        -- for the rest of the session with no repeated table traversal.
+        -- Store character data under a per-character key so alts on the same
+        -- profile each have their own queue, scan cache, and crest offsets.
+        local charKey = UnitName("player") .. " - " .. GetRealmName()
+        _charKey = charKey
         local store = _euicProfileRef
-        store.upgradeCalc       = store.upgradeCalc      or {}
-        local db                = store.upgradeCalc
-        db.cache                = db.cache               or { slots = {}, ts = 0 }
-        db.calibrated           = db.calibrated          or false
-        db.queue                = db.queue               or {}
-        db.crestManualAdds      = db.crestManualAdds     or {}
-        store.upgradeCalcOpts   = store.upgradeCalcOpts  or {}
+        store.chars             = store.chars           or {}
+        store.chars[charKey]    = store.chars[charKey]  or {}
+        local charStore         = store.chars[charKey]
+        charStore.upgradeCalc   = charStore.upgradeCalc or {}
+        local db                = charStore.upgradeCalc
+        db.cache                = db.cache              or { slots = {}, ts = 0 }
+        db.calibrated           = db.calibrated         or false
+        db.queue                = db.queue              or {}
+        db.crestManualAdds      = db.crestManualAdds    or {}
+        store.upgradeCalcOpts   = store.upgradeCalcOpts or {}
         _dbCache   = db
         _optsCache = store.upgradeCalcOpts
     end
