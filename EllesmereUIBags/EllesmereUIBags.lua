@@ -1032,13 +1032,15 @@ end
 -------------------------------------------------------------------------------
 local lastCapturedGold = 0
 local goldCapturePending = false
+local lastCapturedWarbandGold = -1
+local warbandGoldCapturePending = false
 
-local function FormatNumberWithDots(num)
+local function FormatNumberWithCommas(num)
     local str = tostring(math.floor(num))
     local result = ""
     local count = 0
     for i = #str, 1, -1 do
-        if count > 0 and count % 3 == 0 then result = "." .. result end
+        if count > 0 and count % 3 == 0 then result = "," .. result end
         result = str:sub(i, i) .. result
         count = count + 1
     end
@@ -1051,7 +1053,7 @@ local function FormatGoldWithPadding(gold)
     local copperAmount = gold % 100
     local result = ""
     if goldAmount > 0 then
-        result = FormatNumberWithDots(goldAmount) .. "|TInterface\\MoneyFrame\\UI-GoldIcon:17|t "
+        result = FormatNumberWithCommas(goldAmount) .. "|TInterface\\MoneyFrame\\UI-GoldIcon:17|t "
     end
     result = result .. string.format("%02d", silverAmount) .. "|TInterface\\MoneyFrame\\UI-SilverIcon:17|t "
     result = result .. string.format("%02d", copperAmount) .. "|TInterface\\MoneyFrame\\UI-CopperIcon:17|t"
@@ -1060,7 +1062,21 @@ end
 
 local function FormatGoldOnly(gold)
     local goldAmount = math.floor(gold / 10000)
-    return FormatNumberWithDots(goldAmount) .. "|TInterface\\MoneyFrame\\UI-GoldIcon:14|t"
+    return FormatNumberWithCommas(goldAmount) .. "|TInterface\\MoneyFrame\\UI-GoldIcon:14|t"
+end
+
+local WARBANK_GOLD_R, WARBANK_GOLD_G, WARBANK_GOLD_B = 1, 0.8, 0.5
+
+local function UpdateBagMoneyDisplay()
+    if not EUI_Bags.Money then return end
+    MoneyFrame_UpdateMoney(EUI_Bags.Money)
+    local goldBtn = _G["EUI_BagMoneyFrameGoldButton"]
+    if goldBtn then
+        local txt = goldBtn:GetFontString()
+        if txt then
+            txt:SetText(FormatNumberWithCommas(math.floor(GetMoney() / 10000)))
+        end
+    end
 end
 
 local function GetCharacterIdentifier()
@@ -1076,11 +1092,6 @@ local function ResetCurrentCharacterGold()
     if not EllesmereUIDB or not EllesmereUIDB.characterGold then return end
     local charID = GetCharacterIdentifier()
     EllesmereUIDB.characterGold[charID] = nil
-end
-
-local function ResetAllGoldData()
-    if not EllesmereUIDB then return end
-    EllesmereUIDB.characterGold = {}
 end
 
 local function CaptureCurrentCharacterGold()
@@ -1103,6 +1114,44 @@ local function CaptureCurrentCharacterGold()
         lastCapturedGold = currentGold
         goldCapturePending = false
     end)
+end
+
+local function CaptureWarbandGold()
+    if not C_Bank or not C_Bank.FetchDepositedMoney then return end
+    InitializeCharacterGold()
+    local gold = C_Bank.FetchDepositedMoney(Enum.BankType.Account) or 0
+    if gold == lastCapturedWarbandGold then return end
+    if warbandGoldCapturePending then return end
+    lastCapturedWarbandGold = gold
+    warbandGoldCapturePending = true
+    C_Timer.After(0.5, function()
+        local currentGold = C_Bank.FetchDepositedMoney(Enum.BankType.Account) or 0
+        EllesmereUIDB.warbandGold = {
+            gold = currentGold,
+            lastUpdated = time(),
+        }
+        lastCapturedWarbandGold = currentGold
+        warbandGoldCapturePending = false
+    end)
+end
+
+EUI_Bags.CaptureWarbandGold = CaptureWarbandGold
+
+local function CaptureTrackedGold()
+    if EllesmereUIDB and EllesmereUIDB.enableGoldTracking == false then return end
+    CaptureCurrentCharacterGold()
+    CaptureWarbandGold()
+end
+
+local function ResetAllGoldData()
+    if not EllesmereUIDB then return end
+    EllesmereUIDB.characterGold = {}
+    EllesmereUIDB.warbandGold = nil
+    lastCapturedGold = -1
+    lastCapturedWarbandGold = -1
+    goldCapturePending = false
+    warbandGoldCapturePending = false
+    CaptureTrackedGold()
 end
 
 -------------------------------------------------------------------------------
@@ -1185,20 +1234,27 @@ local function StripRealm(name)
 end
 
 local function ShowGoldTooltip(anchor)
-    if not EllesmereUIDB or not EllesmereUIDB.characterGold then return end
+    if not EllesmereUIDB then return end
     if EllesmereUIDB.enableGoldTracking == false then return end
 
     local totalGold = 0
     local charList = {}
-    for charID, data in pairs(EllesmereUIDB.characterGold) do
-        charList[#charList + 1] = { id = charID, data = data }
-        totalGold = totalGold + data.gold
+    if EllesmereUIDB.characterGold then
+        for charID, data in pairs(EllesmereUIDB.characterGold) do
+            charList[#charList + 1] = { id = charID, data = data }
+            totalGold = totalGold + data.gold
+        end
     end
-    if #charList == 0 then return end
     table.sort(charList, function(a, b) return a.id < b.id end)
 
-    -- +1 for total row
+    local warbandGold = EllesmereUIDB.warbandGold and EllesmereUIDB.warbandGold.gold
+    if warbandGold then
+        totalGold = totalGold + warbandGold
+    end
+    if #charList == 0 and not warbandGold then return end
+
     local rowCount = #charList + 1
+    if warbandGold then rowCount = rowCount + 1 end
     EnsureGoldRows(rowCount)
     local tt = GetGoldTooltip()
 
@@ -1219,8 +1275,21 @@ local function ShowGoldTooltip(anchor)
         if gw > colWidths[2] then colWidths[2] = gw end
     end
 
-    -- Total row
     local totalRow = #charList + 1
+    if warbandGold then
+        local nameFS = _goldTTRows[totalRow][0]
+        local goldFS = _goldTTRows[totalRow][1]
+        nameFS:SetText("|cffffcc80Warbank|r")
+        goldFS:SetText(FormatGoldOnly(warbandGold))
+        goldFS:SetTextColor(WARBANK_GOLD_R, WARBANK_GOLD_G, WARBANK_GOLD_B, 1)
+        nameFS:Show(); goldFS:Show()
+        local nw = nameFS:GetStringWidth() or 0
+        local gw = goldFS:GetStringWidth() or 0
+        if nw > colWidths[1] then colWidths[1] = nw end
+        if gw > colWidths[2] then colWidths[2] = gw end
+        totalRow = totalRow + 1
+    end
+
     local totalNameFS = _goldTTRows[totalRow][0]
     local totalGoldFS = _goldTTRows[totalRow][1]
     totalNameFS:SetText("|cffffcc80Total|r")
@@ -1325,7 +1394,7 @@ local function CreateFooter()
     moneyHitbox:SetScript("OnEnter", function(self) ShowGoldTooltip(self) end)
     moneyHitbox:SetScript("OnLeave", function() HideGoldTooltip() end)
     moneyHitbox:SetScript("OnMouseDown", function(self, button)
-        if not EllesmereUIDB or not EllesmereUIDB.characterGold then return end
+        if not EllesmereUIDB then return end
         if EllesmereUIDB.enableGoldTracking == false then return end
         if button == "RightButton" and IsControlKeyDown() then
             ResetAllGoldData(); HideGoldTooltip(); return
@@ -4602,7 +4671,7 @@ function EUI_Bags:RefreshInventory()
         else EUI_Bags._diceBtn:Hide() end
     end
 
-    MoneyFrame_UpdateMoney(EUI_Bags.Money)
+    UpdateBagMoneyDisplay()
     UpdateCurrencyDisplays()
 end
 
@@ -4757,7 +4826,7 @@ local function StartAddon()
 
     InitializeCharacterGold()
     if not EllesmereUIDB or EllesmereUIDB.enableGoldTracking ~= false then
-        CaptureCurrentCharacterGold()
+        CaptureTrackedGold()
     end
 
     -- Position: default 50px from bottom-left, saved position overrides
@@ -4844,6 +4913,10 @@ local function StartAddon()
     if EUI and EUI.PanelPP then
         EUI.PanelPP.CreateBorder(EUI_Bags, 0.1, 0.1, 0.1, 1, 1, "OVERLAY", 7)
     end
+
+    EUI_Bags:HookScript("OnShow", function()
+        CaptureTrackedGold()
+    end)
 
     EUI_Bags:HookScript("OnHide", function()
         if EUI_Bags._searchBox then
@@ -5143,8 +5216,8 @@ local function StartAddon()
             if EUI_Bags._unlockSort then EUI_Bags._unlockSort() end
             ScheduleRefresh()
         elseif event == "PLAYER_MONEY" then
-            if EllesmereUIDB and EllesmereUIDB.enableGoldTracking ~= false then CaptureCurrentCharacterGold() end
-            MoneyFrame_UpdateMoney(EUI_Bags.Money)
+            CaptureTrackedGold()
+            UpdateBagMoneyDisplay()
         elseif event == "CURRENCY_DISPLAY_UPDATE" then
             UpdateCurrencyDisplays()
         end
