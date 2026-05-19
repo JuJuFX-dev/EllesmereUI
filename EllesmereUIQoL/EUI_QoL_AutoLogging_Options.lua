@@ -12,6 +12,7 @@ local TRIGGER_DEFAULTS = {
     log5pp      = true,
     logArena    = true,
     logScenario = false,
+    delaystop   = true,
 }
 
 local TRIGGER_ITEMS = {
@@ -86,6 +87,21 @@ local function BuildAutoLoggingPage(pageName, parent, yOffset)
     end
 
     _, h = W:Spacer(parent, y, 20); y = y - h
+
+    _, h = W:DualRow(parent, y,
+        { type    = "toggle",
+          text    = \"Warcraft Recorder Compatibility\",
+          tooltip = "Delays stopping combat logging by 30 seconds after leaving an instance. Recommended for Warcraft Recorder compatibility.",
+          getValue = function()
+              local v = Cfg().delaystop
+              if v == nil then return TRIGGER_DEFAULTS.delaystop end
+              return v
+          end,
+          setValue = function(v)
+              Cfg().delaystop = v
+          end },
+        nil
+    ); y = y - h
 
     parent:SetHeight(math.abs(y - yOffset))
 end

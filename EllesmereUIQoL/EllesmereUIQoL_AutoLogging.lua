@@ -39,6 +39,7 @@ local TRIGGER_DEFAULTS = {
     log5pp      = true,
     logArena    = true,
     logScenario = false,
+    delaystop   = true,
 }
 
 local function GetTrigger(c, key)
@@ -99,14 +100,29 @@ local function ZoneShouldBeLogged()
 end
 
 local wasLogging = false
+local _stopTimer  = nil
+
+local function CancelStopTimer()
+    if _stopTimer then _stopTimer:Cancel(); _stopTimer = nil end
+end
 
 local function ApplyLoggingState()
     local shouldLog = ZoneShouldBeLogged()
     if shouldLog then
+        CancelStopTimer()
         EnsureAdvancedLogging()
         LoggingCombat(true)
     elseif wasLogging and LoggingCombat() then
-        LoggingCombat(false)
+        local c = Cfg()
+        local delay = GetTrigger(c, "delaystop")
+        if delay and not _stopTimer then
+            _stopTimer = C_Timer.NewTimer(30, function()
+                _stopTimer = nil
+                LoggingCombat(false)
+            end)
+        elseif not delay then
+            LoggingCombat(false)
+        end
     end
     wasLogging = shouldLog
 end
