@@ -295,6 +295,7 @@ function ns.AddSpellToBar(barKey, spellID)
     if not sd.assignedSpells then sd.assignedSpells = {} end
     if FindVariantIndex(sd.assignedSpells, spellID) then return false end
     sd.assignedSpells[#sd.assignedSpells + 1] = spellID
+    ns._spellOrderDirty = true
     local frame = cdmBarFrames[barKey]
     if frame then frame._blizzCache = nil; frame._prevVisibleCount = nil end
     return true
@@ -312,6 +313,7 @@ function ns.RemoveSpellFromBar(barKey, spellID)
     local idx = FindVariantIndex(sd.assignedSpells, spellID)
     if not idx then return nil end
     local removed = table.remove(sd.assignedSpells, idx)
+    ns._spellOrderDirty = true
     -- Clean up auxiliary per-spell metadata for the removed entry
     if sd.customSpellDurations then sd.customSpellDurations[removed] = nil end
     if sd.customSpellIDs       then sd.customSpellIDs[removed]       = nil end
@@ -667,6 +669,7 @@ function ns.SwapTrackedSpells(barKey, idx1, idx2)
     while #t < maxIdx do t[#t + 1] = 0 end
     t[idx1], t[idx2] = t[idx2], t[idx1]
     while #t > 0 and (t[#t] == 0 or t[#t] == nil) do t[#t] = nil end
+    ns._spellOrderDirty = true
     local frame = cdmBarFrames[barKey]
     if frame then frame._blizzCache = nil end
     if ns.QueueReanchor then ns.QueueReanchor() end
@@ -686,6 +689,7 @@ function ns.MoveTrackedSpell(barKey, fromIdx, toIdx)
     local val = table.remove(t, fromIdx)
     table.insert(t, toIdx, val)
     while #t > 0 and (t[#t] == 0 or t[#t] == nil) do t[#t] = nil end
+    ns._spellOrderDirty = true
     local frame = cdmBarFrames[barKey]
     if frame then frame._blizzCache = nil end
     if ns.QueueReanchor then ns.QueueReanchor() end

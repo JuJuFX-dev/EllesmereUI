@@ -458,6 +458,7 @@ initFrame:SetScript("OnEvent", function(self)
                 { key = "greatVault",    label = "Great Vault" },
                 { key = "portals",       label = "M+ Portals" },
                 { key = "friendsOnline", label = "Friends Online" },
+                { key = "groupButton",   label = "Group Button" },
             }
 
             local cbDD, cbDDRefresh = EllesmereUI.BuildVisOptsCBDropdown(

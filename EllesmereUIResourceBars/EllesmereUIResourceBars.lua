@@ -644,6 +644,8 @@ local DEFAULTS = {
             thresholdSpecs = {},  -- per-spec threshold/hash entries: { specIDs={0}, hashValues="", thresholdCount=3, thresholdPartialOnly=false }
             runesSimple = false,  -- DK: treat runes as flat pips (no recharge animation/timer)
             chargedR = 0.44, chargedG = 0.77, chargedB = 1.00, chargedA = 1,
+            enhanceFiveBar = true,  -- Enhance Shaman: show 5 pips with overflow coloring
+            enhanceOverflowR = 1, enhanceOverflowG = 0.6, enhanceOverflowB = 0.2,
             visibility  = "always",  -- "always","combat","target","mouseover","never","in_combat","in_raid","in_party","solo"
             visHideHousing = false,
             visOnlyInstances = false,
@@ -1973,6 +1975,13 @@ local function BuildBars()
             elseif powerType == "MAELSTROM_WEAPON" and EllesmereUI.GetMaelstromWeapon then
                 local _, realMax = EllesmereUI.GetMaelstromWeapon()
                 if realMax and realMax > 0 then maxPts = realMax end
+                -- Enhance 5-bar mode: cap visual pips to 5, overflow handled at render time
+                if sp.enhanceFiveBar and maxPts > 5 then
+                    cachedSecondary._realMax = maxPts
+                    maxPts = 5
+                else
+                    cachedSecondary._realMax = nil
+                end
             elseif powerType == "TIP_OF_THE_SPEAR" and EllesmereUI.GetTipOfTheSpear then
                 local _, realMax = EllesmereUI.GetTipOfTheSpear()
                 if realMax and realMax > 0 then maxPts = realMax end
@@ -2981,6 +2990,8 @@ local function UpdateSecondaryResource()
             if not maxC or maxC <= 0 then maxC = maxPts end
         elseif powerType == "MAELSTROM_WEAPON" and EllesmereUI and EllesmereUI.GetMaelstromWeapon then
             cur, maxC = EllesmereUI.GetMaelstromWeapon()
+            -- Enhance 5-bar mode: clamp visual to 5 pips
+            if sp.enhanceFiveBar and maxC > 5 then maxC = 5 end
         elseif powerType == "TIP_OF_THE_SPEAR" and EllesmereUI and EllesmereUI.GetTipOfTheSpear then
             cur, maxC = EllesmereUI.GetTipOfTheSpear()
         elseif powerType == "WHIRLWIND_STACKS" and EllesmereUI and EllesmereUI.GetWhirlwindStacks then
@@ -3044,12 +3055,22 @@ local function UpdateSecondaryResource()
             for i = 1, maxC do
                 if pips[i] and pips[i]._secretBar then pips[i]._secretBar:Hide() end
             end
-            local useThresh = _tsEntry and cur >= _tsThreshCount
+            -- Enhance 5-bar overflow: stacks 6-10 recolor pips 1-5
+            local _enhFive = sp.enhanceFiveBar and powerType == "MAELSTROM_WEAPON"
+            local _enhOverflow = _enhFive and cur > 5
+            local _enhOverCount = _enhOverflow and (cur - 5) or 0
+            local _enhRealCur = cur  -- preserve for count text
+            local _enhOR, _enhOG, _enhOB = sp.enhanceOverflowR or 1, sp.enhanceOverflowG or 0.6, sp.enhanceOverflowB or 0.2
+            if _enhOverflow then cur = 5 end  -- all 5 pips active when overflowing
+
+            local useThresh = _tsEntry and cur >= _tsThreshCount and not _enhFive
             local tr, tg, tb = _tsR, _tsG, _tsB
             for i = 1, maxC do
                 if pips[i] and pips[i]:IsShown() then
                     local active = i <= cur
-                    if active and useThresh then
+                    if active and _enhOverflow and i <= _enhOverCount then
+                        pips[i]:SetActive(true, _enhOR, _enhOG, _enhOB)
+                    elseif active and useThresh then
                         if _tsPartialOnly and i < _tsThreshCount then
                             pips[i]:SetActive(true, r, g, b, a)
                         else
@@ -3060,9 +3081,9 @@ local function UpdateSecondaryResource()
                     end
                 end
             end
-            -- Count text
+            -- Count text (use real count, not clamped)
             if sp.showText and secondaryFrame._countText then
-                secondaryFrame._countText:SetText(tostring(cur))
+                secondaryFrame._countText:SetText(tostring(_enhRealCur or cur))
             end
         end
     else

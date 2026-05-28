@@ -2098,6 +2098,19 @@ EllesmereUI.RegisterMigration({
 
 
 EllesmereUI.RegisterMigration({
+    id          = "enhance_five_bar_off_existing_v1",
+    scope       = "profile",
+    description = "Existing profiles default enhanceFiveBar to false; new installs get true from defaults.",
+    body = function(ctx)
+        local erb = ctx.profile.addons and ctx.profile.addons.EllesmereUIResourceBars
+        local sec = erb and erb.secondary
+        if sec and sec.enhanceFiveBar == nil then
+            sec.enhanceFiveBar = false
+        end
+    end,
+})
+
+EllesmereUI.RegisterMigration({
     id          = "auto_open_containers_preserve_v1",
     scope       = "global",
     description = "Preserve autoOpenContainers for existing users after default changed from on to off.",

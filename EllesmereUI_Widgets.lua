@@ -2407,7 +2407,7 @@ local function BuildColorPickerPopup()
         else hexBox:SetText(lastValidHex) end
     end
     local hexEscaping = false
-    hexBox:SetScript("OnEnterPressed", function() CommitHex(); hexBox:ClearFocus(); _confirmed = true; popup:Hide() end)
+    hexBox:SetScript("OnEnterPressed", function() CommitHex(); hexBox:ClearFocus() end)
     hexBox:SetScript("OnEscapePressed", function()
         hexEscaping = true
         hexBox:SetText(lastValidHex)

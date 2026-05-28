@@ -42,8 +42,8 @@ local defaults = {
             hideMail             = false,
             hideRaidDifficulty   = false,
             hideCraftingOrder    = false,
-            hideExtraBtns        = { greatVault = false, portals = false, friendsOnline = false },
             friendsMaxRows       = 0,   -- 0 = no cap; else cap per section, show "...and N more"
+            hideExtraBtns        = { greatVault = false, portals = false, friendsOnline = false, groupButton = false },
             greatVaultExtraInfo  = true,
             hideAddonCompartment = false,
             hideAddonButtons     = false,
@@ -2879,6 +2879,11 @@ local function LayoutIndicatorFrames(minimap, p, circleMode)
                 anchor = _portalBtn
             end
         end
+
+        -- Flyout toggle (EUI group button for addon icons)
+        if flyoutToggle and heb.groupButton then
+            flyoutToggle:Hide()
+        end
     end
 
     -- Free Move: hook shift+drag on all indicator buttons and apply saved offsets
@@ -3034,8 +3039,8 @@ local function ApplyMinimap()
         local blocker = CreateFrame("Frame", nil, minimap)
         blocker:SetAllPoints()
         blocker:SetFrameLevel(minimap:GetFrameLevel() + 10)
-        blocker:EnableMouse(true)
         blocker:SetPassThroughButtons("LeftButton", "RightButton")
+        blocker:SetPropagateMouseMotion(true)
         blocker:SetScript("OnMouseUp", function(_, btn)
             if btn == "MiddleButton" and EBS._ToggleMicroMenu then
                 EBS._ToggleMicroMenu()
@@ -3303,7 +3308,9 @@ local function ApplyMinimap()
 
     -- Show/hide flyout toggle based on whether any grouped buttons exist
     local groupedButtons = CollectFlyoutButtons()
-    if #groupedButtons > 0 then
+    local mp2 = EBS.db and EBS.db.profile and EBS.db.profile.minimap
+    local hideGroupBtn = mp2 and mp2.hideExtraBtns and mp2.hideExtraBtns.groupButton
+    if #groupedButtons > 0 and not hideGroupBtn then
         flyoutToggle:Show()
     else
         flyoutToggle:Hide()

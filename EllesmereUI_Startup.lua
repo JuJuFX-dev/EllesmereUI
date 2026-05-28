@@ -80,6 +80,10 @@ do
                 -- Returning user: single SetScale at PLAYER_LOGIN.
                 -- No timers, no repeated calls.
                 ApplyScaleSafe(EllesmereUIDB.ppUIScale)
+
+                -- Re-apply our scale whenever Blizzard fires UI_SCALE_CHANGED
+                -- (zone transitions, CVar resets, resolution changes).
+                self:RegisterEvent("UI_SCALE_CHANGED")
                 return
             end
 
@@ -87,6 +91,14 @@ do
             if EllesmereUI and EllesmereUI.PP and EllesmereUI.PP.UpdateMult then
                 EllesmereUI.PP.UpdateMult()
             end
+
+        elseif event == "UI_SCALE_CHANGED" then
+            local saved = EllesmereUIDB and EllesmereUIDB.ppUIScale
+            if saved then
+                ApplyScaleSafe(saved)
+                SyncMultOnly()
+            end
+            return
 
         elseif event == "PLAYER_ENTERING_WORLD" then
             self:UnregisterEvent("PLAYER_ENTERING_WORLD")

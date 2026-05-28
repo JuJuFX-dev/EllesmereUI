@@ -21,6 +21,7 @@ EUI_BagsWindow = CreateFrame("Frame", "EUI_BagsWindowFrame", UIParent)
 EUI_BagsWindow:Hide()
 
 local SLOT_SIZE, SPACING = 34, 4
+local _canUseCache = {}  -- [itemID] = bool, stable per session (class/level based)
 -- Weak-keyed table for bank-deposit routing state. Writing custom keys onto
 -- ContainerFrameItemButtonTemplate frames during PreClick taints the secure
 -- execution chain and causes UseContainerItem() ADDON_ACTION_FORBIDDEN.
@@ -2279,6 +2280,19 @@ local function RenderButton(btn, data, _, col, row, startX, currentY, _, interac
                 if btn._textOverlay then btn.IconOverlay:SetParent(btn._textOverlay) end
             else
                 btn.IconOverlay:SetAlpha(0)
+            end
+        end
+        if btn.icon and data._isGear and data.info and data.info.itemID then
+            local id = data.info.itemID
+            local canUse = _canUseCache[id]
+            if canUse == nil and C_PlayerInfo and C_PlayerInfo.CanUseItem then
+                canUse = C_PlayerInfo.CanUseItem(id)
+                _canUseCache[id] = canUse
+            end
+            if canUse == false then
+                btn.icon:SetVertexColor(1, 0.1, 0.1)
+            else
+                btn.icon:SetVertexColor(1, 1, 1)
             end
         end
         if btn.IconOverlay2 then

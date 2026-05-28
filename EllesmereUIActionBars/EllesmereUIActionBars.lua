@@ -1303,6 +1303,12 @@ local function HideBlizzardBars()
             local safeHide = bar.HideBase or bar.Hide
             safeHide(bar)
             bar:SetParent(hiddenParent)
+            -- Prevent Blizzard from re-showing (spell transforms like
+            -- Ascendance can trigger ValidateActionBarTransition which
+            -- re-shows and repositions, creating invisible dead zones)
+            bar:HookScript("OnShow", function(self)
+                self:Hide()
+            end)
             if bar.actionButtons and type(bar.actionButtons) == "table" then
                 for _, child in pairs(bar.actionButtons) do
                     child:UnregisterAllEvents()

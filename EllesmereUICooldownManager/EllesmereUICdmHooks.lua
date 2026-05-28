@@ -1199,7 +1199,32 @@ local function ProcessPresetCooldowns()
                     if durObj and f._cooldown and f._cooldown.SetCooldownFromDurationObject then
                         f._cooldown:SetCooldownFromDurationObject(durObj, true)
                     end
-                    ApplySpellDesaturation(f, durObj)
+                    -- Skip desaturation when the spell is only on GCD
+                    local cdInfo = C_Spell.GetSpellCooldown and C_Spell.GetSpellCooldown(sid)
+                    local onRealCD = cdInfo and cdInfo.isActive and not cdInfo.isOnGCD
+                    if cdInfo and cdInfo.isOnGCD and not onRealCD then
+                        if f._tex then f._tex:SetDesaturation(0) end
+                    else
+                        ApplySpellDesaturation(f, durObj)
+                    end
+                    -- Resource check: dim vertex color when not enough resources
+                    -- Only for custom spells (not racials -- racials don't cost resources)
+                    if f._isCustomSpellFrame and f._tex then
+                        if not onRealCD then
+                            local isUsable, notEnoughMana = C_Spell.IsSpellUsable(sid)
+                            if notEnoughMana then
+                                f._tex:SetVertexColor(0.5, 0.5, 1.0)
+                            elseif not isUsable then
+                                f._tex:SetVertexColor(0.4, 0.4, 0.4)
+                            elseif f._lastVertexDim then
+                                f._tex:SetVertexColor(1, 1, 1)
+                            end
+                            f._lastVertexDim = (not isUsable) or nil
+                        elseif f._lastVertexDim then
+                            f._tex:SetVertexColor(1, 1, 1)
+                            f._lastVertexDim = nil
+                        end
+                    end
                 end
             elseif f._isItemPresetFrame and f._presetItemID and now >= _encounterResetUntil then
                 local itemID = f._presetItemID

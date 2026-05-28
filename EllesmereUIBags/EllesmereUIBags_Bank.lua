@@ -9,6 +9,7 @@ local EUI = EllesmereUI
 --  Constants
 -------------------------------------------------------------------------------
 local SLOT_SIZE, SPACING = 34, 4
+local _canUseCache = {}  -- [itemID] = bool, stable per session
 local HEADER_H    = 35
 local FOOTER_H    = 32
 local SIDEBAR_W   = 160
@@ -1463,6 +1464,19 @@ function EUI_Bank:RefreshBank()
                     btn.IconOverlay:SetAlpha(1)
                     if btn._textOverlay then btn.IconOverlay:SetParent(btn._textOverlay) end
                 else btn.IconOverlay:SetAlpha(0) end
+            end
+            if btn.icon and info and info.itemID and itemLink and IsEquippableItem(itemLink) then
+                local id = info.itemID
+                local canUse = _canUseCache[id]
+                if canUse == nil and C_PlayerInfo and C_PlayerInfo.CanUseItem then
+                    canUse = C_PlayerInfo.CanUseItem(id)
+                    _canUseCache[id] = canUse
+                end
+                if canUse == false then
+                    btn.icon:SetVertexColor(1, 0.1, 0.1)
+                else
+                    btn.icon:SetVertexColor(1, 1, 1)
+                end
             end
             if btn.IconOverlay2 then
                 if btn.IconOverlay2:IsShown() then

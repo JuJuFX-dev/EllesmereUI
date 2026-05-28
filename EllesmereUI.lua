@@ -4049,7 +4049,6 @@ function EllesmereUI:ShowInputPopup(opts)
             local progress, target = 0, 0
             local function Apply(t)
                 extraLbl:SetTextColor(1, 1, 1, lerp(0.6, 0.9, t))
-                extraBrd:SetColorTexture(1, 1, 1, lerp(0.25, 0.45, t))
             end
             local function OnUpdate(self, elapsed)
                 local dir = (target == 1) and 1 or -1
@@ -7669,7 +7668,7 @@ end
 -------------------------------------------------------------------------------
 --  Slash commands
 -------------------------------------------------------------------------------
-EllesmereUI.VERSION = "7.9.1"
+EllesmereUI.VERSION = "7.9.3"
 
 -- Register this addon's version into a shared global table (taint-free at load time)
 if not _G._EUI_AddonVersions then _G._EUI_AddonVersions = {} end
@@ -8586,9 +8585,11 @@ initFrame:SetScript("OnEvent", function(self, event)
             EllesmereUI._applyBgTint(themeR, themeG, themeB)
         end
         -- Accent color priority: class color (if enabled) > custom override > theme
-        if EllesmereUIDB.useClassAccentColor and EllesmereUI.GetPlayerClassColor then
-            local cr, cg, cb = EllesmereUI.GetPlayerClassColor()
-            ELLESMERE_GREEN.r, ELLESMERE_GREEN.g, ELLESMERE_GREEN.b = cr, cg, cb
+        if EllesmereUIDB.useClassAccentColor then
+            local clr = CLASS_COLOR_MAP[playerClass]
+            if clr then
+                ELLESMERE_GREEN.r, ELLESMERE_GREEN.g, ELLESMERE_GREEN.b = clr.r, clr.g, clr.b
+            end
         else
             local ca = EllesmereUIDB.customAccentColor
             if ca then
