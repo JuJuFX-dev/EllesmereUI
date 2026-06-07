@@ -514,6 +514,31 @@ initFrame:SetScript("OnEvent", function(self)
             leftRgn._control = cbDD
             leftRgn._lastInline = nil
             EllesmereUI.RegisterWidgetRefresh(cbDDRefresh)
+
+            -- Inline cog: Extra Button Flyout Scale (scales the Friends / Great
+            -- Vault / M+ Portals hover panels these extra buttons open).
+            local _, cogShow = EllesmereUI.BuildCogPopup({
+                title = "Extra Button Flyouts",
+                rows = {
+                    { type = "slider", label = "Flyout Scale", min = 0.5, max = 2.0, step = 0.01,
+                      get = function() local m = MinimapDB(); return m and m.extraFlyoutScale or 1.0 end,
+                      set = function(v)
+                          local m = MinimapDB(); if not m then return end
+                          m.extraFlyoutScale = v
+                      end },
+                },
+            })
+            local cogBtn = CreateFrame("Button", nil, leftRgn)
+            cogBtn:SetSize(26, 26)
+            cogBtn:SetPoint("RIGHT", leftRgn._control, "LEFT", -8, 0)
+            cogBtn:SetFrameLevel(leftRgn:GetFrameLevel() + 5)
+            cogBtn:SetAlpha(0.4)
+            local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
+            cogTex:SetAllPoints()
+            cogTex:SetTexture(EllesmereUI.COGS_ICON)
+            cogBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.7) end)
+            cogBtn:SetScript("OnLeave", function(self) self:SetAlpha(0.4) end)
+            cogBtn:SetScript("OnClick", function(self) cogShow(self) end)
         end
 
         -- Show Omnium Folio (expansion landing page button) | inline X/Y cog
