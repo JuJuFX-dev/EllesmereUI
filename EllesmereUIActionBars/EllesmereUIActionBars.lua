@@ -1661,6 +1661,10 @@ EAB_VTABLE.PAGING_STATES = {
         { id = "shift", macro = "[mod:shift]", label = "Shift" },
         { id = "ctrl",  macro = "[mod:ctrl]",  label = "Ctrl" },
     },
+    target = {
+        { id = "help",  macro = "[help]",      label = "Friendly Target" },
+        { id = "harm",  macro = "[harm]",      label = "Hostile Target" },
+    },
     class = {
         DRUID = {
             { id = "prowl",   macro = "[bonusbar:1,stealth]", label = "Prowl" },
@@ -1725,6 +1729,16 @@ function EAB_VTABLE.BuildPagingConditions(barKey, pagingConfig, defaultPage)
         parts[#parts + 1] = "[bonusbar:5] 11"
         for i = 2, NUM_AB_PAGES do
             parts[#parts + 1] = "[bar:" .. i .. "] " .. i
+        end
+    end
+    -- Target conditions come after bonusbar/bar so dragonriding and manual
+    -- page switches always take priority over target-based switching.
+    if PG.target then
+        for _, state in ipairs(PG.target) do
+            local page = pagingConfig[state.id]
+            if page then
+                parts[#parts + 1] = state.macro .. " " .. page
+            end
         end
     end
     parts[#parts + 1] = tostring(defaultPage or 1)

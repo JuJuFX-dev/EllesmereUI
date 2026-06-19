@@ -3268,6 +3268,17 @@ initFrame:SetScript("OnEvent", function(self)
                           getValue=function() return GetPagingVal("alt") end,
                           setValue=function(v) SetPagingVal("alt", v) end });  y = y - h
 
+                    -- Row 3: Friendly Target | Hostile Target
+                    _, h = W:DualRow(parent, y,
+                        { type="dropdown", text="Friendly Target",
+                          values=pagingValues, order=pagingOrder,
+                          getValue=function() return GetPagingVal("help") end,
+                          setValue=function(v) SetPagingVal("help", v) end },
+                        { type="dropdown", text="Hostile Target",
+                          values=pagingValues, order=pagingOrder,
+                          getValue=function() return GetPagingVal("harm") end,
+                          setValue=function(v) SetPagingVal("harm", v) end });  y = y - h
+
                     -- Class form dropdowns (paired into DualRows)
                     local classStatesLocal = PG_STATES.class and PG_STATES.class[playerClass]
                     if classStatesLocal then
