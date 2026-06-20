@@ -55,6 +55,7 @@ initFrame:SetScript("OnEvent", function(self)
 
     local showCombatIndicatorPreview = false
     local showHealAbsorbPreview      = false  -- eyeball toggle for the Heal Absorb Style preview
+    local showDispelOverlayPreview   = false  -- eyeball toggle for the player dispel overlay preview
     -- Preview hover-highlight hint text (shared across Single/Multi tabs)
     local _ufPreviewHintFS_display     -- hint FontString for the Main Frames page
     local _displayHeaderBaseH = 0      -- display header height WITHOUT hint
@@ -1050,6 +1051,13 @@ initFrame:SetScript("OnEvent", function(self)
         healthFill:SetAlpha(hA)
         pf._healthFill = healthFill
         pf._hR, pf._hG, pf._hB, pf._hA = hR, hG, hB, hA
+
+        local dispelOverlayPreview
+        if unitKey == "player" then
+            dispelOverlayPreview = health:CreateTexture(nil, "ARTWORK", nil, 3)
+            dispelOverlayPreview:SetTexture("Interface\\Buttons\\WHITE8X8")
+            dispelOverlayPreview:Hide()
+        end
 
         -- Text overlay frame (sits above absorb StatusBar and border)
         local textOverlay = CreateFrame("Frame", nil, pf)
@@ -2776,6 +2784,31 @@ initFrame:SetScript("OnEvent", function(self)
                 end
             end
 
+            if dispelOverlayPreview then
+                local mode = db.profile.dispelOverlay or "none"
+                if showDispelOverlayPreview and mode ~= "none" then
+                    local c = db.profile.dispelColorMagic or { r = 0.349, g = 0.475, b = 1.0 }
+                    local alpha = (db.profile.dispelOverlayOpacity or 100) / 100
+                    dispelOverlayPreview:ClearAllPoints()
+                    dispelOverlayPreview:SetVertexColor(1, 1, 1, 1)
+                    if mode == "full" then
+                        dispelOverlayPreview:SetAllPoints(health)
+                        dispelOverlayPreview:SetColorTexture(c.r, c.g, c.b, alpha)
+                    elseif mode == "gradient" then
+                        dispelOverlayPreview:SetAllPoints(health)
+                        dispelOverlayPreview:SetTexture("Interface\\AddOns\\EllesmereUI\\media\\textures\\gradient-tb.tga")
+                        dispelOverlayPreview:SetVertexColor(c.r, c.g, c.b, alpha)
+                    else
+                        dispelOverlayPreview:SetPoint("TOPLEFT", health, "TOPLEFT", 0, 0)
+                        dispelOverlayPreview:SetPoint("BOTTOMRIGHT", healthFill, "BOTTOMRIGHT", 0, 0)
+                        dispelOverlayPreview:SetColorTexture(c.r, c.g, c.b, alpha)
+                    end
+                    dispelOverlayPreview:Show()
+                else
+                    dispelOverlayPreview:Hide()
+                end
+            end
+
             -- Buff icons -- reposition based on anchor/growth/size/offset settings
             local buffExtra = 0
             if #buffIcons > 0 then
@@ -3348,6 +3381,7 @@ initFrame:SetScript("OnEvent", function(self)
         pf._cpPipContainer = cpPipContainer
         pf._cpPips = cpPips
         pf._combatIndicator = combatInd
+        pf._dispelOverlayPreview = dispelOverlayPreview
 
         pf._disabledOverlay = disabledOverlay
         -- Clean up any orphaned preview for this unit key before storing the new one
@@ -8654,6 +8688,7 @@ initFrame:SetScript("OnEvent", function(self)
             local dispelOverlayOrder = { "none", "fill", "full", "gradient" }
             local function DispelRefresh()
                 if ns.UpdatePlayerDispelOverlay then ns.UpdatePlayerDispelOverlay() end
+                UpdatePreview()
             end
             local dispelRow
             dispelRow, h = W:DualRow(parent, y,
@@ -8678,6 +8713,37 @@ initFrame:SetScript("OnEvent", function(self)
                       getValue = function() local c = db.profile.dispelColorBleed; if c then return c.r, c.g, c.b end return 0.75, 0.15, 0.15 end,
                       setValue = function(r, g, b) db.profile.dispelColorBleed = { r=r, g=g, b=b }; DispelRefresh() end },
                   } });  y = y - h
+            -- Inline eyeball: preview a magic dispel overlay on the top player preview.
+            do
+                local rgn = dispelRow._leftRegion
+                local EYE_VISIBLE   = "Interface\\AddOns\\EllesmereUI\\media\\icons\\eui-visible.png"
+                local EYE_INVISIBLE = "Interface\\AddOns\\EllesmereUI\\media\\icons\\eui-invisible.png"
+                local eyeBtn = CreateFrame("Button", nil, rgn)
+                eyeBtn:SetSize(26, 26)
+                eyeBtn:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
+                eyeBtn:SetFrameLevel(rgn:GetFrameLevel() + 5)
+                eyeBtn:SetAlpha(0.4)
+                rgn._lastInline = eyeBtn
+                local eyeTex = eyeBtn:CreateTexture(nil, "OVERLAY")
+                eyeTex:SetAllPoints()
+                local function RefreshDispelEye()
+                    eyeTex:SetTexture(showDispelOverlayPreview and EYE_INVISIBLE or EYE_VISIBLE)
+                end
+                RefreshDispelEye()
+                eyeBtn:SetScript("OnClick", function()
+                    showDispelOverlayPreview = not showDispelOverlayPreview
+                    RefreshDispelEye()
+                    UpdatePreview()
+                end)
+                eyeBtn:SetScript("OnEnter", function(self)
+                    self:SetAlpha(0.7)
+                    EllesmereUI.ShowWidgetTooltip(self, showDispelOverlayPreview and "Hide dispel overlay preview" or "Show dispel overlay preview")
+                end)
+                eyeBtn:SetScript("OnLeave", function(self)
+                    self:SetAlpha(0.4)
+                    EllesmereUI.HideWidgetTooltip()
+                end)
+            end
             -- Inline cog on Dispel Overlay: Overlay Opacity
             do
                 local rgn = dispelRow._leftRegion
