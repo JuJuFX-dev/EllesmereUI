@@ -761,15 +761,39 @@ local function ModPrefixForAttr(modsStr)
     return modsStr:lower()
 end
 
+-- Set a secure "type" attribute, optionally gated to out-of-combat only.
+-- menu/target (constracted to spell) route as a raw action type with no
+-- conditional, when oocOnly is set we drive the type attribute by
+-- combat: the real action out of combat, an inert "none" in combat.
+--
+-- nil because unit buttons set a default *type2 = "click" wildcard
+-- (the right-click menu via the secure proxy, see AttachSecureUnitMenu). The
+-- secure resolver falls back to that wildcard whenever the specific type<N> is
+-- NIL -- so clearing the attribute in combat would let the wildcard menu open
+-- anyway. A non-nil unrecognized type ("none") suppresses the wildcard
+-- fallback and performs no action.
+--
+-- Bbinding application is deferred out of combat so these driver calls never run while in combat.
+-- Unregister first so a stale driver can't survive a rebuild that changed the binding type.
+local function SetGatedType(frame, attrName, value, oocOnly)
+    UnregisterAttributeDriver(frame, attrName)
+    if oocOnly then
+        RegisterAttributeDriver(frame, attrName, "[combat] none; " .. value)
+    else
+        frame:SetAttribute(attrName, value)
+    end
+end
+
 -- Apply click (mouse button 1-5) attributes on a frame for one binding.
-local function SetClickAttr(frame, parsed, actionType, spellOrMacro, macrotext)
+local function SetClickAttr(frame, parsed, actionType, spellOrMacro, macrotext, oocOnly)
     local prefix = ModPrefixForAttr(parsed.modifiers)
     local suffix = tostring(parsed.buttonNum)
+    local typeAttr = prefix .. "type" .. suffix
     -- 12.0.7 gates a raw "togglemenu" on unit buttons (and an insecure reopen
     -- taints its protected items). Route the menu through the secure proxy via
     -- the ungated "click" action instead.
     if actionType == "togglemenu" and EllesmereUI.GetSecureMenuProxy then
-        frame:SetAttribute(prefix .. "type" .. suffix, "click")
+        SetGatedType(frame, typeAttr, "click", oocOnly)
         frame:SetAttribute(prefix .. "clickbutton" .. suffix, EllesmereUI.GetSecureMenuProxy(frame))
         return
     end
@@ -779,11 +803,14 @@ local function SetClickAttr(frame, parsed, actionType, spellOrMacro, macrotext)
     -- target binding (other buttons / modifiers) through the ungated "click"
     -- proxy. Keeps the change scoped to users who rebound target off left-click.
     if actionType == "target" and (suffix ~= "1" or prefix ~= "") and EllesmereUI.GetSecureTargetProxy then
-        frame:SetAttribute(prefix .. "type" .. suffix, "click")
+        SetGatedType(frame, typeAttr, "click", oocOnly)
         frame:SetAttribute(prefix .. "clickbutton" .. suffix, EllesmereUI.GetSecureTargetProxy(frame))
         return
     end
-    frame:SetAttribute(prefix .. "type" .. suffix, actionType)
+    -- Raw action type. Only menu/target honor oocOnly via the combat driver;
+    -- spell/macro carry their own conditional in the macro text.
+    local gate = oocOnly and (actionType == "togglemenu" or actionType == "target")
+    SetGatedType(frame, typeAttr, actionType, gate)
     if actionType == "spell" then
         frame:SetAttribute(prefix .. "spell" .. suffix, spellOrMacro or "")
     elseif actionType == "macro" then
@@ -794,6 +821,7 @@ end
 local function ClearClickAttr(frame, parsed)
     local prefix = ModPrefixForAttr(parsed.modifiers)
     local suffix = tostring(parsed.buttonNum)
+    UnregisterAttributeDriver(frame, prefix .. "type" .. suffix)
     frame:SetAttribute(prefix .. "type" .. suffix, nil)
     frame:SetAttribute(prefix .. "spell" .. suffix, nil)
     frame:SetAttribute(prefix .. "macrotext" .. suffix, nil)
@@ -801,22 +829,26 @@ local function ClearClickAttr(frame, parsed)
 end
 
 -- Apply keyboard binding attributes on a frame (virtual button suffix).
-local function SetKeyAttr(frame, idx, actionType, spellOrMacro, macrotext)
+local function SetKeyAttr(frame, idx, actionType, spellOrMacro, macrotext, oocOnly)
     local suffix = "eui_" .. idx
+    local typeAttr = "type-" .. suffix
     -- Route a "menu" keybind through the secure proxy (see SetClickAttr).
     if actionType == "togglemenu" and EllesmereUI.GetSecureMenuProxy then
-        frame:SetAttribute("type-" .. suffix, "click")
+        SetGatedType(frame, typeAttr, "click", oocOnly)
         frame:SetAttribute("clickbutton-" .. suffix, EllesmereUI.GetSecureMenuProxy(frame))
         return
     end
     -- A "target" keybind is never plain left-click, so it always hits the 12.0.7
     -- gate -- route it through the ungated "click" proxy (see SetClickAttr).
     if actionType == "target" and EllesmereUI.GetSecureTargetProxy then
-        frame:SetAttribute("type-" .. suffix, "click")
+        SetGatedType(frame, typeAttr, "click", oocOnly)
         frame:SetAttribute("clickbutton-" .. suffix, EllesmereUI.GetSecureTargetProxy(frame))
         return
     end
-    frame:SetAttribute("type-" .. suffix, actionType)
+    -- Only menu/target honor oocOnly via the combat driver; spell/macro carry
+    -- their own conditional in the macro text.
+    local gate = oocOnly and (actionType == "togglemenu" or actionType == "target")
+    SetGatedType(frame, typeAttr, actionType, gate)
     if actionType == "spell" then
         frame:SetAttribute("spell-" .. suffix, spellOrMacro or "")
     elseif actionType == "macro" then
@@ -827,6 +859,7 @@ end
 local function ClearKeyAttrs(frame, count)
     for i = 1, count do
         local suffix = "eui_" .. i
+        UnregisterAttributeDriver(frame, "type-" .. suffix)
         frame:SetAttribute("type-" .. suffix, nil)
         frame:SetAttribute("spell-" .. suffix, nil)
         frame:SetAttribute("macrotext-" .. suffix, nil)
@@ -838,6 +871,7 @@ end
 local function ClearHoverAttrs(btn, count)
     for i = 1, count do
         local suffix = "eui_hc_" .. i
+        UnregisterAttributeDriver(btn, "type-" .. suffix)
         btn:SetAttribute("type-" .. suffix, nil)
         btn:SetAttribute("spell-" .. suffix, nil)
         btn:SetAttribute("macrotext-" .. suffix, nil)
@@ -992,9 +1026,9 @@ local function DoRegisterFrame(frame)
             local aType, spellName, macrotext = ResolveBinding(b)
             if aType then
                 if parsed.isMouseButton and parsed.buttonNum and parsed.buttonNum <= 5 then
-                    SetClickAttr(frame, parsed, aType, spellName, macrotext)
+                    SetClickAttr(frame, parsed, aType, spellName, macrotext, b.oocOnly)
                 else
-                    SetKeyAttr(frame, i, aType, spellName, macrotext)
+                    SetKeyAttr(frame, i, aType, spellName, macrotext, b.oocOnly)
                 end
             end
         end
@@ -1202,9 +1236,9 @@ function ns.CC_ApplyBindings()
             local aType, spellName, macrotext = ResolveBinding(fb.b)
             if aType then
                 if parsed.isMouseButton and parsed.buttonNum and parsed.buttonNum <= 5 then
-                    SetClickAttr(frame, parsed, aType, spellName, macrotext)
+                    SetClickAttr(frame, parsed, aType, spellName, macrotext, fb.b.oocOnly)
                 else
-                    SetKeyAttr(frame, fb.idx, aType, spellName, macrotext)
+                    SetKeyAttr(frame, fb.idx, aType, spellName, macrotext, fb.b.oocOnly)
                 end
             else
             end
@@ -1215,7 +1249,7 @@ function ns.CC_ApplyBindings()
         local parsed = ParseKeyString(fb.b.key)
         local aType, spellName, macrotext = ResolveBinding(fb.b)
         if aType and (not parsed.isMouseButton or not parsed.buttonNum or parsed.buttonNum > 5) then
-            SetKeyAttr(bindProxy, fb.idx, aType, spellName, macrotext)
+            SetKeyAttr(bindProxy, fb.idx, aType, spellName, macrotext, fb.b.oocOnly)
         end
     end
 
@@ -1278,7 +1312,10 @@ function ns.CC_ApplyBindings()
                 globalBtn:SetAttribute("type-" .. suffix, "macro")
                 globalBtn:SetAttribute("macrotext-" .. suffix, mt)
             else
-                globalBtn:SetAttribute("type-" .. suffix, aType)
+                -- menu/target carry no macro conditional, so honor oocOnly via
+                -- the combat driver (present out of combat, cleared in combat).
+                SetGatedType(globalBtn, "type-" .. suffix, aType,
+                    hb.b.oocOnly and (aType == "togglemenu" or aType == "target"))
             end
             globalBtn:SetAttribute("unit-" .. suffix, "mouseover")
             -- Route the key/button to the global button for EVERY action type, not
@@ -3265,17 +3302,26 @@ function ns.CC_BuildPage(pageName, parent, yOffset)
             or selectedBinding.type == "item" or selectedBinding.type == "dispel" or selectedBinding.type == "external"
             or selectedBinding.type == "trinket1" or selectedBinding.type == "trinket2"
             or selectedBinding.type == "dynamicrez"
-        if hasAdvancedOpts then
-            -- OOC Only row
-            do
-                local row = MakeRow(centerY)
-                RowLabel(row, "Only Cast Out of Combat")
-                RowToggle(row,
-                    function() return selectedBinding.oocOnly end,
-                    function(v) selectedBinding.oocOnly = v; ns.CC_ApplyBindings() end)
-                centerY = centerY - ROW_H
+        -- OOC-Only is available for spell/macro AND for menu/target, so the
+        -- right-click context menu (or targeting) can be suppressed in combat to
+        -- avoid accidental opens. Combat-gating for menu/target is enforced
+        -- securely via an attribute driver (see SetGatedType).
+        if hasAdvancedOpts or selectedBinding.type == "menu" or selectedBinding.type == "target" then
+            local row = MakeRow(centerY)
+            local oocLabel = "Only Cast Out of Combat"
+            if selectedBinding.type == "menu" then
+                oocLabel = "Only Open Menu Out of Combat"
+            elseif selectedBinding.type == "target" then
+                oocLabel = "Only Target Out of Combat"
             end
+            RowLabel(row, oocLabel)
+            RowToggle(row,
+                function() return selectedBinding.oocOnly end,
+                function(v) selectedBinding.oocOnly = v; ns.CC_ApplyBindings() end)
+            centerY = centerY - ROW_H
+        end
 
+        if hasAdvancedOpts then
             -- Hovercast row (disabled for bare left/right click)
             do
                 local row = MakeRow(centerY)
