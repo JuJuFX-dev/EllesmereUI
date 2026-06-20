@@ -461,11 +461,12 @@ pmInit:SetScript("OnEvent", function(self, event, ...)
         local encounterID, encounterName, difficultyID, groupSize, success = ...
         if success ~= 1 then return end
         local diffMap = {
-            [16] = "partyModeTriggerMythicBoss",
-            [15] = "partyModeTriggerHeroicBoss",
-            [14] = "partyModeTriggerNormalBoss",
-            [17] = "partyModeTriggerLFRBoss",
-            [23] = "partyModeTriggerMythic0",
+            [16]  = "partyModeTriggerMythicBoss",
+            [233] = "partyModeTriggerMythicBoss",  -- flex Mythic (RaidMythicFlexible)
+            [15]  = "partyModeTriggerHeroicBoss",
+            [14]  = "partyModeTriggerNormalBoss",
+            [17]  = "partyModeTriggerLFRBoss",
+            [23]  = "partyModeTriggerMythic0",
         }
         local key = diffMap[difficultyID]
         if not key then return end

@@ -62,6 +62,7 @@ local TALENT_REMINDER_ZONES = {
     { name="The Voidspire",           type="raid" },
     { name="The Dreamrift",           type="raid" },
     { name="March on Quel'Danas",     type="raid" },
+    { name="Sporefall",               type="raid" },
 
     { name="Magister's Terrace",      type="dungeon", mapID=2515 },
     { name="Maisara Caverns",         type="dungeon", mapID=2501 },

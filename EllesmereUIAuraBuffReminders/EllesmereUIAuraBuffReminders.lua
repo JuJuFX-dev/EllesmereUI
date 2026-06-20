@@ -142,18 +142,24 @@ local function InMythicZeroDungeon()
     return false
 end
 
+-- Mythic raid difficulty: fixed 20-player (16, PrimaryRaidMythic) or
+-- flexible (233, RaidMythicFlexible, added in 12.0.x). Add future Mythic
+-- raid difficulty IDs here so every gate below stays correct.
+local function IsMythicRaidDiff(d)
+    return d == 16 or d == 233
+end
 
--- Mythic 0 dungeon (party, normal difficulty 1) or Mythic raid (difficulty 16)
+-- Mythic 0 dungeon (party, normal difficulty 1) or Mythic raid (fixed or flex)
 local function InMythicZeroDungeonOrMythicRaid()
     if InMythicZeroDungeon() then return true end
-    if IsInRaid() and _cachedDiffID == 16 then return true end
+    if IsInRaid() and IsMythicRaidDiff(_cachedDiffID) then return true end
     return false
 end
 
 -- Heroic+ content (heroic dungeon/raid or mythic dungeon/raid/M+)
 local function InHeroicOrMythicContent()
     if _cachedIType == "party" and (_cachedDiffID == 2 or _cachedDiffID == 23 or _cachedDiffID == 8) then return true end
-    if _cachedIType == "raid" and (_cachedDiffID == 5 or _cachedDiffID == 6 or _cachedDiffID == 15 or _cachedDiffID == 16) then return true end
+    if _cachedIType == "raid" and (_cachedDiffID == 5 or _cachedDiffID == 6 or _cachedDiffID == 15 or IsMythicRaidDiff(_cachedDiffID)) then return true end
     return false
 end
 
@@ -1981,10 +1987,10 @@ local specialsActive = inInstance or co.showSpecialsNonInstanced
         end
 
         -- Consumables (weapon enchants, flask, food) only in Mythic dungeons
-        -- (M0/M+) and Normal/Heroic/Mythic raids.
+        -- (M0/M+) and Normal/Heroic/Mythic raids (fixed 16 or flex 233).
         if inInstance and (InMythicPlusKey()
             or (_cachedIType == "party" and (_cachedDiffID == 23 or _cachedDiffID == 8))
-            or (_cachedIType == "raid" and (_cachedDiffID == 14 or _cachedDiffID == 15 or _cachedDiffID == 16))) then
+            or (_cachedIType == "raid" and (_cachedDiffID == 14 or _cachedDiffID == 15 or IsMythicRaidDiff(_cachedDiffID)))) then
 
         -- Weapon Enchants (temp weapon enchant items)
         -- Skip if the player knows any imbue spell (Shaman imbues, Paladin rites).
