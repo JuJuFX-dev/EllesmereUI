@@ -3649,7 +3649,13 @@ initFrame:SetScript("OnEvent", function(self)
                         bd.bgR, bd.bgG, bd.bgB, bd.bgA = r, g, b, a; RefreshTBB()
                     end },
               } },
-            { type = "label", text = "" }
+            { type = "toggle", text = "Hide When Inactive",
+              getValue = function() local bd = SelectedTBB(); return bd and bd.hideWhenInactive ~= false end,
+              setValue = function(v)
+                  local bd = SelectedTBB(); if not bd then return end
+                  bd.hideWhenInactive = v and true or false; RefreshTBB()
+              end,
+              tooltip = "Only show this bar while the tracked buff/cooldown is active. Turn off to keep an empty bar on screen at all times." }
         );  y = y - h
 
         -----------------------------------------------------------------------
@@ -3839,7 +3845,11 @@ initFrame:SetScript("OnEvent", function(self)
             local function tbbAntsOff()
                 if tbbPandemicOff() then return true end
                 local bd = SelectedTBB()
-                return not bd or type(bd.pandemicGlowStyle) ~= "number" or bd.pandemicGlowStyle ~= 1
+                -- Pixel-glow "ants" settings apply for every bar style except
+                -- Auto-Cast Shine (4). Any non-{1,4} stored value (e.g. the legacy
+                -- -1 "Blizzard Default", which is meaningless on a rectangle)
+                -- renders as Pixel Glow, so its ants settings stay editable.
+                return not bd or bd.pandemicGlowStyle == 4
             end
 
             local tbbPanRow
@@ -3849,7 +3859,13 @@ initFrame:SetScript("OnEvent", function(self)
                   getValue = function()
                       local bd = SelectedTBB(); if not bd then return 0 end
                       if bd.pandemicGlow ~= true then return 0 end
-                      return bd.pandemicGlowStyle or 1
+                      -- Bars only render Pixel Glow (1) or Auto-Cast Shine (4).
+                      -- Any other stored style (e.g. the -1 "Blizzard Default"
+                      -- default, which has no meaning on a rectangle) renders as
+                      -- Pixel Glow, so show it as Pixel Glow instead of a raw -1.
+                      local style = bd.pandemicGlowStyle
+                      if style ~= 4 then style = 1 end
+                      return style
                   end,
                   setValue = function(v)
                       local bd = SelectedTBB(); if not bd then return end
@@ -4872,6 +4888,14 @@ initFrame:SetScript("OnEvent", function(self)
 
                                 -- Swatch click: open color picker
                                 swatchBtn:SetScript("OnClick", function()
+                                    -- Persist before mutating: for a spell with
+                                    -- no saved settings yet (e.g. a freshly added
+                                    -- Hero-talent spell like Wither / Celestial
+                                    -- Conduit), `ss` is a throwaway {} -- without
+                                    -- EnsureSS the picked colour is written to a
+                                    -- temporary table and lost, so the swipe never
+                                    -- changes and reverts to default on reopen.
+                                    EnsureSS()
                                     -- Ensure custom mode is selected
                                     ss.activeSwipeMode = nil
                                     ss.activeSwipeClassColor = nil
@@ -9392,10 +9416,14 @@ initFrame:SetScript("OnEvent", function(self)
                     end)
                     classBorderSwatch:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
 
+                    local UpdateBorderState
                     local swatch, updateSwatch = EllesmereUI.BuildColorSwatch(
                         leftRgn, buffBsRow:GetFrameLevel() + 3,
                         function() return BD().borderR or 0, BD().borderG or 0, BD().borderB or 0 end,
                         function(r, g, b)
+                            -- Picking a color always switches off class color so the
+                            -- chosen custom color actually applies.
+                            BD().borderClassColor = false
                             BD().borderR, BD().borderG, BD().borderB = r, g, b
                             ns.RefreshCDMIconAppearance(BD().key); Refresh(); UpdateCDMPreview()
                         end,
@@ -9406,21 +9434,23 @@ initFrame:SetScript("OnEvent", function(self)
                     end)
                     swatch:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
 
-                    -- Click the dimmed custom swatch to switch back from class color (no block overlay)
+                    -- Clicking the custom swatch switches off class color (if on) AND
+                    -- opens the color picker in the same click -- previously the first
+                    -- click only toggled class color off, leaving the border black and
+                    -- making it look like the swatch was stuck.
                     local origClick = swatch:GetScript("OnClick")
                     swatch:SetScript("OnClick", function(self, ...)
+                        -- No border selected: don't open the color picker
+                        if (BD().borderThickness or "thin") == "none" then return end
                         if BD().borderClassColor then
                             BD().borderClassColor = false
                             ns.RefreshCDMIconAppearance(BD().key); Refresh(); UpdateCDMPreview()
-                            EllesmereUI:RefreshPage()
-                            return
+                            updateSwatch(); UpdateBorderState()
                         end
-                        -- No border selected: allow swapping boxes but do not open the color picker
-                        if (BD().borderThickness or "thin") == "none" then return end
                         if origClick then origClick(self, ...) end
                     end)
 
-                    local function UpdateBorderState()
+                    function UpdateBorderState()
                         local isClassColored = BD().borderClassColor
                         local isNone = (BD().borderThickness or "thin") == "none"
                         swatch:SetAlpha((isClassColored or isNone) and 0.3 or 1)

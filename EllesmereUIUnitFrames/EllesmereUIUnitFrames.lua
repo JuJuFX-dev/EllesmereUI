@@ -1184,20 +1184,25 @@ ns.ApplyDarkTheme = ApplyDarkTheme
 
 -- Smart power text: percent for healers/prot pally/arcane mage, numeric for everyone else.
 -- Shared helper used by both the oUF tag and the resource bars renderer.
-local function EUI_IsSmartPowerPercent()
+-- `displayedPowerType` (optional, an Enum.PowerType value) is the power the
+-- caller's bar is actually showing. For form/spec-shifting classes (Druid,
+-- Monk) the decision must follow the displayed power, NOT UnitPowerType: a
+-- Balance druid's UnitPowerType is Astral Power even while the power bar shows
+-- Mana, so without this the mana number would render raw instead of percent.
+local function EUI_IsSmartPowerPercent(displayedPowerType)
     local _, cls = UnitClass("player")
     if not cls then return false end
-    -- Druids: Restoration always uses percent (mana healer, % is always
-    -- what matters -- including Incarnation: Tree of Life, which lands on
-    -- a form index that varies by spec/talent loadout). Other specs use
-    -- percent in caster/travel form and raw value in cat/bear.
-    if cls == "DRUID" then
-        local spec = GetSpecialization()
-        if spec == 4 then return true end
-        local form = GetShapeshiftForm()
-        return form == nil or form == 0 or form == 3
+    -- Druid / Monk both shift their displayed power with form/spec. Percent
+    -- only while the bar shows Mana (Druid caster/Tree/travel + Mistweaver),
+    -- raw value otherwise (Cat=Energy, Bear=Rage, Moonkin=Astral, WW/BRM=Energy).
+    -- This is consistent across every spec, including Restoration weaving
+    -- Cat/Bear where the bar is really Energy/Rage. Prefer the caller-supplied
+    -- displayed power; fall back to the live primary power type.
+    if cls == "DRUID" or cls == "MONK" then
+        local pt = displayedPowerType or UnitPowerType("player")
+        return pt == Enum.PowerType.Mana
     end
-    if cls == "PRIEST" or cls == "SHAMAN" or cls == "MONK" then
+    if cls == "PRIEST" or cls == "SHAMAN" then
         return true
     end
     -- Paladin: Holy and Protection (mana-based specs)

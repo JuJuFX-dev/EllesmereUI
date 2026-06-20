@@ -174,6 +174,78 @@ local function ResolveFrameSpellID(frame)
 end
 ns.ResolveFrameSpellID = ResolveFrameSpellID
 
+-- Resolve the per-spell settings table for a CDM frame. Settings are keyed by
+-- the spell the user added (assignedSpells / spellSettings[id]). The live frame
+-- can report SEVERAL different ids for the same logical spell, and which one
+-- matches the stored key varies by talent state:
+--   * sid2          -- ResolveFrameSpellID's cooldownInfo base. For some
+--                      Hero-talent slots this is an UNRELATED spell (observed:
+--                      a Hellcaller Wither slot whose cooldownInfo base is
+--                      Immolate 348 while the displayed spell is Wither 445468).
+--   * canon         -- GetCanonicalSpellIDForFrame: the displayed/castable id
+--                      the picker keys settings by (GetSpellID-first, clean-read
+--                      cached so it survives the active/secret state).
+--   * resolvedSid   -- cached override/display id.
+--   * baseSpellID   -- cached base id.
+-- Match a stored key against the frame's FULL identity set, by direct hit,
+-- linkedSpellIDs, and override resolution in BOTH directions (the assigned
+-- spell may be the base whose active override is one of the identity ids -- e.g.
+-- assigned Corruption 172, frame shows Wither 445468 = FindSpellOverrideByID(172)
+-- -- or an identity id may be the base whose override is the assigned spell).
+local function ResolveSpellSettings(frame, sid2, sd2)
+    local settings = sd2 and sd2.spellSettings
+    if not settings or not sid2 then return nil end
+
+    local fc2 = _ecmeFC[frame]
+
+    -- Build the frame's identity-id set (deduped).
+    local ids = { sid2 }
+    local function addId(id)
+        if not id or id <= 0 then return end
+        for i = 1, #ids do if ids[i] == id then return end end
+        ids[#ids + 1] = id
+    end
+    if ns.GetCanonicalSpellIDForFrame then addId(ns.GetCanonicalSpellIDForFrame(frame)) end
+    if fc2 then
+        addId(fc2.resolvedSid)
+        addId(fc2.baseSpellID)
+    end
+
+    -- 1. Direct hit on any identity id.
+    for i = 1, #ids do
+        local s = settings[ids[i]]
+        if s then return s end
+    end
+
+    -- 2. linkedSpellIDs reported by the cooldown info.
+    if fc2 and fc2.linkedSpellIDs then
+        for _, lid in ipairs(fc2.linkedSpellIDs) do
+            if settings[lid] then return settings[lid] end
+        end
+    end
+
+    -- 3. Override resolution across assignedSpells, both directions, against the
+    --    full identity set.
+    local FindOvr = C_SpellBook and C_SpellBook.FindSpellOverrideByID
+    if FindOvr and sd2.assignedSpells then
+        local idOvr = {}
+        for i = 1, #ids do idOvr[i] = FindOvr(ids[i]) end
+        for _, asid in ipairs(sd2.assignedSpells) do
+            if asid and asid > 0 and settings[asid] then
+                local asidOvr = FindOvr(asid)
+                for i = 1, #ids do
+                    if asidOvr == ids[i] or idOvr[i] == asid then
+                        return settings[asid]
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end
+ns.ResolveSpellSettings = ResolveSpellSettings
+
 -------------------------------------------------------------------------------
 --  Spell Routing State
 --
@@ -624,30 +696,7 @@ local function DecorateFrame(frame, barData)
                 -- Check per-spell settings
                 local ss2
                 if sid2 and bk2 then
-                    local sd2 = ns.GetBarSpellData(bk2)
-                    ss2 = sd2 and sd2.spellSettings and sd2.spellSettings[sid2]
-                    -- Fallback: sid2 may be a base/override variant while
-                    -- settings are stored under the assigned spell ID.
-                    if not ss2 and sd2 and sd2.spellSettings and sd2.assignedSpells then
-                        local fc2 = _ecmeFC[frame]
-                        -- Try linkedSpellIDs
-                        if fc2 and fc2.linkedSpellIDs then
-                            for _, lid in ipairs(fc2.linkedSpellIDs) do
-                                if sd2.spellSettings[lid] then ss2 = sd2.spellSettings[lid]; break end
-                            end
-                        end
-                        -- Try override resolution
-                        if not ss2 and C_SpellBook and C_SpellBook.FindSpellOverrideByID then
-                            for _, asid in ipairs(sd2.assignedSpells) do
-                                if asid and asid > 0 and asid ~= sid2
-                                   and sd2.spellSettings[asid] then
-                                    if C_SpellBook.FindSpellOverrideByID(asid) == sid2 then
-                                        ss2 = sd2.spellSettings[asid]; break
-                                    end
-                                end
-                            end
-                        end
-                    end
+                    ss2 = ResolveSpellSettings(frame, sid2, ns.GetBarSpellData(bk2))
                 end
                 -- Detect active state from swipe color
                 local swipeColor = frame.cooldownSwipeColor
@@ -852,22 +901,7 @@ local function DecorateFrame(frame, barData)
                 if bk2:sub(1, 7) == "__ghost" then return end
                 -- FocusKick icon alpha is owned by SetFocusKickAlpha only.
                 if bk2 == ns.FOCUSKICK_BAR_KEY then return end
-                local sd2 = ns.GetBarSpellData(bk2)
-                local ss2 = sd2 and sd2.spellSettings and sd2.spellSettings[sid2]
-                -- Fallback: sid2 may be a spell override while settings are
-                -- stored under the base ID. Scan assignedSpells for a match.
-                if not ss2 and sd2 and sd2.spellSettings and sd2.assignedSpells
-                   and C_SpellBook and C_SpellBook.FindSpellOverrideByID then
-                    for _, asid in ipairs(sd2.assignedSpells) do
-                        if asid and asid > 0 and asid ~= sid2
-                           and sd2.spellSettings[asid] then
-                            if C_SpellBook.FindSpellOverrideByID(asid) == sid2 then
-                                ss2 = sd2.spellSettings[asid]
-                                break
-                            end
-                        end
-                    end
-                end
+                local ss2 = ResolveSpellSettings(frame, sid2, ns.GetBarSpellData(bk2))
                 local cse = ss2 and ss2.cdStateEffect
                 if not cse then
                     if fd._cdStateGlowOn then
@@ -969,21 +1003,7 @@ local function DecorateFrame(frame, barData)
                 local sid2 = fc2 and fc2.spellID
                 local bk2 = fc2 and fc2.barKey
                 if not sid2 or not bk2 then return end
-                local sd2 = ns.GetBarSpellData(bk2)
-                local ss2 = sd2 and sd2.spellSettings and sd2.spellSettings[sid2]
-                -- Override fallback: sid2 may be a transformed/override variant
-                -- while settings live under the assigned base ID (matches cdState).
-                if not ss2 and sd2 and sd2.spellSettings and sd2.assignedSpells
-                   and C_SpellBook and C_SpellBook.FindSpellOverrideByID then
-                    for _, asid in ipairs(sd2.assignedSpells) do
-                        if asid and asid > 0 and asid ~= sid2
-                           and sd2.spellSettings[asid]
-                           and C_SpellBook.FindSpellOverrideByID(asid) == sid2 then
-                            ss2 = sd2.spellSettings[asid]
-                            break
-                        end
-                    end
-                end
+                local ss2 = ResolveSpellSettings(frame, sid2, ns.GetBarSpellData(bk2))
                 if not (ss2 and ss2.desatNotActive) then return end
                 local isAct = false
                 local sc = frame.cooldownSwipeColor

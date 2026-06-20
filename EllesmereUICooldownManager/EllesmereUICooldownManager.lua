@@ -3413,10 +3413,18 @@ local function RefreshCDMIconAppearance(barKey)
             tex:SetAllPoints(icon)
             tex:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
         end
-        -- Update cooldown (full frame so swipe covers the entire icon)
+        -- Update cooldown (full frame so swipe covers the entire icon). The swipe
+        -- and the countdown number both live on the Cooldown widget, so raise the
+        -- whole widget ABOVE our border (icon+13) so the number renders on top of
+        -- it -- it previously sat below the border and got drawn over (most visible
+        -- when the text is offset to an edge). Anchoring the number to cd (below)
+        -- keeps the X/Y offset working. Side effect: the dark swipe now sits over
+        -- the thin border, lightly tinting it during an active cooldown.
         if cd then
             cd:ClearAllPoints()
             cd:SetAllPoints(icon)
+            -- Above the border (icon+13); still below glow (icon+16) / text (icon+23).
+            pcall(cd.SetFrameLevel, cd, icon:GetFrameLevel() + 14)
             cd:SetSwipeColor(0, 0, 0, barData.swipeAlpha or 0.7)
             cd:SetHideCountdownNumbers(not barData.showCooldownText)
             -- Apply cooldown text font directly (old tick loop is gone)
@@ -3428,15 +3436,17 @@ local function RefreshCDMIconAppearance(barKey)
                 local cdB = barData.cooldownTextB or 1
                 local cdX = barData.cooldownTextX or 0
                 local cdY = barData.cooldownTextY or 0
-                -- Find Blizzard's countdown text FontString on the Cooldown widget
+                -- Find Blizzard's countdown text FontString on the Cooldown widget.
+                -- Keep it on the Cooldown widget (anchored to cd) so the user's
+                -- X/Y offset works -- reparenting it makes Blizzard's engine
+                -- re-center and ignore the offset. CENTER anchor also overrides
+                -- the engine's stale baseline (raw SetFont vs SetCountdownFont).
                 for _, rgn in pairs({ cd:GetRegions() }) do
                     if rgn and rgn.GetObjectType and rgn:GetObjectType() == "FontString" then
                         EllesmereUI.ApplyIconTextFont(rgn, cdFont, cdSize, "cdm")
                         rgn:SetTextColor(cdR, cdG, cdB)
-                        if cdX ~= 0 or cdY ~= 0 then
-                            rgn:ClearAllPoints()
-                            rgn:SetPoint("CENTER", cd, "CENTER", cdX, cdY)
-                        end
+                        rgn:ClearAllPoints()
+                        rgn:SetPoint("CENTER", cd, "CENTER", cdX, cdY)
                     end
                 end
             end

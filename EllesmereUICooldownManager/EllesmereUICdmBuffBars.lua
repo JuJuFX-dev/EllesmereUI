@@ -182,6 +182,7 @@ local TBB_DEFAULT_BAR = {
     spellID   = 0,
     name      = "New Bar",
     enabled   = true,
+    hideWhenInactive = true,  -- hide the bar unless the tracked aura is active
     grouped   = true,   -- per-bar "Group Tracking Bars" checkbox; checked bars chain + share width/height
     height    = 24,
     width     = 270,
@@ -1376,7 +1377,20 @@ function ns.UpdateTrackedBuffBarTimers()
             local blzChild = FindChild(cfg)
             if blzChild then ns.HookPandemicState(blzChild) end
 
-            local isActive = blzChild and blzChild.IsShown and blzChild:IsShown() or false
+            -- Active state must come from the CooldownViewer item's IsActive()
+            -- (real aura state: expirationTime > now, or infinite auras), NOT
+            -- IsShown(). A buff-bar item stays SHOWN even while inactive unless
+            -- the user enabled Blizzard's "Hide When Inactive" edit-mode option
+            -- (off by default), so IsShown() would make our mirrored bar visible
+            -- 100% of the time. Fall back to IsShown() only if IsActive is absent.
+            local isActive = false
+            if blzChild then
+                if blzChild.IsActive then
+                    isActive = blzChild:IsActive() and true or false
+                elseif blzChild.IsShown then
+                    isActive = blzChild:IsShown() or false
+                end
+            end
 
             -- Read Blizzard's StatusBar (the data source for fill/timer)
             local blizzBar = blzChild and blzChild.Bar
@@ -1530,14 +1544,24 @@ function ns.UpdateTrackedBuffBarTimers()
                     end
                 end
             else
-                -- Inactive: clear state and hide
-                bar._nameSet = nil
+                -- Inactive: clear transient state
                 bar._cachedBlizzFillTex = nil
                 bar._cachedOurFillTex = nil
                 if _anyPandemic and bar._pandemicGlowActive then ClearPandemic(bar) end
                 if bar._stacksText then bar._stacksText:Hide() end
                 bar._stackCount = 0
-                if bar:IsShown() then bar:Hide() end
+                if cfg.hideWhenInactive == false then
+                    -- "Hide When Inactive" off: keep the bar on screen as an
+                    -- empty idle bar (name visible, no fill / timer / spark).
+                    if not bar:IsShown() then bar:Show() end
+                    local sb = bar._bar
+                    if sb then sb:SetMinMaxValues(0, 1); sb:SetValue(0) end
+                    if bar._timerText then bar._timerText:Hide() end
+                    if bar._spark then bar._spark:Hide() end
+                else
+                    bar._nameSet = nil
+                    if bar:IsShown() then bar:Hide() end
+                end
             end
         end
     end

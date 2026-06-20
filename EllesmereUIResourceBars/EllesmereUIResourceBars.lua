@@ -2858,7 +2858,7 @@ local function UpdatePrimaryBar()
         local percentText = format("%d", pctRaw) .. percentSuffix
         local txt
         if fmt == "smart" then
-            local isPercent = EllesmereUI.IsSmartPowerPercent and EllesmereUI.IsSmartPowerPercent()
+            local isPercent = EllesmereUI.IsSmartPowerPercent and EllesmereUI.IsSmartPowerPercent(cachedPrimary)
             txt = isPercent and percentText or AbbreviateNumbers(cur)
         elseif fmt == "both" then
             txt = AbbreviateNumbers(cur) .. " | " .. percentText
