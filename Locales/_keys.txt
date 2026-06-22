@@ -43,7 +43,6 @@ Are you sure you want to reset all %1$s settings to their defaults? This will re
 Assign to Spec
 Back
 Brightness
-Buff Bar
 CDM Buttons can have all their glow and active\nstates changed on a per icon (or synced to the bar)\nbasis. Click on a button to show that button's settings.
 Cancel
 Choose Zones
@@ -67,6 +66,7 @@ Custom Spell ID
 Dark Overlays\nDisabled
 Dark Overlays\nEnabled
 Deactivate Party Mode
+Delete Spell
 Delete \
 Deselect All
 Disable

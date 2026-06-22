@@ -519,6 +519,10 @@ local defaults = {
         raidMarkerOffsetY  = 0,
         showReadyCheck   = true,
         showSummonPending = true,
+        readyCheckSize   = 18,
+        readyCheckPosition = "center",  -- "topleft", "top", "topright", "left", "center", "right", "bottomleft", "bottom"
+        readyCheckOffsetX  = 0,
+        readyCheckOffsetY  = 0,
         threatBorderSize = 2,    -- aggro warning border thickness; 0 = off
         showLeaderIcon   = false,
         leaderIconPosition = "top",
@@ -2819,12 +2823,39 @@ local function StyleButton(button)
     AnchorRaidMarker()
     d.AnchorRaidMarker = AnchorRaidMarker
 
-    -- Ready check icon
+    -- Ready check icon (shared with the incoming-summon indicator)
     local readyCheck = health:CreateTexture(nil, "OVERLAY", nil, 3)
-    readyCheck:SetSize(18, 18)
-    readyCheck:SetPoint("CENTER", health, "CENTER", 0, 0)
+    readyCheck:SetSize(PixelSnap(s.readyCheckSize or 18), PixelSnap(s.readyCheckSize or 18))
     readyCheck:Hide()
     d.readyCheck = readyCheck
+
+    local function AnchorReadyCheck()
+        readyCheck:ClearAllPoints()
+        local pos = s.readyCheckPosition or "center"
+        local ox = s.readyCheckOffsetX or 0
+        local oy = s.readyCheckOffsetY or 0
+        if pos == "topleft" then
+            readyCheck:SetPoint("TOPLEFT", health, "TOPLEFT", 2 + ox, -2 + oy)
+        elseif pos == "top" then
+            readyCheck:SetPoint("TOP", health, "TOP", ox, -2 + oy)
+        elseif pos == "topright" then
+            readyCheck:SetPoint("TOPRIGHT", health, "TOPRIGHT", -2 + ox, -2 + oy)
+        elseif pos == "left" then
+            readyCheck:SetPoint("LEFT", health, "LEFT", 2 + ox, oy)
+        elseif pos == "right" then
+            readyCheck:SetPoint("RIGHT", health, "RIGHT", -2 + ox, oy)
+        elseif pos == "bottomleft" then
+            readyCheck:SetPoint("BOTTOMLEFT", health, "BOTTOMLEFT", 2 + ox, 2 + oy)
+        elseif pos == "bottom" then
+            readyCheck:SetPoint("BOTTOM", health, "BOTTOM", ox, 2 + oy)
+        elseif pos == "bottomright" then
+            readyCheck:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", -2 + ox, 2 + oy)
+        else -- center
+            readyCheck:SetPoint("CENTER", health, "CENTER", ox, oy)
+        end
+    end
+    AnchorReadyCheck()
+    d.AnchorReadyCheck = AnchorReadyCheck
 
     -- Debuff icons (pre-created, anchored dynamically)
     d.debuffIcons = {}
@@ -4782,23 +4813,23 @@ local function UpdateReadyCheck(button, unit)
     local tex = d.readyCheck
     if not tex then return end
 
+    local sz = PixelSnap(db.profile.readyCheckSize or 18)
+    tex:SetSize(sz, sz)
+
     -- Ready check (priority)
     if db.profile.showReadyCheck and readyCheckActive then
         local status = GetReadyCheckStatus(unit)
         if status == "ready" then
-            tex:SetSize(18, 18)
             tex:SetTexCoord(0, 1, 0, 1)
             tex:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
             tex:Show()
             return
         elseif status == "notready" then
-            tex:SetSize(18, 18)
             tex:SetTexCoord(0, 1, 0, 1)
             tex:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
             tex:Show()
             return
         elseif status == "waiting" then
-            tex:SetSize(18, 18)
             tex:SetTexCoord(0, 1, 0, 1)
             tex:SetTexture("Interface\\RaidFrame\\ReadyCheck-Waiting")
             tex:Show()
@@ -4810,17 +4841,14 @@ local function UpdateReadyCheck(button, unit)
     if db.profile.showSummonPending and unit and C_IncomingSummon.HasIncomingSummon(unit) then
         local sStatus = C_IncomingSummon.IncomingSummonStatus(unit)
         if sStatus == SUMMON_STATUS_PENDING then
-            tex:SetSize(20, 20)
             tex:SetAtlas("RaidFrame-Icon-SummonPending")
             tex:Show()
             return
         elseif sStatus == SUMMON_STATUS_ACCEPTED then
-            tex:SetSize(20, 20)
             tex:SetAtlas("RaidFrame-Icon-SummonAccepted")
             tex:Show()
             return
         elseif sStatus == SUMMON_STATUS_DECLINED then
-            tex:SetSize(20, 20)
             tex:SetAtlas("RaidFrame-Icon-SummonDeclined")
             tex:Show()
             return
@@ -6019,6 +6047,11 @@ XF.Layout = function()
             d.raidMarker:SetSize(rmSz, rmSz)
             if d.AnchorRaidMarker then d.AnchorRaidMarker() end
         end
+        if d.readyCheck then
+            local rcSz = PixelSnap(xs.readyCheckSize or 18)
+            d.readyCheck:SetSize(rcSz, rcSz)
+            if d.AnchorReadyCheck then d.AnchorReadyCheck() end
+        end
         if d.debuffIcons then
             for _, icon in ipairs(d.debuffIcons) do
                 icon:SetSize(xs.debuffSize or 18, xs.debuffSize or 18)
@@ -7140,6 +7173,13 @@ local function ReloadFrames()
             local rmSz = PixelSnap(s.raidMarkerSize or 16)
             d.raidMarker:SetSize(rmSz, rmSz)
             if d.AnchorRaidMarker then d.AnchorRaidMarker() end
+        end
+
+        -- Ready check / summon size + position
+        if d.readyCheck then
+            local rcSz = PixelSnap(s.readyCheckSize or 18)
+            d.readyCheck:SetSize(rcSz, rcSz)
+            if d.AnchorReadyCheck then d.AnchorReadyCheck() end
         end
 
         -- Border
@@ -8387,6 +8427,7 @@ do
             "showRoleForTank", "showRoleForHealer", "showRoleForDPS",
             "showRaidMarker", "raidMarkerSize", "raidMarkerPosition", "raidMarkerOffsetX", "raidMarkerOffsetY",
             "showReadyCheck", "showSummonPending",
+            "readyCheckSize", "readyCheckPosition", "readyCheckOffsetX", "readyCheckOffsetY",
             "statusTextPosition", "statusTextOffsetX", "statusTextOffsetY", "statusTextSize", "statusTextColor",
             "showLeaderIcon", "leaderIconPosition", "leaderIconSize", "leaderIconOffsetX", "leaderIconOffsetY",
             "borderSize", "borderColor", "borderAlpha", "borderTexture",
@@ -9108,6 +9149,13 @@ ns.ReloadPartyFrames = function()
             local rmSz = PixelSnap(pp.raidMarkerSize or 16)
             d.raidMarker:SetSize(rmSz, rmSz)
             if d.AnchorRaidMarker then d.AnchorRaidMarker() end
+        end
+
+        -- Ready check / summon
+        if d.readyCheck then
+            local rcSz = PixelSnap(pp.readyCheckSize or 18)
+            d.readyCheck:SetSize(rcSz, rcSz)
+            if d.AnchorReadyCheck then d.AnchorReadyCheck() end
         end
 
         -- Border
@@ -10589,9 +10637,9 @@ local function CreatePreviewFrame(index)
     raidMarker:SetSize(rmSz, rmSz)
     raidMarker:Hide()
 
-    -- Ready check icon
+    -- Ready check icon (position/size re-applied in the preview indicator pass)
     local readyCheck = health:CreateTexture(nil, "OVERLAY", nil, 3)
-    readyCheck:SetSize(18, 18)
+    readyCheck:SetSize(PixelSnap(s.readyCheckSize or 18), PixelSnap(s.readyCheckSize or 18))
     readyCheck:SetPoint("CENTER", health, "CENTER", 0, 0)
     readyCheck:Hide()
 
@@ -11664,7 +11712,6 @@ local function ApplyPreviewData(f, index)
     -- Ready check icon
     if f._readyCheck then
         local rcStatuses = previewRoles._readyCheck
-        local rcStatuses = previewRoles._readyCheck
         local rcStatus = rcStatuses and rcStatuses[index]
         local isSummon = rcStatus and rcStatus:sub(1, 6) == "summon"
         local showRC = indVis and rcStatus and (
@@ -11672,10 +11719,31 @@ local function ApplyPreviewData(f, index)
             (isSummon and s.showSummonPending)
         )
         if showRC then
-            if isSummon then
-                f._readyCheck:SetSize(20, 20)
-            else
-                f._readyCheck:SetSize(18, 18)
+            local rcSz = PixelSnap(s.readyCheckSize or 18)
+            f._readyCheck:SetSize(rcSz, rcSz)
+            -- Anchor based on ready-check position setting
+            f._readyCheck:ClearAllPoints()
+            local pos = s.readyCheckPosition or "center"
+            local ox = s.readyCheckOffsetX or 0
+            local oy = s.readyCheckOffsetY or 0
+            if pos == "topleft" then
+                f._readyCheck:SetPoint("TOPLEFT", f._health, "TOPLEFT", 2 + ox, -2 + oy)
+            elseif pos == "top" then
+                f._readyCheck:SetPoint("TOP", f._health, "TOP", ox, -2 + oy)
+            elseif pos == "topright" then
+                f._readyCheck:SetPoint("TOPRIGHT", f._health, "TOPRIGHT", -2 + ox, -2 + oy)
+            elseif pos == "left" then
+                f._readyCheck:SetPoint("LEFT", f._health, "LEFT", 2 + ox, oy)
+            elseif pos == "right" then
+                f._readyCheck:SetPoint("RIGHT", f._health, "RIGHT", -2 + ox, oy)
+            elseif pos == "bottomleft" then
+                f._readyCheck:SetPoint("BOTTOMLEFT", f._health, "BOTTOMLEFT", 2 + ox, 2 + oy)
+            elseif pos == "bottom" then
+                f._readyCheck:SetPoint("BOTTOM", f._health, "BOTTOM", ox, 2 + oy)
+            elseif pos == "bottomright" then
+                f._readyCheck:SetPoint("BOTTOMRIGHT", f._health, "BOTTOMRIGHT", -2 + ox, 2 + oy)
+            else -- center
+                f._readyCheck:SetPoint("CENTER", f._health, "CENTER", ox, oy)
             end
             if rcStatus == "ready" then
                 f._readyCheck:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")

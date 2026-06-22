@@ -2253,6 +2253,61 @@ initFrame:SetScript("OnEvent", function(self)
             cogBtn:SetScript("OnClick", function(self) cogShow(self) end)
         end
 
+        -- Ready Check / Summon icon position + size (the two indicators share a
+        -- single texture, so one set of controls drives both).
+        local readyCheckPositionValues = {
+            topleft     = "Top Left",
+            top         = "Top",
+            topright    = "Top Right",
+            left        = "Left",
+            center      = "Center",
+            right       = "Right",
+            bottomleft  = "Bottom Left",
+            bottom      = "Bottom",
+            bottomright = "Bottom Right",
+        }
+        local readyCheckPositionOrder = { "topleft", "top", "topright", "left", "center", "right", "bottomleft", "bottom", "bottomright" }
+        local rcRow
+        rcRow, h = W:DualRow(parent, y,
+            { type="dropdown", text="Ready Check", values=readyCheckPositionValues, order=readyCheckPositionOrder,
+              getValue=function() return SVal("readyCheckPosition", "center") end,
+              setValue=function(v) SSet("readyCheckPosition", v) end },
+            { type="slider", text="Icon Size", min=8, max=40, step=1,
+              getValue=function() return SVal("readyCheckSize", 18) end,
+              setValue=function(v) SSet("readyCheckSize", v) end });  y = y - h
+        -- Cog for ready check / summon toggles + offset X/Y
+        do
+            local rgn = rcRow._leftRegion
+            local _, cogShow = EllesmereUI.BuildCogPopup({
+                title = "Ready Check / Summon",
+                rows = {
+                    { type="toggle", label="Show Ready Check",
+                      get=function() return SVal("showReadyCheck", true) end,
+                      set=function(v) SSet("showReadyCheck", v) end },
+                    { type="toggle", label="Show Incoming Summon",
+                      get=function() return SVal("showSummonPending", true) end,
+                      set=function(v) SSet("showSummonPending", v) end },
+                    { type="slider", label="Offset X", min=-50, max=50, step=1,
+                      get=function() return SVal("readyCheckOffsetX", 0) end,
+                      set=function(v) SSet("readyCheckOffsetX", v) end },
+                    { type="slider", label="Offset Y", min=-50, max=50, step=1,
+                      get=function() return SVal("readyCheckOffsetY", 0) end,
+                      set=function(v) SSet("readyCheckOffsetY", v) end },
+                },
+            })
+            local cogBtn = CreateFrame("Button", nil, rgn)
+            cogBtn:SetSize(26, 26)
+            cogBtn:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
+            rgn._lastInline = cogBtn
+            cogBtn:SetFrameLevel(rgn:GetFrameLevel() + 5)
+            cogBtn:SetAlpha(0.4)
+            local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
+            cogTex:SetAllPoints(); cogTex:SetTexture(EllesmereUI.DIRECTIONS_ICON)
+            cogBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.7) end)
+            cogBtn:SetScript("OnLeave", function(self) self:SetAlpha(0.4) end)
+            cogBtn:SetScript("OnClick", function(self) cogShow(self) end)
+        end
+
         -- Status Text Position (+ cog for X/Y) | Text Size (+ inline color swatch)
         local statusTextPositionValues = {
             none        = "None",
