@@ -203,7 +203,6 @@ Not Included
 Not Loaded
 OK
 Okay
-Only In Combat
 PER-SPELL OPTIONS
 Paste your profile string here...
 Patch Notes
