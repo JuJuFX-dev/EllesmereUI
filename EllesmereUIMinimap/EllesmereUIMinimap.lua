@@ -62,6 +62,7 @@ local defaults = {
             customBtnSizeEnabled = false,
             customBtnSize        = 24,
             btnPositions         = {},
+            extraFlyoutScale     = 1.0,
             showClock     = true,
             clockInside   = true,
             clockFormat   = "12h",
@@ -1223,6 +1224,9 @@ local function ShowVaultTooltip(anchor)
     }
 
     local tt = GetVaultTooltip()
+    -- Scale the whole flyout to the user's Extra Button Flyout Scale (re-applied each show).
+    local _mp = EBS.db and EBS.db.profile.minimap
+    tt:SetScale(_mp and _mp.extraFlyoutScale or 1.0)
 
     -- Apply user's current font to all FontStrings
     local fontPath = (EllesmereUI.GetFontPath and EllesmereUI.GetFontPath("minimap")) or "Fonts\\FRIZQT__.TTF"
@@ -1700,6 +1704,11 @@ end
 local function ToggleMinimapPortalFlyout(anchorBtn)
     if InCombatLockdown() then return end
     local flyout = CreateMinimapPortalFlyout()
+    -- Scale to the user's Extra Button Flyout Scale. Safe (combat early-returns
+    -- above; secure children). Set before the anchor math so GetEffectiveScale
+    -- below reflects it.
+    local _mp = EBS.db and EBS.db.profile.minimap
+    flyout:SetScale(_mp and _mp.extraFlyoutScale or 1.0)
     if flyout:IsShown() then
         flyout:Hide()
     else
@@ -1935,6 +1944,9 @@ end
 local function ShowFriendsTooltip(anchor)
     local guild, favorites, friends = GatherOnlineFriends()
     local tt = GetFriendsTT()
+    -- Scale the whole flyout to the user's Extra Button Flyout Scale (re-applied each show).
+    local _mp = EBS.db and EBS.db.profile.minimap
+    tt:SetScale(_mp and _mp.extraFlyoutScale or 1.0)
     local total = #guild + #favorites + #friends
 
     -- Refresh fonts to match current global font setting
