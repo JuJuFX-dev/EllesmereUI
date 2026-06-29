@@ -1419,8 +1419,9 @@ end
 ns.RF_NAME_WIDTH_FRACTION = 1.0
 
 -- Resolve the display name for a unit. Nickname sources are consulted in order:
--- Northern Sky Raid Tools (NSAPI) first, then Timeline Reminders (TimelineReminders),
--- then the Liquid addon (LiquidAPI), falling back to the short character name. For
+-- Northern Sky Raid Tools (NSAPI) first, then MethodInternal (EasyNicknameAPI),
+-- then Timeline Reminders (TimelineReminders), then the Liquid addon (LiquidAPI),
+-- falling back to the short character name. For
 -- NSRT we pass our addon key "EUI" (NSRT added a dedicated per-addon setting +
 -- EUI_NICKNAME_TOGGLE callback for us): NSAPI:GetName self-gates on NSRT's Global
 -- Nicknames AND its EUI checkbox, so the user controls nicknames entirely through
@@ -1438,7 +1439,16 @@ local function ResolveDisplayName(unit, applyCap)
             display = dn
         end
     end
-    -- Timeline Reminders nicknames (secondary source, consulted when NSRT did not
+    -- MethodInternal nicknames (EasyNicknameAPI), consulted after NSRT and before
+    -- Timeline Reminders.
+    if not display and EasyNicknameAPI and EasyNicknameAPI.GetNicknameForUnit then
+        local ok, dn = pcall(EasyNicknameAPI.GetNicknameForUnit, unit)
+        if ok and type(dn) == "string"
+           and not (issecretvalue and issecretvalue(dn)) and dn ~= "" and dn ~= name then
+            display = dn
+        end
+    end
+    -- Timeline Reminders nicknames (consulted when earlier sources did not
     -- produce a nickname). Gated by TR's own EllesmereUI checkbox, so the user
     -- controls these entirely through TR (no EUI-side toggle). GetNickname falls
     -- back to the plain unit name when no nickname is set, so HasNickname is
