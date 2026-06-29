@@ -90,8 +90,8 @@ local ORIENT_VALUES = { HORIZONTAL = "Horizontal", VERTICAL = "Vertical" }
 local ORIENT_ORDER = { "HORIZONTAL", "VERTICAL" }
 
 -- Show when mode (for frame effects)
-local SHOW_WHEN_VALUES = { present = "When Present", missing = "When Missing" }
-local SHOW_WHEN_ORDER = { "present", "missing" }
+local SHOW_WHEN_VALUES = { present = "When Any Present", allPresent = "When All Present", anyMissing = "When Any Missing", missing = "When All Missing" }
+local SHOW_WHEN_ORDER = { "present", "allPresent", "anyMissing", "missing" }
 
 -- Indicator frame level (layering relative to the unit button). For Icon/Square
 -- the indicator's own border sits at base + 1 and its count/duration text carrier
@@ -2087,15 +2087,19 @@ function ns.BM_UpdateIndicators(button, unit, db, updateInfo)
         else
             -- Frame effects
             local anyPresent = false
+            local allPresent = #ind.spells > 0
             local presentAura = nil
             for _, sid in ipairs(ind.spells) do
                 local a = GetAura(sid)
-                if a then anyPresent = true; presentAura = a; break end
+                if a then anyPresent = true; presentAura = presentAura or a
+                else allPresent = false end
             end
 
             local showWhen = ind.showWhen or "present"
             local shouldShow = (showWhen == "present" and anyPresent)
                             or (showWhen == "missing" and not anyPresent)
+                            or (showWhen == "allPresent" and allPresent)
+                            or (showWhen == "anyMissing" and not allPresent)
 
             -- Threshold drives off the first present tracked aura (present mode
             -- only -- a missing aura has no remaining time to watch). Secret-safe.
