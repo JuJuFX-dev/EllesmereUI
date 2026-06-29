@@ -1444,6 +1444,20 @@ do
         return cursorFrame
     end
 
+    -- Show + position the tracking frame at the pointer right now. The OnUpdate
+    -- alone only repositions it on the NEXT frame, so a tooltip anchored to it
+    -- and shown synchronously this frame (as the custom CDM frames do) would have
+    -- no valid rect yet -- and nothing renders.
+    local function PositionCursorFrameNow(cf)
+        cf:Show()
+        local scale = UIParent:GetEffectiveScale()
+        if scale > 0 then
+            local x, y = GetCursorPosition()
+            cf:ClearAllPoints()
+            cf:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+        end
+    end
+
     local function ApplyCursorAnchor(tooltip, parent)
         if tooltip ~= GameTooltip then return end
         -- Gated by the "Reskin Tooltip" master (matches the grayed-out option), so
@@ -1461,9 +1475,32 @@ do
             return
         end
         local cf = EnsureCursorFrame()
-        cf:Show()
+        PositionCursorFrameNow(cf)
         local point = POINT_FOR_POS[EllesmereUIDB.tooltipCursorPosition or "top"] or "BOTTOM"
         tooltip:SetOwner(parent, "ANCHOR_NONE")
+        tooltip:ClearAllPoints()
+        tooltip:SetPoint(point, cf, "CENTER",
+            EllesmereUIDB.tooltipCursorOffsetX or 0,
+            EllesmereUIDB.tooltipCursorOffsetY or 0)
+    end
+
+    -- Re-assert the cursor anchor on GameTooltip WITHOUT re-owning it (SetOwner
+    -- would wipe the content). A custom frame whose tooltip content-setter
+    -- (e.g. SetItemByID) clears/hides the tip mid-build can fire GameTooltip's
+    -- OnHide -- which hides the tracking frame -- leaving the tip anchored to a
+    -- hidden/unpositioned frame so it never appears. Calling this AFTER the
+    -- content is set (and before Show) re-shows + repositions the tracking frame
+    -- and re-points the tooltip so it reliably renders at the cursor. No-op when
+    -- the cursor anchor (or the reskin master) is off, so callers can call it
+    -- unconditionally.
+    EllesmereUI._repointTooltipAtCursor = function(tooltip)
+        if tooltip ~= GameTooltip then return end
+        if EllesmereUIDB and EllesmereUIDB.customTooltips == false then return end
+        if not (EllesmereUIDB and EllesmereUIDB.tooltipAnchorCursor) then return end
+        if tooltip:IsForbidden() then return end
+        local cf = EnsureCursorFrame()
+        PositionCursorFrameNow(cf)
+        local point = POINT_FOR_POS[EllesmereUIDB.tooltipCursorPosition or "top"] or "BOTTOM"
         tooltip:ClearAllPoints()
         tooltip:SetPoint(point, cf, "CENTER",
             EllesmereUIDB.tooltipCursorOffsetX or 0,
