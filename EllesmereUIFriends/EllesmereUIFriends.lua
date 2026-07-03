@@ -50,6 +50,7 @@ local defaults = {
             factionBanners = false,
             showRegionIcons = true,
             autoAcceptFriendInvites = false,
+            autoAcceptGuildInvites = false,
             showOffline    = true,
             visibility     = "always",
             visOnlyInstances = false,
@@ -2685,6 +2686,9 @@ local function SkinFriendsFrame()
             end
             if not isFriend and C_FriendList and C_FriendList.IsFriend then
                 isFriend = C_FriendList.IsFriend(inviterGUID)
+            end
+            if not isFriend and fp5.autoAcceptGuildInvites then
+              isFriend = IsGuildMember(inviterGUID)
             end
             if isFriend then
                 AcceptGroup()

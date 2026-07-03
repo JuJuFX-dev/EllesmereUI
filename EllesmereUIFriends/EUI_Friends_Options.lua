@@ -197,10 +197,26 @@ initFrame:SetScript("OnEvent", function(self)
         "arcade", "legend", "midnight", "runic",
     }
 
+    local function MakeCogBtn(rgn, showFn)
+        local cogBtn = CreateFrame("Button", nil, rgn)
+        cogBtn:SetSize(26, 26)
+        cogBtn:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
+        rgn._lastInline = cogBtn
+        cogBtn:SetFrameLevel(rgn:GetFrameLevel() + 5)
+        cogBtn:SetAlpha(0.4)
+        local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
+        cogTex:SetAllPoints()
+        cogTex:SetTexture(EllesmereUI.COGS_ICON)
+        cogBtn:SetScript("OnEnter", function(s) s:SetAlpha(0.7) end)
+        cogBtn:SetScript("OnLeave", function(s) s:SetAlpha(0.4) end)
+        cogBtn:SetScript("OnClick", function(s) showFn(s) end)
+        return cogBtn
+    end
+
     local function BuildFriendsPage(pageName, parent, yOffset)
         local W = EllesmereUI.Widgets
         local y = yOffset
-        local _, h
+        local _, row, h
 
         EllesmereUI:ClearContentHeader()
 
@@ -312,7 +328,7 @@ initFrame:SetScript("OnEvent", function(self)
         );  y = y - h
 
         -- Show Region Icons | Auto-Accept Friend Invites
-        _, h = W:DualRow(parent, y,
+        row, h = W:DualRow(parent, y,
             { type="toggle", text="Show Region Icons",
               tooltip="Shows a map icon of the friend's region if they are not playing within your region",
               getValue=function() local f = FriendsDB(); return f and (f.showRegionIcons ~= false) end,
@@ -329,6 +345,20 @@ initFrame:SetScript("OnEvent", function(self)
                 f.autoAcceptFriendInvites = v
               end }
         );  y = y - h
+
+        local rgn = row._rightRegion
+        local _, cogShow = EllesmereUI.BuildCogPopup({
+            title = "Auto Accept Settings",
+            rows = {
+                { type="toggle", label="Accept Guild Invites",
+                  get=function() local f = FriendsDB(); return f and (f.autoAcceptGuildInvites ~= false) end,
+                  set=function(v)
+                    local f = FriendsDB(); if not f then return end
+                    f.autoAcceptGuildInvites = v
+                  end }
+            },
+        })
+        MakeCogBtn(rgn, cogShow)
 
         return math.abs(y)
     end
