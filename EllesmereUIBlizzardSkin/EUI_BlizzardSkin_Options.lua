@@ -358,7 +358,13 @@ initFrame:SetScript("OnEvent", function(self)
                     EllesmereUIDB.showItemMaxStacks = v
                     EllesmereUI:RefreshPage()  -- update the Use Modifier cog disabled state
                 end },
-            { type="label", text="" }
+            { type="toggle", text="Show Guild Rank",
+                disabled=ttReskinOff, disabledTooltip="Reskin Tooltip",
+                getValue=function() return not (EllesmereUIDB and EllesmereUIDB.tooltipShowGuildRank == false) end,
+                setValue=function(v)
+                    if not EllesmereUIDB then EllesmereUIDB = {} end
+                    EllesmereUIDB.tooltipShowGuildRank = v
+                end },
         ); y = y - h
 
 
