@@ -2160,6 +2160,9 @@ local function SkinCharacterSheet()
                 valueButton:EnableMouse(true)
 
                 valueButton:SetScript("OnEnter", function()
+                    local specIndex = GetSpecialization and GetSpecialization()
+                    local role = specIndex and GetSpecializationRole(specIndex) or nil
+
                     local statValue = stat.func()
                     if issecretvalue(statValue) then return end
                     GameTooltip:SetOwner(valueButton, "ANCHOR_RIGHT")
@@ -2197,7 +2200,7 @@ local function SkinCharacterSheet()
                         local rawValue = stat.rawFunc()
                         GameTooltip:AddLine(
                             string.format(L("%s %.2f%% (%d rating)"), L(stat.name), percentValue, rawValue),
-                            scR, scG, scB, 1  -- category color (live)
+                            scR, scG, scB, true  -- category color (live)
                         )
                         -- Description for secondary stats
                         local description = ""
@@ -2209,7 +2212,6 @@ local function SkinCharacterSheet()
                             -- Pull the actual spec mastery spell description (e.g.
                             -- "Mastery: Razor Claws") so the tooltip explains what
                             -- the mastery does, not just a generic line.
-                            local specIndex = GetSpecialization and GetSpecialization()
                             if specIndex and GetSpecializationMasterySpells and C_Spell and C_Spell.GetSpellDescription then
                                 local masterySpell, masterySpell2 = GetSpecializationMasterySpells(specIndex)
                                 if masterySpell then
@@ -2236,6 +2238,12 @@ local function SkinCharacterSheet()
                         end
                         GameTooltip:AddLine(description, 1, 1, 1, true)
 
+                        if stat.name == "Crit" and GetCritChanceProvidesParryEffect() then
+                            local critToParry = GetCombatRatingBonusForCombatRatingValue(CR_PARRY, GetCombatRating(CR_CRIT_MELEE))
+                            GameTooltip:AddLine(" ")
+                            GameTooltip:AddLine(string.format(L("Increases parry chance by %.2f%%."), critToParry), 1, 1, 1, true)
+                        end
+
                         -- Diminishing returns breakdown (opt-in via Stat Display)
                         if EllesmereUIDB and EllesmereUIDB.showAdjustedStats
                            and not issecretvalue(rawValue) and EllesmereUI.GetStatDR then
@@ -2245,12 +2253,12 @@ local function SkinCharacterSheet()
                                 GameTooltip:AddLine(" ")
                                 GameTooltip:AddLine(string.format(L("Adjusted Rating: %s"),
                                     BreakUpLargeNumbers(math.floor(adjusted + 0.5))),
-                                    scR, scG, scB, 1)
+                                    scR, scG, scB, true)
                                 GameTooltip:AddLine(string.format(L("Wasted Rating: %s"),
                                     BreakUpLargeNumbers(math.floor(wasted + 0.5))),
-                                    scR, scG, scB, 1)
+                                    scR, scG, scB, true)
                                 GameTooltip:AddLine(string.format(L("Penalty Percentage: %d%%"), penalty),
-                                    scR, scG, scB, 1)
+                                    scR, scG, scB, true)
                                 if nextThreshold then
                                     local nextRating = math.floor(nextThreshold + 0.5)
                                     local needed = nextRating - math.floor(rawValue + 0.5)
@@ -2258,13 +2266,15 @@ local function SkinCharacterSheet()
                                     GameTooltip:AddLine(string.format(L("Next %d%% Penalty At: %s (+%s)"),
                                         nextPenalty, BreakUpLargeNumbers(nextRating),
                                         BreakUpLargeNumbers(needed)),
-                                        scR, scG, scB, 1)
+                                        scR, scG, scB, true)
                                 end
                             end
                         end
                     -- Attributes
                     elseif stat.statIndex then
                         local base, _, posBuff, negBuff = UnitStat("player", stat.statIndex)
+                        -- base from UnitStat is wrong, so calculate it like the default UI does
+                        base = base - posBuff - negBuff
                         local statLabel = stat.name
 
                         -- Map to Blizzard global names
@@ -2283,13 +2293,82 @@ local function SkinCharacterSheet()
                         if bonus ~= 0 then
                             statLine = statLine .. " (" .. base .. (bonus > 0 and "+" or "") .. bonus .. ")"
                         end
-                        GameTooltip:AddLine(statLine, scR, scG, scB, 1)
+                        GameTooltip:AddLine(statLine, scR, scG, scB, true)
                         GameTooltip:AddLine(L(stat.tooltip), 1, 1, 1, true)
+
+                        -- Tanks have an extra line for Strength and Agility with parry chance / dodge chance respectively
+                        if role == "TANK" then
+                            if stat.name == "Strength" then
+                                if GetParryChanceFromAttribute then
+                                    local parryFromStr = GetParryChanceFromAttribute()
+
+                                    if parryFromStr and parryFromStr > 0 then
+                                        GameTooltip:AddLine(" ")
+                                        GameTooltip:AddLine(string.format(L("Increases parry chance by %.2f%%."), parryFromStr), 1, 1, 1, true)
+                                        GameTooltip:AddLine(L("|cff888888(Before diminishing returns)|r"), 1, 1, 1, true)
+                                    end
+                                end
+                            elseif stat.name == "Agility" then
+                                if GetDodgeChanceFromAttribute then
+                                    local dodgeChanceStr = GetDodgeChanceFromAttribute()
+
+                                    if dodgeChanceStr and dodgeChanceStr > 0 then
+                                        GameTooltip:AddLine(" ")
+                                        GameTooltip:AddLine(string.format(L("Increases dodge chance by %.2f%%."), dodgeChanceStr), 1, 1, 1, true)
+                                        GameTooltip:AddLine(L("|cff888888(Before diminishing returns)|r"), 1, 1, 1, true)
+                                    end
+                                end
+                            end
+                        end
                     -- Generic stats (Attack, Defense, etc.)
                     else
-                        GameTooltip:AddLine(titleLine, scR, scG, scB, 1)
+                        GameTooltip:AddLine(titleLine, scR, scG, scB, true)
                         if stat.tooltip then
                             GameTooltip:AddLine(L(stat.tooltip), 1, 1, 1, true)
+                        end
+
+                        if stat.name == "Armor" then
+                            local _, effectiveArmor = UnitArmor("player")
+                            local armorReduction = 0
+
+                            -- Reduction against an evenly matched enemy
+                            if C_PaperDollInfo and C_PaperDollInfo.GetArmorEffectiveness then
+                                armorReduction = (C_PaperDollInfo.GetArmorEffectiveness(effectiveArmor, UnitLevel("player")) or 0) * 100
+                            end
+                            if armorReduction > 0 then
+                                GameTooltip:AddLine(" ")
+                                GameTooltip:AddLine(string.format(L("Physical damage reduction: %.2f%%"), armorReduction), 1, 1, 1, true)
+                                GameTooltip:AddLine(L("|cff888888(Against an evenly matched enemy)|r"), 1, 1, 1, true)
+                            end
+
+                            -- Reduction against target
+                            if C_PaperDollInfo and C_PaperDollInfo.GetArmorEffectivenessAgainstTarget then
+                                armorReduction = (C_PaperDollInfo.GetArmorEffectivenessAgainstTarget(effectiveArmor) or 0) * 100
+                            end
+                            if armorReduction > 0 then
+                                GameTooltip:AddLine(string.format(L("(Against Current Target: %.2f%%)"), armorReduction), 1, 1, 1, true)
+                            end
+                        elseif stat.name == "Block" then
+                            local shieldBlockArmor = GetShieldBlock();
+                            local armorReduction = 0
+
+                            -- Reduction against an evenly matched enemy
+                            if C_PaperDollInfo and C_PaperDollInfo.GetArmorEffectiveness then
+                                armorReduction = (C_PaperDollInfo.GetArmorEffectiveness(shieldBlockArmor, UnitLevel("player")) or 0) * 100
+                            end
+                            if armorReduction > 0 then
+                                GameTooltip:AddLine(" ")
+                                GameTooltip:AddLine(string.format(L("Physical damage reduction: %.2f%%"), armorReduction), 1, 1, 1, true)
+                                GameTooltip:AddLine(L("|cff888888(Against an evenly matched enemy)|r"), 1, 1, 1, true)
+                            end
+
+                            -- Reduction against target
+                            if C_PaperDollInfo and C_PaperDollInfo.GetArmorEffectivenessAgainstTarget then
+                                armorReduction = (C_PaperDollInfo.GetArmorEffectivenessAgainstTarget(shieldBlockArmor) or 0) * 100
+                            end
+                            if armorReduction > 0 then
+                                GameTooltip:AddLine(string.format(L("(Against Current Target: %.2f%%)"), armorReduction), 1, 1, 1, true)
+                            end
                         end
                     end
 

@@ -1998,10 +1998,10 @@ function BuildBankSidebar()
 
             if not self._isSelected then self._bg:SetColorTexture(1, 1, 1, 0.06) end
             if (BP().bankSidebarCollapsed) and EUI.ShowWidgetTooltip then
-                EUI.ShowWidgetTooltip(self, (self._entryName or "?") .. " (" .. (self._entryCount or 0) .. ")" .. ((showEditableTabTooltip) and "\n|cffdab842<Right-click for settings>|r" or ""))
+                EUI.ShowWidgetTooltip(self, (self._entryName or "?") .. " (" .. (self._entryCount or 0) .. ")" .. ((showEditableTabTooltip) and ("\n|cffdab842" .. BANK_TAB_TOOLTIP_CLICK_INSTRUCTION  .. "|r") or ""))
             end
             if not (BP().bankSidebarCollapsed) and showEditableTabTooltip then
-                if EUI.ShowWidgetTooltip then EUI.ShowWidgetTooltip(self, "|cffdab842<Right-click for settings>|r") end
+                if EUI.ShowWidgetTooltip then EUI.ShowWidgetTooltip(self, "|cffdab842" .. BANK_TAB_TOOLTIP_CLICK_INSTRUCTION  .. "|r") end
             end
         end)
         btn:SetScript("OnLeave", function(self)
