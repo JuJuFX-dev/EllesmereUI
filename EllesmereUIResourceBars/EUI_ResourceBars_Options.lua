@@ -12,14 +12,6 @@ local PAGE_GCD       = "GCD Bar"
 local PAGE_TOTEM     = "Totem Bar"
 local PAGE_UNLOCK    = "Unlock Mode"
 
--- Tooltip for the hash "Position by percent" toggle (bar-type resources).
-local HASH_MODE_TIP =
-    "|cffffd100How hash numbers are positioned|r\n" ..
-    "|cffffd100Off / Value|r (default): numbers are absolute\n" ..
-    "resource amounts (eg; 50 = the 50 mark on a 0-150 bar).\n" ..
-    "|cffffd100On / Percent|r: numbers are 0-100 percentages of\n" ..
-    "the bar (eg; 50 = halfway, whatever the max)."
-
 local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")
 initFrame:SetScript("OnEvent", function(self)
@@ -85,33 +77,12 @@ initFrame:SetScript("OnEvent", function(self)
     local _previewHintFS
     local _previewScale = 1
     local _previewBuilding = false  -- true while _previewHeaderBuilder is executing
-    local IsBarTypeSecondary  -- forward declaration; assigned below
     local HasClassResource     -- forward declaration; assigned below
 
     -- Helper: returns true if the current class/spec has any secondary resource
     HasClassResource = function()
         local gsr = _G._ERB_GetSecondaryResource
         return gsr and gsr() ~= nil
-    end
-
-    -- Helper: returns true if the current class/spec uses a bar-type secondary (no pips)
-    IsBarTypeSecondary = function()
-        local _, cf = UnitClass("player")
-        local spec = GetSpecialization()
-        local gsr = _G._ERB_GetSecondaryResource
-        local info = gsr and gsr()
-        if info and info.power == "IRONFUR_BAR" then return true end -- Guardian Ironfur bar
-        if info and info.power == "IGNOREPAIN_BAR" then return true end -- Prot Warrior Ignore Pain bar
-        if cf == "DRUID" and spec == 1 then return true end -- Balance (Astral Power bar)
-        if cf == "SHAMAN" and spec == 1 then return true end -- Elemental
-        if cf == "PRIEST" and spec == 3 then return true end -- Shadow
-        if cf == "MONK" and spec == 1 then return true end -- Brewmaster
-        if cf == "HUNTER" and (spec == 1 or spec == 2) then return true end -- BM / MM Focus bar
-        if cf == "DEMONHUNTER" and spec then
-            local specID = C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo(spec)
-            if specID == 1480 then return true end -- Devourer
-        end
-        return false
     end
 
     -- Helper: returns true if the current class/spec has a primary power bar
@@ -230,7 +201,7 @@ initFrame:SetScript("OnEvent", function(self)
 
         local container = _previewFrames.pipContainer and _previewFrames.pipContainer:GetParent()
         local sp = p.secondary
-        local isBar = IsBarTypeSecondary()
+        local isBar = ns.IsBarTypeSecondary()
 
         -- Class resource preview
         local pc = _previewFrames.pipContainer
@@ -644,7 +615,7 @@ initFrame:SetScript("OnEvent", function(self)
 
         local sp = p.secondary
         local pipH = sp.pipHeight
-        local isBar = IsBarTypeSecondary()
+        local isBar = ns.IsBarTypeSecondary()
 
         -- pipC is the container for either pips or the bar preview
         local pipC = CreateFrame("Frame", nil, container)
@@ -962,11 +933,10 @@ initFrame:SetScript("OnEvent", function(self)
     end
 
     ---------------------------------------------------------------------------
-    --  Shared multi-band color editor (opt-in). A small popup, opened per
+    --  multi-band threshold popup definition editor (opt-in). A small popup, opened per
     --  threshold-spec entry from its "Bands" button, that edits entry.bands --
     --  an ordered list of { to=<boundary>, r,g,b,a } color stops. `to` is a
     --  resource count for pip resources, or a percent/value for bar-type bars.
-    --  One instance is shared by the power, health, and class-resource popups;
     --  ShowBandEditor() rebinds it to the calling bar each time it opens.
     ---------------------------------------------------------------------------
     local _bandCloseIcon = "Interface\\AddOns\\EllesmereUI\\media\\icons\\eui-close.png"
@@ -990,9 +960,8 @@ initFrame:SetScript("OnEvent", function(self)
 		.. "Any remaning values outside the bands will use fill color.\n"
         .. "|cff888888Bars can use % or actual value; pip resources use counts.|r"
 
-    -- Shown over the single-threshold input/swatch when Multi-band is on.
     local BAND_REPLACES_TIP =
-        "The single threshold is off while Multi-band is on.\n"
+        "Single threshold is off while Multi-band is on.\n"
 
     local function CurrentBandEntry()
         if not _bandEntryIdx or not _bandGetBarData then return nil end
@@ -1113,7 +1082,7 @@ initFrame:SetScript("OnEvent", function(self)
         })
         _bandReverseSeg:SetPoint("RIGHT", _bandReverseRow, "RIGHT", 0, 0)
 
-        -- Add Band button (matches the "Add Threshold" empty-state button style)
+        -- Add Band button
         _bandAddBtn = CreateFrame("Button", nil, bandPopup)
         PP.Size(_bandAddBtn, BAND_POPUP_W - BAND_PAD * 2, 26)
         _bandAddBtn:SetFrameLevel(bandPopup:GetFrameLevel() + 3)
@@ -1336,7 +1305,7 @@ initFrame:SetScript("OnEvent", function(self)
 
     ---------------------------------------------------------------------------
     --  BuildThresholdSettingsButton: shared builder for threshold per-spec
-    --  popup. Used by class resource, power bar, and health bar sections.
+    --  popup. Used by power bar and health bar sections.
     --
     --  cfg = {
     --    parentRgn      -- the DualRow right region to host the button
@@ -2182,7 +2151,7 @@ initFrame:SetScript("OnEvent", function(self)
                 if ef._multiSnap then ef._multiSnap() end
 
                 -- Multi-band on: the single-threshold input + swatch are replaced by
-                -- bands. Enable the "Bands" button and hide the now-meaningless cog.
+                -- bands. Enable the "Bands" button and hide the cog.
                 local entEnabled = entry.thresholdEnabled
                 if entEnabled == nil then entEnabled = true end
                 local multiOn = entry.multiBandEnabled and true or false
@@ -2209,7 +2178,7 @@ initFrame:SetScript("OnEvent", function(self)
                     ef._threshDis:Hide()
                 end
 
-                -- Dim only genuine duplicates the resolver can never reach; lone
+                -- Dim only duplicates the resolver can never reach
                 -- per-spec or inactive-talent cards stay fully visible.
                 ef:SetAlpha(ns._ERB_IsThresholdCardShadowed(entries, idx) and 0.45 or 1)
 
@@ -2239,7 +2208,6 @@ initFrame:SetScript("OnEvent", function(self)
         end
 
         settingsBtn:SetScript("OnClick", function(self) TogglePopup_L(self) end)
-        -- settingsBtn:SetScript("OnClick", function(self) cfg.settingsPage:Show() end)
         settingsBtn:HookScript("OnHide", function()
             if popup and popup:IsShown() then popup:Hide() end
         end)
@@ -2985,29 +2953,6 @@ initFrame:SetScript("OnEvent", function(self)
             end
         end
 
-		-- local thresholdSettingsPage = BuildThresholdSettingsPage({
-		-- 	parent = parent,
-		-- 	topY = _advTop,
-		-- 	botY = y,
-		-- 	sectionName = "Health",
-		-- 	getBarData = function() return cfg() end,
-		-- 	singleSpec = ctx.advanced or nil,
-		-- 	refreshFn = function()
-		-- 		RefreshHealth(); SmoothRefresh()
-		-- 	end,
-		-- 	rebuildFn = function() RebuildHealth() end,
-		-- 	disabledFn = healthOff,
-		-- 	disabledTip = "Health Bar",
-		-- 	showHash = false,
-		-- 	showPartialCog = false,
-		-- 	thresholdLabel = "Threshold %",
-		-- 	threshMin = 1,
-		-- 	threshMax = 99,
-		-- 	defaultR = 1.0,
-		-- 	defaultG = 0.2,
-		-- 	defaultB = 0.2,
-		-- 	defaultA = 1,
-		-- })
         BuildThresholdSettingsButton({
             parentRgn = healthColorRow._rightRegion,
             getBarData = function() return cfg() end,
@@ -3023,7 +2968,6 @@ initFrame:SetScript("OnEvent", function(self)
             popupTitle = "Health Bar Threshold",
             defaultR = 1.0, defaultG = 0.2, defaultB = 0.2, defaultA = 1,
         })
-		-- settingsPage = thresholdSettingsPage,
 
         -- Synced overlay: cover the fully-built content (near-opaque, controls
         -- barely visible) so the section is the same height synced or not.
@@ -4892,8 +4836,6 @@ initFrame:SetScript("OnEvent", function(self)
             end
 
             local function BuildFrame(args)
-				-- settings frame
-				-- sizing
 				local hdrH     = 40
 				local PP       = EllesmereUI.PanelPP or EllesmereUI.PP
 				local SIDE_PAD = 20
@@ -4917,9 +4859,6 @@ initFrame:SetScript("OnEvent", function(self)
 				-- Extend the overlay one row down in simple mode
 				local thrPageBotY    = args.botY - ((ctx and ctx.advanced) and 0 or ROW_H)
 				thrPage = CreateFrame("Frame", nil, parent)
-				-- Anchor via PP (pixel-perfect scaled) so it lines up with the section
-				-- header/rows, which are placed the same way. Raw SetPoint here drifts
-				-- from the scaled content (the offset grows with depth down the page).
 				PP.Point(thrPage, "TOPLEFT", parent, "TOPLEFT", CPAD, args.topY)
 				PP.Point(thrPage, "TOPRIGHT", parent, "TOPRIGHT", -CPAD, args.topY)
 				PP.Point(thrPage, "BOTTOMLEFT", parent, "TOPLEFT", CPAD, thrPageBotY)
@@ -4948,7 +4887,6 @@ initFrame:SetScript("OnEvent", function(self)
 				totalW             = thrPage:GetWidth()
 				halfW              = thrPage:GetWidth() / 2
 				contentHalfSize    = math.floor(halfW - (SIDE_PAD * 2))
-				-- local contentHalfSize = math.floor((totalW - (SIDE_PAD * 4)) / 2)
 				totalH             = thrPage:GetHeight()
 				local curY               = -INNERPAD
 				local BUTTON_W, BUTTON_H = 80, 29
@@ -5168,11 +5106,7 @@ initFrame:SetScript("OnEvent", function(self)
 				specContainer = CreateFrame("Frame", nil, backBtn)
 				specContainer:SetFrameStrata("DIALOG")
 				specContainer:SetFrameLevel(200)
-				-- popup:SetClampedToScreen(true)
-				-- popup:EnableMouse(true)
-				-- popup:SetScale(0.9)
 				PP.Point(specContainer, "TOPLEFT", thrPage, "TOPLEFT", SIDE_PAD, -ROW_H)
-				-- popup:Hide()
 				PP.Size(specContainer, contentHalfSize, specContainerH)
 
 				local bg = specContainer:CreateTexture(nil, "BACKGROUND")
@@ -5249,9 +5183,7 @@ initFrame:SetScript("OnEvent", function(self)
 				local detailC = CreateFrame("Frame", nil, thrPage)
 				detailC:SetFrameStrata("DIALOG")
 				detailC:SetFrameLevel(200)
-				-- The right side has no header, so start it at the top (aligned with
-				-- the left's back button) and run to the same bottom as the list --
-				-- reclaims the otherwise-wasted top gap so tall configs still fit.
+				-- The right side has no header row, so start it at the top
 				PP.Point(detailC, "TOPRIGHT", thrPage, "TOPRIGHT", -SIDE_PAD, -INNERPAD)
 				PP.Size(detailC, contentHalfSize, specContainerH + (ROW_H - INNERPAD))
 				local dBg = detailC:CreateTexture(nil, "BACKGROUND")
@@ -5367,7 +5299,7 @@ initFrame:SetScript("OnEvent", function(self)
 				talentDD:SetHeight(22)
 				talentDD:SetPoint("RIGHT", talentRow, "RIGHT", 0, 0)
 				talentRow._talentDD = talentDD
-				-- Keep the menu above the cog popups (see the list-side note).
+				-- Keep the menu above the cog popups
 				talentDD:HookScript("OnClick", function()
 					local m = talentDD._ddMenu
 					if m then m:SetFrameStrata("TOOLTIP") end
@@ -5400,12 +5332,11 @@ initFrame:SetScript("OnEvent", function(self)
 				hashLbl:SetAlpha(0.6)
 				hashLbl:SetPoint("LEFT", hashRow, "LEFT", 0, 0)
 				hashRow._lbl2 = hashLbl
-				-- Hash style cog: position-by-percent (bar only) + width. Color lives
-				-- inline on the row (next to the cog), like the threshold swatch.
+				-- Hash style cog
 				local hashCog, hashCogShow = EllesmereUI.BuildCogPopup({
 					title = "Hash Line Style", bgAlpha = 1, frameStrata = "FULLSCREEN_DIALOG", frameLevel = 500,
 					rows = {
-						{ type = "toggle", label = "Position by percent", tooltip = HASH_MODE_TIP,
+						{ type = "toggle", label = "Position by percent",
 						  disabled = function()
 						      local ent = CurEntry(); return not (ent and ns.IsEntryBarType(ent))
 						  end,
@@ -5432,7 +5363,6 @@ initFrame:SetScript("OnEvent", function(self)
 				hashCogBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.8) end)
 				hashCogBtn:SetScript("OnLeave", function(self) self:SetAlpha(0.5) end)
 				hashCogBtn:SetScript("OnClick", function(self) hashCogShow(self) end)
-				-- Inline hash color swatch (next to the cog), mirroring the threshold row.
 				local hashSwatch, hashSwatchSnap = EllesmereUI.BuildColorSwatch(
 					hashRow, hashRow:GetFrameLevel() + 4,
 					function()
@@ -5531,7 +5461,7 @@ initFrame:SetScript("OnEvent", function(self)
 				threshRow._enableSnap = threshEnableSnap
 				threshRow._swatchSnap = threshSwatchSnap
 				-- Greys the threshold input + swatch (label kept) while the threshold
-				-- is off or replaced by multi-band; the enable toggle stays clickable.
+				-- is off or replaced by multi-band
 				local threshDis = CreateFrame("Frame", nil, threshRow)
 				threshDis:SetPoint("TOPLEFT", threshRow, "TOPLEFT", -2, 3)
 				threshDis:SetPoint("BOTTOMRIGHT", threshSwatch, "BOTTOMRIGHT", 3, -3)
@@ -5679,7 +5609,7 @@ initFrame:SetScript("OnEvent", function(self)
 				multiToggle:HookScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
 
 				-- Disabled overlay: covers the toggle + Bands button when multi-band
-				-- can't apply (Enhance 5-bar style). Blocks clicks and shows why.
+				-- can't apply (Enhance 5-bar style)
 				local multiDis = CreateFrame("Frame", nil, multiRow)
 				multiDis:SetPoint("TOPLEFT", multiToggle, "TOPLEFT", -3, 3)
 				multiDis:SetPoint("BOTTOMRIGHT", bandsBtn, "BOTTOMRIGHT", 3, -3)
@@ -5733,7 +5663,7 @@ initFrame:SetScript("OnEvent", function(self)
 					-- Refill talent options from the active loadout + the entry's
 					-- saved gate (even if off-spec/off-loadout).
 					if allowTalent then
-						local loadoutTalents = (EllesmereUI.GetLoadoutTalents and EllesmereUI.GetLoadoutTalents()) or {}
+						local loadoutTalents = (ns.GetLoadoutTalents()) or {}
 						local vals, ord = talentRow._talentValues, talentRow._talentOrder
 						wipe(ord)
 						for k in pairs(vals) do if k ~= "_menuOpts" then vals[k] = nil end end
@@ -5847,7 +5777,6 @@ initFrame:SetScript("OnEvent", function(self)
 					end
 					-- The single-threshold option (below-value / at-above) is dead when
 					-- the threshold is off or replaced by multi-band -- grey + disable
-					-- it (kept visible so the row doesn't jump).
 					local optUsable = entEnabled and not multiOn
 					threshOptToggle:SetAlpha(optUsable and 1 or 0.35)
 					threshOptToggle:SetEnabled(optUsable)
@@ -5876,7 +5805,7 @@ initFrame:SetScript("OnEvent", function(self)
 					place(multiRow)
 				end
 				thrPage:Hide();
-            end -- BuildPopup
+            end -- BuildFrame
 
 			-- BuildFrame is not called here. It's built lazily on first open
 			-- (ToggleFrame)
@@ -6136,7 +6065,7 @@ initFrame:SetScript("OnEvent", function(self)
                             local p2 = DB(); if not p2 then return end
                             local sp2 = p2.secondary; if not sp2 then return end
                             if not sp2.thresholdSpecs then sp2.thresholdSpecs = {} end
-                            local isBar = IsSpecBarType(ctx.specID)
+                            local isBar = ns.IsSpecBarType(ctx.specID)
                             sp2.thresholdSpecs[#sp2.thresholdSpecs + 1] = {
                                 specIDs = { 0 },
                                 hashValues = "", hashWidth = 1,

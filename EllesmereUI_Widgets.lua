@@ -570,7 +570,7 @@ local function BuildDropdownMenu(ddBtn, menuW, order, values, getValue, setValue
     local mBrR, mBrG, mBrB, mBrA = 1, 1, 1, DD_BRD_A
     -- Parent to a caller-supplied frame (a scaled popup) when given, so the menu
     -- INHERITS that frame's scale and layers within it -- no manual scale matching
-    -- (kills the giant-font / behind-render fiddliness of a nested dropdown).
+    -- (fixes the giant-font / behind-render nested dropdown).
     -- Otherwise UIParent (default) so page dropdowns escape the scroll-frame clip.
     local menu = CreateFrame("Frame", nil, (_menuOpts and _menuOpts.parent) or UIParent)
     menu:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -6166,88 +6166,6 @@ local function BuildInlineToggle(opts)
     RegisterWidgetRefresh(tgSnap)
     return toggle
 end
-
--------------------------------------------------------------------------------
---  Talent helpers
--------------------------------------------------------------------------------
--- Enumerate every choosable talent in the active loadout (class + spec trees),
--- returning a name-sorted list of { spellID, name }. Returns {} when traits
--- aren't available yet. Only the active loadout is enumerable by the API.
-local function GetLoadoutTalents()
-    local talents = {}
-    local configID = C_ClassTalents and C_ClassTalents.GetActiveConfigID and C_ClassTalents.GetActiveConfigID()
-    if not configID then return talents end
-    local configInfo = C_Traits and C_Traits.GetConfigInfo and C_Traits.GetConfigInfo(configID)
-    if not configInfo or not configInfo.treeIDs then return talents end
-
-    local seenSpells = {}
-    for _, treeID in ipairs(configInfo.treeIDs) do
-        local nodes = C_Traits.GetTreeNodes(treeID)
-        if nodes then
-            for _, nodeID in ipairs(nodes) do
-                local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
-                if nodeInfo and nodeInfo.ID and nodeInfo.ID > 0
-                    and nodeInfo.entryIDs and #nodeInfo.entryIDs > 0
-                    and not nodeInfo.subTreeID then
-                    for _, entryID in ipairs(nodeInfo.entryIDs) do
-                        local entryInfo = C_Traits.GetEntryInfo(configID, entryID)
-                        if entryInfo and entryInfo.definitionID then
-                            local defInfo = C_Traits.GetDefinitionInfo(entryInfo.definitionID)
-                            if defInfo and defInfo.spellID and not seenSpells[defInfo.spellID] then
-                                local spellName = C_Spell.GetSpellName(defInfo.spellID)
-                                if spellName and spellName ~= "" then
-                                    seenSpells[defInfo.spellID] = true
-                                    talents[#talents + 1] = { spellID = defInfo.spellID, name = spellName }
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    table.sort(talents, function(a, b) return a.name < b.name end)
-    return talents
-end
-
-local function BuildSpecItems()
-	local items = {}
-	items[#items + 1] = { key = 0, label = "All Specs", isAction = true, lockedFn = HasCRAllSpecs }
-
-	local classList = {}
-	for classID = 1, (GetNumClasses and GetNumClasses() or 13) do
-		local className, classFile = GetClassInfo(classID)
-		if className then
-			classList[#classList + 1] = { classID = classID, className = className }
-		end
-	end
-	table.sort(classList, function(a, b) return a.className < b.className end)
-
-	local healers, tanks, dps = {}, {}, {}
-	for _, cls in ipairs(classList) do
-		items[#items + 1] = { isHeader = true, label = cls.className }
-		local numSpecs = GetNumSpecializationsForClassID(cls.classID) or 0
-		for specIndex = 1, numSpecs do
-			local specID, specName, _, _, role = GetSpecializationInfoForClassID(cls.classID, specIndex)
-			if specID and specName then
-				local sid = specID
-				items[#items + 1] = { key = specID, label = specName, lockedFn = function() return IsCRSpecClaimed(sid) end }
-				if role == "HEALER" then healers[#healers + 1] = specID
-				elseif role == "TANK" then tanks[#tanks + 1] = specID
-				else dps[#dps + 1] = specID end
-			end
-		end
-	end
-	_crRoleCache[CR_ROLE_HEALERS] = healers
-	_crRoleCache[CR_ROLE_TANKS] = tanks
-	_crRoleCache[CR_ROLE_DPS] = dps
-	return items
-end
-
-EllesmereUI.GetLoadoutTalents   = GetLoadoutTalents
----@type fun()
-EllesmereUI.BuildSpecItems   = BuildSpecItems
 
 EllesmereUI.BuildSliderCore     = BuildSliderCore
 EllesmereUI.BuildDropdownControl = BuildDropdownControl

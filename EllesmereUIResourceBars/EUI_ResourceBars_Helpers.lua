@@ -1,26 +1,22 @@
----@type EllesmereUI
 -------------------------------------------------------------------------------
 --  EUI_ResourceBars_Options.lua
 --  Registers the Resource Bars module with EllesmereUI
 --  Pages: Class, Power and Health Bars | Cast Bar | Unlock Mode
 -------------------------------------------------------------------------------
 local ADDON_NAME, ns = ...
-local abs = math.abs
 
 local function DB()
-	-- Access the global variable created by your .toc SavedVariables
 	local db = _G._ERB_AceDB
 	return db and db.profile
 end
 
--- A threshold card is "shadowed" only when an earlier card with the same talent
--- gate covers an overlapping spec scope - a  duplicate the resolver can never
+-- A threshold card is shadowed when an earlier card with the same talent
+-- gate covers an overlapping spec scope - a duplicate the resolver can never
 -- reach (first match wins). Cards that target another spec, or a talent you
 -- aren't running right now, are not shadowed.
---  Spec-overlap mirrors the popup's SpecsConflict (a concrete spec
+-- Spec-overlap mirrors the popup's SpecsConflict (a concrete spec
 -- shared, or both "All Specs"); an All-Specs card and a spec-specific card do
 -- not shadow each other since the resolver prioritises the specific one.
----@type fun()
 ns._ERB_IsThresholdCardShadowed = function(entries, idx)
     local cur = entries and entries[idx]
     if not cur or not cur.specIDs then return false end
@@ -69,11 +65,9 @@ ns.ERB_OverlayHealOnShow = function(ov, obg, olbl, bgAlpha)
 	end)
 end
 
--- Simple page: when the player's CURRENT spec overrides this section in
+-- Simple page: when the player's current spec overrides this section in
 -- Advanced, its Simple controls are being ignored right now. Cover them with
--- a click-to-Advanced hint so edits here aren't silently lost. This is the
--- inverse of the Advanced "Synced with Simple Mode" overlay, and only draws
--- for the sections that actually have an active override (ie; not synced).
+-- a click-to-Advanced hint so edits here aren't silently lost
 -- sectionKey: "health" | "primary" | "secondary".
 ns.ERB_SimpleOverrideOverlay = function(parent, topY, botY, sectionKey)
 	if not topY then return end
@@ -85,9 +79,7 @@ ns.ERB_SimpleOverrideOverlay = function(parent, topY, botY, sectionKey)
 	local CPAD = EllesmereUI.CONTENT_PAD or 45
 	local PP   = EllesmereUI.PanelPP or EllesmereUI.PP
 	local ov   = CreateFrame("Button", nil, parent)
-	-- Anchor via PP (pixel-perfect scaled) so it lines up with the section
-	-- header/rows, which are placed the same way. Raw SetPoint here drifts
-	-- from the scaled content (the offset grows with depth down the page).
+	-- Anchor via PP so it lines up with the section header/rows.
 	PP.Point(ov, "TOPLEFT", parent, "TOPLEFT", CPAD, topY)
 	PP.Point(ov, "TOPRIGHT", parent, "TOPRIGHT", -CPAD, topY)
 	PP.Point(ov, "BOTTOMLEFT", parent, "TOPLEFT", CPAD, botY)
@@ -108,8 +100,7 @@ ns.ERB_SimpleOverrideOverlay = function(parent, topY, botY, sectionKey)
 		if cur then p.advancedSelectedSpec = cur end
 		p.barDisplayMode = "advanced"
 		EllesmereUI:RefreshPage(true)
-		-- Land at the top of the Advanced page (as if the mode button was
-		-- clicked), not clamped in empty space at the old deep scroll offset.
+		-- Clicking to edit navigates to the top of the Advanced page
 		if EllesmereUI.ScrollToTop then EllesmereUI:ScrollToTop() end
 	end)
 end
@@ -124,7 +115,7 @@ ns.IsEntryBarType = function(entry)
 	if not entry or not entry.specIDs or #entry.specIDs == 0 then return false end
 	return ns.IsSpecBarType(entry.specIDs[1])
 end
-ns.SpecName = function(specID)
+local SpecName = function(specID)
 	if specID == 0 then return "All Specs" end
 	local _, name, _, _, _, _, className = GetSpecializationInfoByID(specID)
 	if name and className then return name .. " " .. className end
@@ -134,7 +125,7 @@ ns.EntryLabel = function(entry)
 	if not entry or not entry.specIDs or #entry.specIDs == 0 then return "Unknown" end
 	if entry.specIDs[1] == 0 then return "All Specs" end
 	local names = {}
-	for _, sid in ipairs(entry.specIDs) do names[#names + 1] = ns.SpecName(sid) end
+	for _, sid in ipairs(entry.specIDs) do names[#names + 1] = SpecName(sid) end
 	return table.concat(names, ", ")
 end
 
@@ -205,4 +196,45 @@ ns.HasCRAllSpecs = function()
 		end
 	end
 	return false
+end
+
+-- Enumerate every choosable talent in the active loadout (class + spec trees),
+-- returning a name-sorted list of { spellID, name }. Returns {} when traits
+-- aren't available yet. Only the active loadout is enumerable by the API.
+ns.GetLoadoutTalents = function()
+	local talents = {}
+	local configID = C_ClassTalents and C_ClassTalents.GetActiveConfigID and C_ClassTalents.GetActiveConfigID()
+	if not configID then return talents end
+	local configInfo = C_Traits and C_Traits.GetConfigInfo and C_Traits.GetConfigInfo(configID)
+	if not configInfo or not configInfo.treeIDs then return talents end
+
+	local seenSpells = {}
+	for _, treeID in ipairs(configInfo.treeIDs) do
+		local nodes = C_Traits.GetTreeNodes(treeID)
+		if nodes then
+			for _, nodeID in ipairs(nodes) do
+				local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
+				if nodeInfo and nodeInfo.ID and nodeInfo.ID > 0
+					and nodeInfo.entryIDs and #nodeInfo.entryIDs > 0
+					and not nodeInfo.subTreeID then
+					for _, entryID in ipairs(nodeInfo.entryIDs) do
+						local entryInfo = C_Traits.GetEntryInfo(configID, entryID)
+						if entryInfo and entryInfo.definitionID then
+							local defInfo = C_Traits.GetDefinitionInfo(entryInfo.definitionID)
+							if defInfo and defInfo.spellID and not seenSpells[defInfo.spellID] then
+								local spellName = C_Spell.GetSpellName(defInfo.spellID)
+								if spellName and spellName ~= "" then
+									seenSpells[defInfo.spellID] = true
+									talents[#talents + 1] = { spellID = defInfo.spellID, name = spellName }
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	table.sort(talents, function(a, b) return a.name < b.name end)
+	return talents
 end

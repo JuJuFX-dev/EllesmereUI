@@ -628,10 +628,9 @@ end
 -- Priority (highest first):
 --   1. spec match + talent gate active
 --   2. spec match, no talent gate
---   3. All Specs (specID 0) + talent gate active -- [TODO]
+--   3. All Specs (specID 0) + talent gate active
 --   4. All Specs, no talent gate
--- Entries carrying a talent gate that is NOT active are skipped. This lets a
--- spec keep two configs (eg; Maelstrom 60 base / 55 with a cost-reducer talent).
+-- Entries carrying a talent gate that is not active are skipped.
 local function ResolveThresholdSpecEntry(sp)
     local entries = sp.thresholdSpecs
     if not entries or #entries == 0 then return nil end
@@ -715,7 +714,7 @@ _G._ERB_ResolvePowerCfg = function(profile)
     return p.primary
 end
 
--- class resource equivalent or _ERB_ResolveHealthCfg
+-- class resource equivalent of _ERB_ResolveHealthCfg
 _G._ERB_ResolveSecondaryCfg = function(profile)
     local p = profile or (ERB and ERB.db and ERB.db.profile)
     if not p then return nil end
@@ -733,12 +732,11 @@ _G._ERB_ResolveSecondaryCfg = function(profile)
     return p.secondary
 end
 
--- True when the player's CURRENT spec has an active Advanced override for the
--- given section ("health" | "primary" | "secondary") -- ie; the Simple config
--- for that section is being IGNORED right now. The options page uses this to
+-- True when the player's current spec has an active Advanced override for the
+-- given section ("health" | "primary" | "secondary") - the Simple config
+-- for that section is being ignored right now. The options page uses this to
 -- overlay the overridden Simple sections, so editing them doesn't silently do
--- nothing (the exact confusion this guards against). Same match rule as the
--- resolvers above.
+-- nothing. Same match rule as the resolvers above.
 _G._ERB_CurSpecOverridesSection = function(sectionKey, profile)
     local p = profile or (ERB and ERB.db and ERB.db.profile)
     if not p then return false end
@@ -2283,7 +2281,7 @@ end
 -- hashIsPercent: if true, the tick numbers are read as 0-100 percentages of the
 --   bar (frac = v/100) instead of absolute resource values (frac = v/maxVal).
 --   Bar-type only; pip resources always use counts. Default false (legacy).
--- maxRenderVal (optional): suppress any tick whose RESOURCE-VALUE position exceeds
+-- maxRenderVal (optional): suppress any tick whose resource-value position exceeds
 -- it (e.g. Devourer in Void Meta caps at 39 so nothing renders at the 40 edge).
 local function ApplyResourceBarTicks(sb, maxVal, tickStr, tickCache, hashWidth, hashR, hashG, hashB, hashA, hashIsPercent, maxRenderVal)
     local vals = ParseTickValues(tickStr)
@@ -4217,7 +4215,7 @@ local function UpdateSecondaryResource()
                     elseif powerType == "IGNOREPAIN_BAR" and (_tsEntry or _tsBandOn) and maxC and maxC > 0 then
                         -- Ignore Pain is a bar but not a real power type, its
 						-- absorb value is secret in combat. Use the secret-safe
-						--  StatusBar-overlay technique (same as Vengeance pips)
+						-- StatusBar-overlay technique (same as Vengeance pips)
                         -- the bar's fill texture is the "cell",
                         -- and each overlay repaints the whole visible fill
                         local function _ipBound(to)
@@ -4421,7 +4419,6 @@ local function UpdateSecondaryResource()
             -- Multi-band: precompute each band's start count. A band overlay fills
             -- pip i when cur >= max(i, start_k); higher bands sit on higher frame
             -- levels so the topmost filled band wins.
-			-- [TODO]
             local _bandStarts
             if _tsBandOn and _tsBands then
                 _bandStarts = {}
@@ -7159,8 +7156,6 @@ function ERB:OnEnable()
     eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
     eventFrame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
     eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-    -- Single-talent swaps (no loadout/spec change) so talent-gated thresholds
-    -- re-resolve. Always out of combat, so a rebuild is safe.
     eventFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
     eventFrame:RegisterEvent("PLAYER_TALENT_UPDATE")
     eventFrame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")

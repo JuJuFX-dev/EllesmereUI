@@ -8,13 +8,6 @@
 --  every section starts SYNCED to Simple (shown behind a "Synced with Simple
 --  Mode" overlay) and can be individually unsynced + customised for that spec.
 --
---  PHASE 1 (this file so far): the top controls + data model only --
---    - profile.advancedSpecs        : array of { specID = N, sync = {} } the
---                                      user has created configs for.
---    - profile.advancedSelectedSpec : which one is being configured.
---  The per-spec sections + sync overlays come next (requires making the Simple
---  page's section builders context-aware/shared -- see notes in chat).
---
 --  ns.ERB_BuildAdvancedPage(parent, yOffset) -> totalHeight  (same contract as
 --  BuildBarDisplayPage: builds into `parent` from the negative yOffset and
 --  returns the absolute page height).
@@ -91,7 +84,7 @@ function ns.ERB_BuildAdvancedPage(parent, yOffset)
 
     local created = GetAdvancedSpecs()
 
-    -- Only the CURRENT character's specs are configurable here (the dropdown and
+    -- Only the current character's specs are configurable here (the dropdown and
     -- the Add list are both current-char only). A shared profile can hold specs
     -- from other characters, so gate the selection on the player's own specs --
     -- otherwise `sel` would default to a foreign spec and wrongly enable the row.
@@ -124,8 +117,7 @@ function ns.ERB_BuildAdvancedPage(parent, yOffset)
 			currentCharSpecs[sp.specID] = true
 		end
 
-        -- Dropdown values: the created specs. When none exist, the dropdown is
-        -- left empty and disabled (below) -- no clickable placeholder entry.
+        -- Dropdown values: the created specs
 		local vals, order = {}, {}
 		local matched = false
 		for _, e in ipairs(created) do
@@ -151,8 +143,7 @@ function ns.ERB_BuildAdvancedPage(parent, yOffset)
         )
         dd:SetHeight(ROW_H)
         PP.Point(dd, "TOPLEFT", parent, "TOPLEFT", CPAD, y)
-        -- No specs yet: nothing to pick, so disable + grey the dropdown (the
-        -- "+ Add Spec" button is how you create one).
+        -- No specs yet: nothing to pick, so disable
         if not matched then
             dd:SetEnabled(false)
             dd:SetAlpha(0.5)
@@ -223,7 +214,7 @@ function ns.ERB_BuildAdvancedPage(parent, yOffset)
             end)
         end
 
-        -- Enabled toggle (right-aligned): off => this spec uses Simple (overrides
+        -- Enabled toggle: off => this spec uses Simple (config
         -- preserved). Always shown; disabled until a spec exists to configure.
         local enLbl = EllesmereUI.MakeFont(parent, 12, nil, 1, 1, 1)
         enLbl:SetAlpha(0.7)
@@ -242,10 +233,6 @@ function ns.ERB_BuildAdvancedPage(parent, yOffset)
         PP.Point(enToggle, "RIGHT", parent, "TOPRIGHT", -CPAD, y - ROW_H / 2)
         enLbl:SetPoint("RIGHT", enToggle, "LEFT", -8, 0)
         enLbl:SetText(EllesmereUI.L("Enabled"))
-        -- No spec yet -> can't enable anything. Make the toggle fully inert
-        -- (clear its click handler + mouse) and grey it, with a hint on hover.
-        -- Note: SetEnabled(false) alone still let the knob animate on click
-        -- because BuildToggleControl's OnClick flips the visual before setValue.
         if not sel then
             enToggle:SetScript("OnClick", nil)
             enToggle:EnableMouse(false)
@@ -280,15 +267,13 @@ function ns.ERB_BuildAdvancedPage(parent, yOffset)
 
     local e = (FindAdvSpec(sel))
 
-    -- Spec's Advanced config toggled off -> it uses Simple. Show a banner
-    -- instead of the sections (the per-spec overrides are preserved).
     if e and e.enabled == false then
         local body = EllesmereUI.MakeFont(parent, 13, nil, 1, 1, 1)
         body:SetAlpha(0.5)
         body:SetJustifyH("CENTER")
         body:SetPoint("TOP", parent, "TOP", 0, y - 40)
-        body:SetText(EllesmereUI.L("Advanced is off for this spec — its bars use Simple mode.") .. "\n"
-            .. EllesmereUI.L("Turn on Enabled above to customise (saved settings are kept)."))
+        body:SetText(EllesmereUI.L("Advanced is off for this spec, its bars use Simple mode.") .. "\n"
+            .. EllesmereUI.L("Turn on Enabled above to customise (saved settings are kept.)"))
         y = y - 140
         return math.abs(y)
     end
