@@ -309,8 +309,7 @@ function EllesmereUI.BuildMacroFactory(parent, startY, PP)
         { name="EUI_DragonrageBurst", icon="Interface\\Icons\\ability_evoker_dragonrage2", label="Dragonrage\nBurst", fixedBody="/cast Dragonrage\n/use 13", fixedTooltip="Dragonrage" },
     }
     local EVOKER_PRES = {
-        { name="EUI_DreamBreath", icon="Interface\\Icons\\ability_evoker_dreambreath", label="Dream Breath\n(Cursor)", fixedBody="/cast [@cursor] Dream Breath", fixedTooltip="Dream Breath" },
-        { name="EUI_Spiritbloom", icon="Interface\\Icons\\ability_evoker_spiritbloom2", label="Spiritbloom\n(Cursor)", fixedBody="/cast [@cursor] Spiritbloom", fixedTooltip="Spiritbloom" },
+        { name="EUI_DreamFlight", icon="Interface\\Icons\\ability_evoker_dreamflight", label="Dream Flight\n(Cursor)", fixedBody="/cast [@cursor] Dream Flight", fixedTooltip="Dream Flight" },
     }
 
     -- Hunter (253=BeastMastery, 254=Marksmanship, 255=Survival)
