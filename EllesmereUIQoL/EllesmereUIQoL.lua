@@ -2435,8 +2435,11 @@ do
         if not alertOverlay then return end
         local fontPath = (EllesmereUI.GetFontPath and EllesmereUI.GetFontPath("extras"))
             or EllesmereUI.EXPRESSWAY or "Fonts\\FRIZQT__.TTF"
-        local outline = (EllesmereUI.GetFontOutlineFlag and EllesmereUI.GetFontOutlineFlag("extras"))
-            or "OUTLINE"
+        -- Always keep an outline so the alert stays readable over any background.
+        local outline = (EllesmereUI.GetFontOutlineFlag and EllesmereUI.GetFontOutlineFlag("extras")) or ""
+        if not outline:find("OUTLINE") then
+            outline = (outline == "") and "OUTLINE" or (outline .. ", OUTLINE")
+        end
         local size = (EllesmereUIDB and EllesmereUIDB.groupDeathTextSize) or DEFAULT_TEXT_SIZE
         alertOverlay._text:SetFont(fontPath, size, outline)
         -- Keep the frame (and therefore the unlock-mode mover) compact and sized
