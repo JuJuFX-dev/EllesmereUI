@@ -4106,15 +4106,15 @@ local function UpdateButton(button)
         if s.statusTextPosition == "none" then
             d.statusText:Hide()
         elseif UnitIsDeadOrGhost(unit) then
-            d.statusText:SetText("DEAD")
+            d.statusText:SetText(EllesmereUI.L("DEAD"))
             d.statusText:SetTextColor(stc.r, stc.g, stc.b)
             d.statusText:Show()
         elseif not UnitIsConnected(unit) then
-            d.statusText:SetText("OFFLINE")
+            d.statusText:SetText(EllesmereUI.L("OFFLINE"))
             d.statusText:SetTextColor(stc.r, stc.g, stc.b)
             d.statusText:Show()
         elseif s.statusShowAFK and UnitIsAFK and not issecretvalue(UnitIsAFK(unit)) and UnitIsAFK(unit) then
-            d.statusText:SetText("AFK")
+            d.statusText:SetText(EllesmereUI.L("AFK"))
             d.statusText:SetTextColor(stc.r, stc.g, stc.b)
             d.statusText:Show()
         else
@@ -5791,15 +5791,15 @@ ns._UpdateButtonHealth = function(button)
         if s.statusTextPosition == "none" then
             d.statusText:Hide()
         elseif UnitIsDeadOrGhost(unit) then
-            d.statusText:SetText("DEAD")
+            d.statusText:SetText(EllesmereUI.L("DEAD"))
             d.statusText:SetTextColor(stc.r, stc.g, stc.b)
             d.statusText:Show()
         elseif not UnitIsConnected(unit) then
-            d.statusText:SetText("OFFLINE")
+            d.statusText:SetText(EllesmereUI.L("OFFLINE"))
             d.statusText:SetTextColor(stc.r, stc.g, stc.b)
             d.statusText:Show()
         elseif s.statusShowAFK and UnitIsAFK and not issecretvalue(UnitIsAFK(unit)) and UnitIsAFK(unit) then
-            d.statusText:SetText("AFK")
+            d.statusText:SetText(EllesmereUI.L("AFK"))
             d.statusText:SetTextColor(stc.r, stc.g, stc.b)
             d.statusText:Show()
         else
@@ -12836,13 +12836,13 @@ local function ApplyPreviewData(f, index)
             f._statusText:SetPoint("CENTER", f._health, "CENTER", stOX, stOY)
         end
         if isDead then
-            f._statusText:SetText("DEAD")
+            f._statusText:SetText(EllesmereUI.L("DEAD"))
             f._statusText:Show()
         elseif isOffline then
-            f._statusText:SetText("OFFLINE")
+            f._statusText:SetText(EllesmereUI.L("OFFLINE"))
             f._statusText:Show()
         elseif isAfk then
-            f._statusText:SetText("AFK")
+            f._statusText:SetText(EllesmereUI.L("AFK"))
             f._statusText:Show()
         else
             f._statusText:Hide()

@@ -4775,7 +4775,7 @@ initFrame:SetScript("OnEvent", function(self)
             -- Wire getters/setters
             cogPopup._xGet = opts.xGet; cogPopup._xSet = opts.xSet
             cogPopup._yGet = opts.yGet; cogPopup._ySet = opts.ySet
-            cogPopup._titleFS:SetText(opts.title)
+            cogPopup._titleFS:SetText(EllesmereUI.L(opts.title))
             cogPopupOwner = anchorBtn
 
             -- Show/hide size row and adjust height

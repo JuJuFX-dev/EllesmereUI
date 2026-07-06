@@ -8339,11 +8339,11 @@ initFrame:SetScript("OnEvent", function(self)
         local row1
         do
             local classItems = {}
-            classItems[#classItems + 1] = { key = "NONE", label = "None (Disabled)" }
+            classItems[#classItems + 1] = { key = "NONE", label = EllesmereUI.L("None (Disabled)") }
             for _, cf in ipairs(ALL_CLASSES) do
                 local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[cf]
-                local raw = color and color.localizedName or cf
-                local name = raw:sub(1, 1):upper() .. raw:sub(2):lower()
+                local name = (LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[cf])
+                    or (cf:sub(1, 1):upper() .. cf:sub(2):lower())
                 local hex = color and color.colorStr or "ffffffff"
                 classItems[#classItems + 1] = { key = cf, label = "|c" .. hex .. name .. "|r" }
             end
