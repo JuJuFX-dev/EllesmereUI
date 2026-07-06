@@ -5677,3 +5677,278 @@ end
 -- Swiftmend Brightness Fix (CDM): handled inside DecorateFrame via
 -- ResolveFrameSpellID. No external scan needed.
 _G._ECDM_ScanSwiftmend = nil
+
+-------------------------------------------------------------------------------
+--  Mirror Key Presses  (per-bar: barData.pressMirror -- set in CDM Bars > Extras)
+--
+--  Show the action-button "pushed down" look on a CDM bar icon whenever you
+--  press that ability's keybind -- even while it's on cooldown. Hooks the
+--  action-button key-down path (ActionButtonDown / MultiActionButtonDown),
+--  which fires on the physical press regardless of cooldown or the cast-on-
+--  key-down/up CVar. The pushed texture + colour are read live from the
+--  EllesmereUI action bars settings, so the CDM press matches real buttons
+--  (falling back to a border-cropped Blizzard depress texture if that module
+--  isn't present). Per-frame data lives in an external weak-keyed table.
+-------------------------------------------------------------------------------
+do
+    local AB_MEDIA      = "Interface\\AddOns\\EllesmereUIActionBars\\Media\\"
+    local AB_HIGHLIGHT  = { AB_MEDIA .. "highlight-2.png", AB_MEDIA .. "highlight-3.png", AB_MEDIA .. "highlight-4.png" }
+    local DEPRESS_TEX   = "Interface\\Buttons\\UI-Quickslot-Depress"
+    local DEPRESS_INSET = 0.14   -- crop the beveled border off the fallback texture
+    local MIN_VISIBLE   = 0.05   -- floor so ultra-fast taps still show a press
+    local MAX_HOLD      = 2.0    -- safety: never leave an icon stuck "pressed"
+
+    local _pushOverlay = setmetatable({}, { __mode = "k" })  -- [icon] = overlay frame
+    local _held  = {}   -- [buttonFrame] = { overlays = {..}, keys = {..}, t = GetTime() }
+    local _heldN = 0
+    local _poll  = CreateFrame("Frame")
+    _poll:Hide()
+
+    -- Read the action bars' pushed settings live so the CDM press matches them.
+    local function GetABProfile()
+        local L = EllesmereUI and EllesmereUI.Lite
+        if not (L and L.GetAddon) then return nil end
+        local ok, eab = pcall(L.GetAddon, "EllesmereUIActionBars", true)
+        if ok and eab and eab.db then return eab.db.profile end
+        return nil
+    end
+
+    -- Style tex to match the bars' pushed look. Returns false when pushed is set
+    -- to "None" (so the CDM press mirrors that), true otherwise.
+    local function StylePush(tex)
+        local p = GetABProfile()
+        if p then
+            local pType = p.pushedTextureType or 2
+            local c = p.pushedCustomColor or { r = 0.973, g = 0.839, b = 0.604 }
+            local cr, cg, cb = c.r, c.g, c.b
+            if p.pushedUseClassColor then
+                local _, ct = UnitClass("player")
+                if ct then local cc = RAID_CLASS_COLORS[ct]; if cc then cr, cg, cb = cc.r, cc.g, cc.b end end
+            end
+            tex:SetTexCoord(0, 1, 0, 1)
+            if p.useBlizzardStyle then
+                tex:SetAtlas("UI-HUD-ActionBar-IconFrame-Down", false)
+                tex:SetVertexColor(1, 1, 1, 1); tex:SetAlpha(1)
+                return true
+            elseif pType == 6 then
+                tex:SetAlpha(0); return false
+            end
+            tex:SetAlpha(1)
+            if pType <= 3 then
+                tex:SetAtlas(nil); tex:SetTexture(AB_HIGHLIGHT[pType] or AB_HIGHLIGHT[2]); tex:SetVertexColor(cr, cg, cb, 1)
+            elseif pType == 4 then
+                tex:SetColorTexture(cr, cg, cb, 0.35)
+            elseif pType == 5 then
+                tex:SetAtlas(nil); tex:SetTexture(AB_HIGHLIGHT[1]); tex:SetVertexColor(cr, cg, cb, 1)
+            end
+            return true
+        end
+        -- Fallback: interior of the Blizzard depress texture (border cropped off).
+        tex:SetAtlas(nil)
+        tex:SetTexture(DEPRESS_TEX)
+        tex:SetTexCoord(DEPRESS_INSET, 1 - DEPRESS_INSET, DEPRESS_INSET, 1 - DEPRESS_INSET)
+        tex:SetVertexColor(1, 1, 1, 1); tex:SetAlpha(1)
+        return true
+    end
+
+    local function ShowPush(icon)
+        local ov = _pushOverlay[icon]
+        if not ov then
+            ov = CreateFrame("Frame", nil, icon)
+            ov:SetFrameLevel(icon:GetFrameLevel() + 15)  -- above icon + cooldown swipe
+            ov:Hide()
+            local tex = ov:CreateTexture(nil, "OVERLAY")
+            tex:SetAllPoints(ov)
+            ov._tex = tex
+            _pushOverlay[icon] = ov
+        end
+        if not StylePush(ov._tex) then ov:Hide(); return nil end
+        local region = icon.Icon or icon
+        ov:ClearAllPoints()
+        ov:SetPoint("TOPLEFT", region, "TOPLEFT", 0, 0)
+        ov:SetPoint("BOTTOMRIGHT", region, "BOTTOMRIGHT", 0, 0)
+        ov:Show()
+        return ov
+    end
+
+    ---------------------------------------------------------------------------
+    --  Spell matching (pressed button's spell vs. a CDM icon's spell)
+    ---------------------------------------------------------------------------
+    local GetOverrideSpell      = C_Spell and C_Spell.GetOverrideSpell
+    local GetBaseSpell          = C_Spell and C_Spell.GetBaseSpell
+    local FindSpellOverrideByID = C_SpellBook and C_SpellBook.FindSpellOverrideByID
+
+    local function safeNum(fn, arg)
+        if type(fn) ~= "function" then return nil end
+        local ok, res = pcall(fn, arg)
+        if ok and type(res) == "number" and res > 0 then return res end
+    end
+
+    local function SpellIdSet(id)
+        local t = { [id] = true }
+        local a = safeNum(GetOverrideSpell, id);      if a then t[a] = true end
+        local b = safeNum(GetBaseSpell, id);          if b then t[b] = true end
+        local c = safeNum(FindBaseSpellByID, id);     if c then t[c] = true end
+        local d = safeNum(FindSpellOverrideByID, id); if d then t[d] = true end
+        return t
+    end
+
+    local function IconMatches(pressedSet, iconSid)
+        if pressedSet[iconSid] then return true end
+        local a = safeNum(GetOverrideSpell, iconSid); if a and pressedSet[a] then return true end
+        local b = safeNum(GetBaseSpell, iconSid);     if b and pressedSet[b] then return true end
+        return false
+    end
+
+    local function IconSpellID(icon)
+        local fc = _ecmeFC and _ecmeFC[icon]
+        local sid = fc and fc.spellID
+        if sid then return sid end
+        local cdID = icon.cooldownID
+        if cdID and C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCooldownInfo then
+            local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
+            if info then return info.overrideSpellID or info.spellID end
+        end
+        return nil
+    end
+
+    ---------------------------------------------------------------------------
+    --  Press / hold / release. Release is driven by polling IsKeyDown on the
+    --  button's binding keys, floored by MIN_VISIBLE and capped by MAX_HOLD.
+    ---------------------------------------------------------------------------
+    local function ReleaseEntry(btn, entry)
+        local ovs = entry.overlays
+        for i = 1, #ovs do ovs[i]:Hide() end
+        _held[btn] = nil
+        _heldN = _heldN - 1
+        if _heldN <= 0 then _heldN = 0; _poll:Hide() end
+    end
+
+    _poll:SetScript("OnUpdate", function()
+        if _heldN == 0 then _poll:Hide(); return end
+        local now = GetTime()
+        for btn, entry in pairs(_held) do
+            local elapsed = now - entry.t
+            local done = false
+            if elapsed >= MAX_HOLD then
+                done = true
+            elseif elapsed >= MIN_VISIBLE then
+                local anyDown = false
+                local keys = entry.keys
+                if keys then
+                    for i = 1, #keys do
+                        if keys[i] and IsKeyDown(keys[i]) then anyDown = true; break end
+                    end
+                end
+                if not anyDown then done = true end
+            end
+            if done then ReleaseEntry(btn, entry) end
+        end
+    end)
+
+    local function AnyBarEnabled()
+        if not barDataByKey then return false end
+        for _, bd in pairs(barDataByKey) do
+            if bd and bd.pressMirror then return true end
+        end
+        return false
+    end
+
+    local function SlotSpellID(slot)
+        if not slot then return nil end
+        if HasAction and not HasAction(slot) then return nil end
+        local actionType, id, subType = GetActionInfo(slot)
+        if actionType == "spell" then
+            return id
+        elseif actionType == "macro" and id then
+            if subType == "spell" then return id else return GetMacroSpell(id) end
+        end
+        return nil
+    end
+
+    -- Base key of a (possibly modified) binding, e.g. "SHIFT-1" -> "1".
+    local function BaseKey(binding)
+        return binding and binding:match("[^%-]+$") or nil
+    end
+
+    local function OnPress(btn, bindCmd)
+        if not btn or not AnyBarEnabled() then return end
+        local slot = btn.action or (btn.GetAttribute and btn:GetAttribute("action"))
+        local sid = SlotSpellID(slot)
+        if not sid then return end
+
+        local pressedSet = SpellIdSet(sid)
+        local overlays
+        if cdmBarIcons then
+            for barKey, list in pairs(cdmBarIcons) do
+                local bd = barDataByKey and barDataByKey[barKey]
+                if bd and bd.pressMirror then
+                    for i = 1, #list do
+                        local icon = list[i]
+                        if icon and icon:IsShown() then
+                            local isid = IconSpellID(icon)
+                            if isid and IconMatches(pressedSet, isid) then
+                                local ov = ShowPush(icon)
+                                if ov then overlays = overlays or {}; overlays[#overlays + 1] = ov end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        if not overlays then return end
+
+        local keys
+        if bindCmd then
+            local k1, k2 = GetBindingKey(bindCmd)
+            keys = { BaseKey(k1), BaseKey(k2) }
+        end
+        local entry = _held[btn]
+        if entry then
+            entry.overlays = overlays; entry.keys = keys; entry.t = GetTime()
+        else
+            _held[btn] = { overlays = overlays, keys = keys, t = GetTime() }
+            _heldN = _heldN + 1
+        end
+        _poll:Show()
+    end
+
+    -- Public: clear active overlays (called from the CDM Bars > Extras toggle).
+    function ns.ClearCdmPressPush()
+        for _, entry in pairs(_held) do
+            local ovs = entry.overlays
+            for i = 1, #ovs do ovs[i]:Hide() end
+        end
+        wipe(_held); _heldN = 0; _poll:Hide()
+    end
+
+    ---------------------------------------------------------------------------
+    --  Hook the action-button key-down path (fires on press, even on cooldown)
+    ---------------------------------------------------------------------------
+    local MULTIBAR_BINDING = {
+        MultiBarBottomLeft  = "MULTIACTIONBAR1BUTTON",
+        MultiBarBottomRight = "MULTIACTIONBAR2BUTTON",
+        MultiBarRight       = "MULTIACTIONBAR3BUTTON",
+        MultiBarLeft        = "MULTIACTIONBAR4BUTTON",
+        MultiBar5           = "MULTIACTIONBAR5BUTTON",
+        MultiBar6           = "MULTIACTIONBAR6BUTTON",
+        MultiBar7           = "MULTIACTIONBAR7BUTTON",
+    }
+
+    local ev = CreateFrame("Frame")
+    ev:RegisterEvent("PLAYER_LOGIN")
+    ev:SetScript("OnEvent", function()
+        if type(ActionButtonDown) == "function" then
+            hooksecurefunc("ActionButtonDown", function(id)
+                local btn = (GetActionButtonForID and GetActionButtonForID(id)) or _G["ActionButton" .. id]
+                OnPress(btn, "ACTIONBUTTON" .. id)
+            end)
+        end
+        if type(MultiActionButtonDown) == "function" then
+            hooksecurefunc("MultiActionButtonDown", function(barName, id)
+                local prefix = MULTIBAR_BINDING[barName]
+                OnPress(_G[barName .. "Button" .. id], prefix and (prefix .. id) or nil)
+            end)
+        end
+    end)
+end

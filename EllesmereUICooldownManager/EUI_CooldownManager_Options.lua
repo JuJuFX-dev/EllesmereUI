@@ -15440,6 +15440,17 @@ initFrame:SetScript("OnEvent", function(self)
             end
         end
 
+       -- Mirror Key Presses
+        _, h = W:DualRow(parent, y,
+            { type="toggle", text="Mirror Key Presses",
+              tooltip = "When you press an ability's keybind, show the action button's \"pushed down\" look on its icon on this bar -- even while the ability is on cooldown.",
+              getValue=function() return BD().pressMirror == true end,
+              setValue=function(v)
+                  BD().pressMirror = v
+                  if ns.ClearCdmPressPush then ns.ClearCdmPressPush() end
+              end },
+            { type="label", text="" });  y = y - h
+
         end -- custom_buff extras guard
 
         return math.abs(y)
