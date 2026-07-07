@@ -519,10 +519,11 @@ PresetOnCD = function(key)
     return (dur > 1.5 and now < start + dur) or false
 end
 
--- Normal (shown) alpha for a frame, from its bar's opacity.
+-- Normal (shown) alpha for a frame, from its bar's opacity (out-of-combat
+-- fade folded in via EffectiveBarAlpha so restores don't clobber the fade).
 local function FrameBaseAlpha(fc)
     local bd = fc and fc.barKey and ns.barDataByKey and ns.barDataByKey[fc.barKey]
-    return (bd and bd.barOpacity) or 1
+    return ns.EffectiveBarAlpha(bd)
 end
 
 -- cas is the rule's styling entry (passed in so a trinket, whose frame key is a

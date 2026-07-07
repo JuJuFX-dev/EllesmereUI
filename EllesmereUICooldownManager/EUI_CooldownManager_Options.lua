@@ -13952,6 +13952,39 @@ initFrame:SetScript("OnEvent", function(self)
             MakeCogBtn(leftRgn, topRowCogShow, ctrl, EllesmereUI.COGS_ICON)
         end
 
+        -- Inline cog on Bar Opacity: fade the bar to a chosen alpha while out
+        -- of combat. Off by default.
+        if isCDOrUtilityRow3 then
+            local rgn = numRowsRow._rightRegion
+            local ctrl = rgn and rgn._control
+            local _, oocCogShow = EllesmereUI.BuildCogPopup({
+                title = "Out of Combat Alpha",
+                rows = {
+                    { type="toggle", label="Fade Out of Combat",
+                      tooltip="Dims this bar while out of combat.",
+                      rawTooltip=true,
+                      get=function() return BD().oocFadeEnabled == true end,
+                      set=function(v)
+                          BD().oocFadeEnabled = v
+                          if ns.CDMApplyVisibility then ns.CDMApplyVisibility() end
+                          UpdateCDMPreview()
+                      end },
+                    { type="slider", label="Out of Combat Alpha",
+                      min=0, max=100, step=1,
+                      disabled=function() return not BD().oocFadeEnabled end,
+                      disabledTooltip="Enable Fade Out of Combat first",
+                      rawTooltip=true,
+                      get=function() return math.floor((BD().oocFadeAlpha or 0.5) * 100 + 0.5) end,
+                      set=function(v)
+                          BD().oocFadeAlpha = v / 100
+                          if ns.CDMApplyVisibility then ns.CDMApplyVisibility() end
+                          UpdateCDMPreview()
+                      end },
+                },
+            })
+            MakeCogBtn(rgn, oocCogShow, ctrl, EllesmereUI.COGS_ICON)
+        end
+
         -- Hide Buffs When Inactive (global setting, applies to all buff bars)
         if ns.IsBarBuffFamily(barData) then
             local prof = ns.ECME and ns.ECME.db and ns.ECME.db.profile

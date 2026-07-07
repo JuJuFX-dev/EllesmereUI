@@ -2067,7 +2067,7 @@ local function DecorateFrame(frame, barData)
                     if fc2 and fc2._cdStateHidden then
                         fc2._cdStateHidden = false
                         local bd2 = barDataByKey and barDataByKey[bk2]
-                        frame:SetAlpha(bd2 and bd2.barOpacity or 1)
+                        frame:SetAlpha(ns.EffectiveBarAlpha(bd2))
                     end
                 end
                 -- For hidden cdState modes, defer the evaluation by one
@@ -2098,7 +2098,7 @@ local function DecorateFrame(frame, barData)
                         local onCD = cseInfo and cseInfo.isActive and not cseInfo.isOnGCD
                         local myCse = self.cse
                         local bd3 = barDataByKey and barDataByKey[bk3]
-                        local baseA = bd3 and bd3.barOpacity or 1
+                        local baseA = ns.EffectiveBarAlpha(bd3)
                         if myCse == "lowerAlphaOnCD" then
                             -- Lowered (not hidden): reuse _cdStateHidden as the
                             -- "cd-state owns this alpha" flag so the opacity appliers
@@ -3945,7 +3945,7 @@ local function CollectAndReanchor()
                             if barData.hidePlaceholderIcon and frame._isPlaceholderFrame then
                                 frame:SetAlpha(0)
                             else
-                                frame:SetAlpha(barHidden and 0 or (barData.barOpacity or 1))
+                                frame:SetAlpha(barHidden and 0 or ns.EffectiveBarAlpha(barData))
                             end
                         end
                     end
@@ -4471,7 +4471,7 @@ local function CollectAndReanchor()
                     if not isFKBar then
                     local fcH = _ecmeFC[frame]
                     if not (fcH and fcH._cdStateHidden) then
-                        frame:SetAlpha(barHidden and 0 or (barData.barOpacity or 1))
+                        frame:SetAlpha(barHidden and 0 or ns.EffectiveBarAlpha(barData))
                     end
                     end
                     frame:Show()

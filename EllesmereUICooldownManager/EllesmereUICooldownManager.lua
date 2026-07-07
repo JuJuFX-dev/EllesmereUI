@@ -220,6 +220,17 @@ local _keybindDebounceTimer  = nil   -- cancellable timer for debounced keybind 
 -- Combat state tracked via events (InCombatLockdown() can lag behind PLAYER_REGEN_DISABLED)
 local _inCombat = false
 
+-- Resting alpha for a bar's icons: the out-of-combat fade value when enabled
+-- and out of combat, otherwise the bar's opacity. Callers restoring an icon's
+-- alpha go through this so the fade survives cd-state and buff re-renders.
+local function EffectiveBarAlpha(barData)
+    if barData and barData.oocFadeEnabled and not _inCombat then
+        return barData.oocFadeAlpha or 0.5
+    end
+    return (barData and barData.barOpacity) or 1
+end
+ns.EffectiveBarAlpha = EffectiveBarAlpha
+
 -- Vehicle/petbattle state proxy. Created once in CDMFinishSetup; drives
 -- _CDMApplyVisibility on state change so CDM bars hide while in vehicle UI.
 local _cdmVehicleProxy = nil
@@ -5128,19 +5139,19 @@ local function RefreshCDMIconAppearance(barKey)
                 local onCD = cseInfo and cseInfo.isActive and not cseInfo.isOnGCD
                 if cse == "hiddenOnCD" or cse == "hiddenReady" then
                     local hide = (cse == "hiddenOnCD") == onCD
-                    icon:SetAlpha(hide and 0 or (barData.barOpacity or 1))
+                    icon:SetAlpha(hide and 0 or EffectiveBarAlpha(barData))
                     if fc then fc._cdStateHidden = hide or false end
                 elseif cse == "lowerAlphaOnCD" then
                     -- Identical to hiddenOnCD but with a customizable opacity instead
                     -- of 0. Reuse the _cdStateHidden flag as "cd-state owns this alpha"
                     -- so the opacity appliers leave the lowered value alone.
-                    icon:SetAlpha(onCD and (csSs.cdStateLowerAlpha or 0.5) or (barData.barOpacity or 1))
+                    icon:SetAlpha(onCD and (csSs.cdStateLowerAlpha or 0.5) or EffectiveBarAlpha(barData))
                     if fc then fc._cdStateHidden = onCD or false end
                 else
                     -- Clear stale hidden state when switching to a glow effect
                     if fc and fc._cdStateHidden then
                         fc._cdStateHidden = false
-                        icon:SetAlpha(barData.barOpacity or 1)
+                        icon:SetAlpha(EffectiveBarAlpha(barData))
                     end
                     if not ifd or not ifd._cdStateGlowOn then
                         if (cse == "pixelGlowReady" or cse == "buttonGlowReady"
@@ -5176,7 +5187,7 @@ local function RefreshCDMIconAppearance(barKey)
                 -- so don't clear it here or the icon flashes visible.
                 if not (ns.PresetHasCdState and ns.PresetHasCdState(icon)) then
                     fc._cdStateHidden = false
-                    icon:SetAlpha(barData.barOpacity or 1)
+                    icon:SetAlpha(EffectiveBarAlpha(barData))
                 end
             end
         end
@@ -6047,8 +6058,9 @@ _CDMApplyVisibility = function()
                 end
                 frame._visHidden = false
                 -- Apply opacity to icons every pass (idempotent, handles
-                -- fresh loads where wasHidden is false).
-                local visAlpha = barData.barOpacity or 1
+                -- fresh loads where wasHidden is false). EffectiveBarAlpha folds
+                -- in the out-of-combat fade when that option is on.
+                local visAlpha = EffectiveBarAlpha(barData)
                 local icons = cdmBarIcons[barData.key]
                 local icCombat2 = InCombatLockdown()
                 if icons then
@@ -6155,7 +6167,7 @@ local function ApplyBarOpacity(barKey)
     local barData = barDataByKey[barKey]
     if not barData then return end
     if barKey == FOCUSKICK_BAR_KEY then return end
-    local a = barData.barOpacity or 1
+    local a = EffectiveBarAlpha(barData)
     local icons = cdmBarIcons[barKey]
     if icons then
         for i = 1, #icons do

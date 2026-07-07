@@ -1666,6 +1666,10 @@ L["Text Bar"]                      = "文字条"
 -- == Text Alignment ===========================================================
 
 -- == CDM Options - Missing Translations ========================================
+L["Fade Out of Combat"]           = "战斗外淡出"
+L["Out of Combat Alpha"]          = "战斗外透明度"
+L["Dims this bar while out of combat."] = "战斗外时降低此条的透明度。"
+L["Enable Fade Out of Combat first"] = "首先启用战斗外淡出"
 L["Glow When"]                    = "发光时机"
 L["Remove Glow"]                  = "移除发光"
 L["Remove"]                       = "移除"
