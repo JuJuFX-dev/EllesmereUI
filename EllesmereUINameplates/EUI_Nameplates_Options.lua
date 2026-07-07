@@ -59,6 +59,7 @@ initFrame:SetScript("OnEvent", function(self)
         fs:SetFont(fontPath, size, flags)
     end
     local floor = math.floor
+    local NAME_RAID_MARKER_GAP = 3
 
     ---------------------------------------------------------------------------
     --  DB helper reads from the centralized profile via ns.db
@@ -557,6 +558,14 @@ initFrame:SetScript("OnEvent", function(self)
         nameFS:SetMaxLines(1)
         nameFS:SetText(EllesmereUI.L("Enemy Name Text"))
         nameFS:SetTextColor(1, 1, 1, 1)
+
+        local nameRaidFrame = CreateFrame("Frame", nil, pf)
+        nameRaidFrame:SetFrameLevel(health:GetFrameLevel() + 8)
+        nameRaidFrame:Hide()
+        local nameRaidIcon = nameRaidFrame:CreateTexture(nil, "ARTWORK")
+        nameRaidIcon:SetAllPoints()
+        nameRaidIcon:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")
+        if SetRaidTargetIconTexture then SetRaidTargetIconTexture(nameRaidIcon, 1) end
 
         -- Health percentage text (right-aligned inside health bar)
         local hpText = healthTextFrame:CreateFontString(nil, "OVERLAY")
@@ -1324,14 +1333,53 @@ initFrame:SetScript("OnEvent", function(self)
             nameFS:SetWordWrap(pvNameWrap)
             nameFS:SetNonSpaceWrap(false)
             nameFS:SetMaxLines(pvNameWrap and 2 or 1)
+            local pvNameMarkerEnabled = DBVal("nameRaidMarkerEnabled") == true
+            local pvNameMarkerSize = DBVal("nameRaidMarkerSize") or defaults.nameRaidMarkerSize or 14
+            local pvNameMarkerReserve = pvNameMarkerEnabled and (pvNameMarkerSize + NAME_RAID_MARKER_GAP) or 0
+            local pvNameSlotKey
+
+            local function PreviewNameTextWidth()
+                local fallback = nameFS:GetWidth() or 0
+                local ok, w = pcall(nameFS.GetStringWidth, nameFS)
+                if ok and type(w) == "number" then
+                    return math.min(w, fallback > 0 and fallback or w)
+                end
+                return fallback
+            end
+
+            local function LayoutPreviewNameRaidMarker()
+                if not (pvNameMarkerEnabled and pvNameSlotKey and nameFS:IsShown()) then
+                    nameRaidFrame:Hide()
+                    return
+                end
+                nameRaidFrame:SetParent((pvNameSlotKey == "textSlotTop") and topTextFrame or healthTextFrame)
+                nameRaidFrame:SetFrameLevel(health:GetFrameLevel() + 8)
+                nameRaidFrame:SetSize(pvNameMarkerSize, pvNameMarkerSize)
+                nameRaidFrame:ClearAllPoints()
+                local textW = PreviewNameTextWidth()
+                if pvNameSlotKey == "textSlotLeft" then
+                    nameRaidFrame:SetPoint("RIGHT", nameFS, "LEFT", -NAME_RAID_MARKER_GAP, 0)
+                elseif pvNameSlotKey == "textSlotRight" then
+                    nameRaidFrame:SetPoint("RIGHT", nameFS, "RIGHT", -textW - NAME_RAID_MARKER_GAP, 0)
+                else
+                    nameRaidFrame:SetPoint("RIGHT", nameFS, "CENTER", -(textW * 0.5) - NAME_RAID_MARKER_GAP, 0)
+                end
+                if SetRaidTargetIconTexture then SetRaidTargetIconTexture(nameRaidIcon, 1) end
+                nameRaidFrame:Show()
+            end
 
             -- Helper: position the name in a bar slot
             local function PlaceNameInBar(anchor, point, xOff, justify, txOff, tyOff, fontSize, cr, cg, cb, nameSlotKey)
                 txOff = txOff or 0
                 tyOff = tyOff or 0
+                pvNameSlotKey = nameSlotKey
+                local markerShift = 0
+                if pvNameMarkerEnabled then
+                    markerShift = (justify == "LEFT") and pvNameMarkerReserve or ((justify == "CENTER") and (pvNameMarkerReserve * 0.5) or 0)
+                end
                 SetPVFont(nameFS, fontPath, fontSize, npOutline)
                 nameFS:SetParent(healthTextFrame)
-                nameFS:SetPoint(point, health, anchor, xOff + txOff, tyOff)
+                nameFS:SetPoint(point, health, anchor, xOff + txOff + markerShift, tyOff)
                 nameFS:SetJustifyH(justify)
                 -- Estimate health text width in opposing bar slots
                 local usedWidth = 0
@@ -1348,7 +1396,7 @@ initFrame:SetScript("OnEvent", function(self)
                         end
                     end
                 end
-                nameFS:SetWidth(math.max((barW - usedWidth) * pvNameWPct / 100, 20))
+                nameFS:SetWidth(math.max((barW - usedWidth - pvNameMarkerReserve) * pvNameWPct / 100, 20))
                 nameFS:SetTextColor(cr, cg, cb, 1)
                 nameFS:Show()
             end
@@ -1359,13 +1407,14 @@ initFrame:SetScript("OnEvent", function(self)
             local topFontSz = DBVal("textSlotTopSize") or defaults.textSlotTopSize
             local topC = (DB() and DB().textSlotTopColor) or defaults.textSlotTopColor
             if slotTop == "enemyName" then
+                pvNameSlotKey = "textSlotTop"
                 SetPVFont(nameFS, fontPath, topFontSz, npOutline)
                 nameFS:SetParent(topTextFrame)
-                nameFS:SetPoint("BOTTOM", health, "TOP", topXOff, 4 + nameYOff + cpPush + topYOff)
+                nameFS:SetPoint("BOTTOM", health, "TOP", topXOff + (pvNameMarkerReserve * 0.5), 4 + nameYOff + cpPush + topYOff)
                 nameFS:SetJustifyH("CENTER")
-                local nameW = barW
+                local nameW = barW - pvNameMarkerReserve
                 if rmPos ~= "none" and showRM then
-                    nameW = barW - 2 * (rmSize - 2) - 7
+                    nameW = nameW - 2 * (rmSize - 2) - 7
                 end
                 if showCL and clPos ~= "none" then
                     nameW = nameW - (reIconSz + 4)
@@ -1410,6 +1459,7 @@ initFrame:SetScript("OnEvent", function(self)
                 PlaceHealthInBar(slotCenter, "CENTER", "CENTER", centerXOff, centerYOff, centerFontSz, centerC.r, centerC.g, centerC.b, "textSlotCenter")
             end
             if DBVal("hideEnemyNameWhileCasting") == true then nameFS:Hide() end
+            LayoutPreviewNameRaidMarker()
 
             -- Health bar color: always uses "enemies in combat" color
             local eic = (DB() and DB().enemyInCombat) or defaults.enemyInCombat
@@ -3553,7 +3603,8 @@ initFrame:SetScript("OnEvent", function(self)
             cogBtn:SetAlpha(questObjOff() and 0.15 or 0.4)
         end
 
-        _, h = W:DualRow(parent, y,
+        local nameRaidMarkerRow
+        nameRaidMarkerRow, h = W:DualRow(parent, y,
             { type="toggle", text="Hide Enemy Name While Casting",
               tooltip="Hide the enemy name text while that nameplate's cast bar is visible.",
               getValue=function() return DBVal("hideEnemyNameWhileCasting") == true end,
@@ -3562,13 +3613,63 @@ initFrame:SetScript("OnEvent", function(self)
                 ns.RefreshAllSettings()
                 UpdatePreview()
               end },
+            { type="toggle", text="Name Raid Marker",
+              tooltip="Shows the target marker directly before the enemy name text. Uses its own size and does not use the Core Positions raid marker slot.",
+              getValue=function() return DBVal("nameRaidMarkerEnabled") == true end,
+              setValue=function(v)
+                DB().nameRaidMarkerEnabled = v
+                ns.RefreshAllSettings()
+                UpdatePreview()
+                EllesmereUI:RefreshPage()
+              end });  y = y - h
+
+        do
+            local function nameRaidMarkerOff() return DBVal("nameRaidMarkerEnabled") ~= true end
+            local rgn = nameRaidMarkerRow._rightRegion
+            local _, nameRaidMarkerCogShow = EllesmereUI.BuildCogPopup({
+                title = "Name Raid Marker",
+                rows = {
+                    { type="slider", label="Size", min=6, max=32, step=1,
+                      get=function() return DBVal("nameRaidMarkerSize") or defaults.nameRaidMarkerSize end,
+                      set=function(v)
+                        DB().nameRaidMarkerSize = v
+                        ns.RefreshAllSettings()
+                        UpdatePreview()
+                      end },
+                },
+            })
+            local cogBtn = CreateFrame("Button", nil, rgn)
+            cogBtn:SetSize(26, 26)
+            cogBtn:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
+            rgn._lastInline = cogBtn
+            cogBtn:SetFrameLevel(rgn:GetFrameLevel() + 5)
+            local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
+            cogTex:SetAllPoints()
+            cogTex:SetTexture(EllesmereUI.RESIZE_ICON)
+            if cogTex.SetSnapToPixelGrid then cogTex:SetSnapToPixelGrid(false); cogTex:SetTexelSnappingBias(0) end
+            local function UpdateCogAlpha()
+                cogBtn:SetAlpha(nameRaidMarkerOff() and 0.15 or 0.4)
+            end
+            EllesmereUI.RegisterWidgetRefresh(UpdateCogAlpha)
+            UpdateCogAlpha()
+            cogBtn:SetScript("OnClick", function(self)
+                if not nameRaidMarkerOff() then nameRaidMarkerCogShow(self) end
+            end)
+            cogBtn:SetScript("OnEnter", function(self)
+                if not nameRaidMarkerOff() then self:SetAlpha(0.75) end
+            end)
+            cogBtn:SetScript("OnLeave", function() UpdateCogAlpha() end)
+        end
+
+        _, h = W:DualRow(parent, y,
             { type = "toggle", text = "Experimental: Cast Lockout as CC Icon",
               tooltip = "Show successful interrupt lockouts in the crowd-control icon slot.\n\nDue to addon restrictions, the duration shown is a generic 4 seconds for all classes, so it is not 100% accurate.",
               getValue = function() return DBVal("showCastLockoutAsCrowdControl") == true end,
               setValue = function(v)
                   DB().showCastLockoutAsCrowdControl = v
                   RefreshAllAuras()
-              end });  y = y - h
+              end },
+            nil);  y = y - h
 
         -- Focus Letter: draws a white "F" on the current focus nameplate.
         local focusLetterOff = function()

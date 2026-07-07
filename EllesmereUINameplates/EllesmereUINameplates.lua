@@ -132,8 +132,22 @@ function ns._appendDisplayPresetKeys(t)
         "targetArrowDouble", "targetArrowStyle", "targetArrowColor", "targetArrowClassColor",
         "auraStackTextSize", "auraStackTextColor",
         "auraStackTextPosition", "auraStackTextX", "auraStackTextY",
+        "auraDurationTextX", "auraDurationTextY",
+        "debuffDurationTextSize", "debuffDurationTextX", "debuffDurationTextY", "debuffDurationTextColor",
+        "buffDurationTextSize", "buffDurationTextX", "buffDurationTextY", "buffDurationTextColor",
+        "ccDurationTextSize", "ccDurationTextX", "ccDurationTextY", "ccDurationTextColor",
         "buffTextSize", "buffTextColor", "ccTextSize", "ccTextColor",
         "raidMarkerPos", "classificationSlot",
+        "castNameSize", "castNameColor", "castTargetSize", "castTargetClassColor", "castTargetColor",
+        "showCastTimer", "castTimerSize", "castTimerColor", "targetScale",
+        "castNameSide", "castTargetSide", "castTimerSide",
+        "castNameWidthPct", "castNameWrap", "castTargetWidthPct", "castTargetWrap",
+        "enemyNameWidthPct", "enemyNameWrap", "wrapBorderCastbar",
+        "debuffSlot", "buffSlot", "ccSlot",
+        "debuffYOffset", "sideAuraXOffset", "auraSpacing",
+        "debuffSpacing", "buffSpacing", "ccSpacing",
+        "debuffTimerPosition", "buffTimerPosition", "ccTimerPosition",
+        "auraDurationTextSize", "auraDurationTextColor",
         "debuffCropIcons", "buffCropIcons", "ccCropIcons",
         "showCastLockoutAsCrowdControl",
         "targetGlowEllesmereUI", "targetGlowBorderColor", "targetGlowHighlight", "targetBorderColor",
@@ -312,6 +326,8 @@ local defaults = {
     -- hardcoded white at 30%, so existing users are unaffected).
     targetHighlightColor = { r = 1, g = 1, b = 1 },
     targetHighlightAlpha = 0.20,
+    nameRaidMarkerEnabled = false,
+    nameRaidMarkerSize = 14,
     raidMarkerPos = "topright",
     raidMarkerSize = 24,
     classificationSlot = "topleft",
@@ -2534,6 +2550,15 @@ local frameCache = CreateFramePool("Frame", UIParent, nil, nil, false, function(
     PP.Width(plate.name, math.max(GetHealthBarWidth(), 20))
     plate.name:SetWordWrap(false)
     plate.name:SetMaxLines(1)
+    plate.nameRaidFrame = CreateFrame("Frame", nil, plate)
+    local nameRmSize = (p and p.nameRaidMarkerSize) or defaults.nameRaidMarkerSize or 14
+    PP.Size(plate.nameRaidFrame, nameRmSize, nameRmSize)
+    plate.nameRaidFrame:SetFrameStrata("MEDIUM")
+    plate.nameRaidFrame:SetFrameLevel(901)
+    plate.nameRaidFrame:Hide()
+    plate.nameRaid = plate.nameRaidFrame:CreateTexture(nil, "ARTWORK")
+    plate.nameRaid:SetAllPoints()
+    plate.nameRaid:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")
     plate.raidFrame = CreateFrame("Frame", nil, plate)
     local rmSize = GetRaidMarkerSize()
     PP.Size(plate.raidFrame, rmSize, rmSize)
@@ -5694,6 +5719,7 @@ function NameplateFrame:SetUnit(unit, nameplate)
             self:UpdateName()
             self:UpdateClassification()
             self:UpdateRaidIcon()
+            if p and p.nameRaidMarkerEnabled == true then self:RefreshNamePosition(true) end
             self:ApplyTarget()
             self:ApplyMouseover()
             self:UpdateCast()
@@ -5776,6 +5802,7 @@ function NameplateFrame:ClearUnit()
     self._kickGeoDirty = nil
     self._castTex = nil
     self._castLockout = nil
+    self._nameRaidMarkerShown = nil
     if ns._npDequeueAuraWork then ns._npDequeueAuraWork(self) end
     self.cast:Hide()
     self.castShieldFrame:Hide()
@@ -5795,6 +5822,7 @@ function NameplateFrame:ClearUnit()
     if self.glow then self.glow:Hide() end
     if self.targetHighlight then self.targetHighlight:Hide() end
     ns.HideHoverEffect(self)
+    if self.nameRaidFrame then self.nameRaidFrame:Hide() end
     self.raidFrame:Hide()
     self.classFrame:Hide()
     if self.classText then self.classText:Hide() end
@@ -6140,6 +6168,7 @@ function NameplateFrame:UpdateName()
     local name = UnitName(unit)
     if type(name) == "string" then
         self.name:SetText(name)
+        if p and p.nameRaidMarkerEnabled == true then self:RefreshNamePosition(true) end
     end
 end
 function NameplateFrame:UpdateClassification()
@@ -6230,9 +6259,10 @@ function NameplateFrame:UpdateNameWidth()
     -- Width % scales the computed (bar-derived) width; 100 = historical behaviour.
     local pct = (p and p.enemyNameWidthPct) or defaults.enemyNameWidthPct
     local nameSlot = FindSlotForElement("enemyName")
+    local nameMarkerReserve = (self.nameRaidFrame and self.nameRaidFrame:IsShown()) and (((p and p.nameRaidMarkerSize) or defaults.nameRaidMarkerSize or 14) + 3) or 0
     if nameSlot == "textSlotTop" then
         -- Above the bar: full bar width minus raid marker if shown
-        local nameW = barW
+        local nameW = barW - nameMarkerReserve
         local rmPos = GetRaidMarkerPos()
         if rmPos ~= "none" and self.raidFrame:IsShown() then
             nameW = nameW - 2 * (GetRaidMarkerSize() - 2) - 7
@@ -6255,7 +6285,7 @@ function NameplateFrame:UpdateNameWidth()
                 end
             end
         end
-        local nameW = barW - usedWidth
+        local nameW = barW - usedWidth - nameMarkerReserve
         PP.Width(self.name, math.max(nameW * pct / 100, 20))
     else
         -- Name not in any slot, use minimal width
@@ -6267,7 +6297,9 @@ function NameplateFrame:ApplyNameVisibility()
     -- only override it (hide while the cast bar is up) when the feature is on.
     if not GetHideEnemyNameWhileCasting() then return end
     local hasNameSlot = FindSlotForElement("enemyName") ~= nil
-    self.name:SetShown(hasNameSlot and not self.cast:IsShown())
+    local shown = hasNameSlot and not self.cast:IsShown()
+    self.name:SetShown(shown)
+    if self.nameRaidFrame then self.nameRaidFrame:SetShown(shown and self._nameRaidMarkerShown == true) end
 end
 -- The full-size cast icon (a child of the cast bar) only occupies its side-slot
 -- space while a cast is up, so its reserve is gated on the cast bar being shown
@@ -6282,23 +6314,43 @@ function NameplateFrame:RefreshCastIconSideReserve()
     self:UpdateRaidIcon()
     PositionArrowsOutsideAuras(self)
 end
-function NameplateFrame:RefreshNamePosition()
+
+function NameplateFrame:RefreshNamePosition(localOnly)
     local nameSlot = FindSlotForElement("enemyName")
     local nameYOff = GetNameYOffset()
+    local nameMarkerShown
+    local nameMarkerSize = (p and p.nameRaidMarkerSize) or defaults.nameRaidMarkerSize or 14
+    if self.nameRaidFrame then
+        local idx
+        if p and p.nameRaidMarkerEnabled == true and nameSlot and self.unit then
+            idx = GetRaidTargetIndex and GetRaidTargetIndex(self.unit)
+        end
+        if type(idx) == "nil" then
+            self._nameRaidMarkerShown = nil
+            self.nameRaidFrame:Hide()
+        else
+            SetRaidTargetIconTexture(self.nameRaid, idx)
+            PP.Size(self.nameRaidFrame, nameMarkerSize, nameMarkerSize)
+            self._nameRaidMarkerShown = true
+            self.nameRaidFrame:Show()
+            nameMarkerShown = true
+        end
+    end
+    local nameMarkerReserve = nameMarkerShown and (nameMarkerSize + 3) or 0
     self:UpdateNameWidth()
     self.name:ClearAllPoints()
     if nameSlot == "textSlotLeft" then
         local txOff, tyOff = GetTextSlotOffsets("textSlotLeft")
         SetFSFont(self.name, GetTextSlotSize("textSlotLeft"), GetNPOutline())
         self.name:SetParent(self.healthTextFrame)
-        PP.Point(self.name, "LEFT", self.health, "LEFT", 4 + txOff, tyOff)
+        PP.Point(self.name, "LEFT", self.health, "LEFT", 4 + txOff + nameMarkerReserve, tyOff)
         self.name:SetJustifyH("LEFT")
         self.name:Show()
     elseif nameSlot == "textSlotCenter" then
         local txOff, tyOff = GetTextSlotOffsets("textSlotCenter")
         SetFSFont(self.name, GetTextSlotSize("textSlotCenter"), GetNPOutline())
         self.name:SetParent(self.healthTextFrame)
-        self.name:SetPoint("CENTER", self.health, "CENTER", txOff, tyOff)
+        self.name:SetPoint("CENTER", self.health, "CENTER", txOff + (nameMarkerReserve * 0.5), tyOff)
         self.name:SetJustifyH("CENTER")
         self.name:Show()
     elseif nameSlot == "textSlotRight" then
@@ -6313,7 +6365,7 @@ function NameplateFrame:RefreshNamePosition()
         SetFSFont(self.name, GetTextSlotSize("textSlotTop"), GetNPOutline())
         self.name:SetParent(self.topTextFrame)
         local cpPush = GetClassPowerTopPush(self)
-        PP.Point(self.name, "BOTTOM", self.health, "TOP", txOff, 4 + nameYOff + cpPush + tyOff)
+        PP.Point(self.name, "BOTTOM", self.health, "TOP", txOff + (nameMarkerReserve * 0.5), 4 + nameYOff + cpPush + tyOff)
         self.name:SetJustifyH("CENTER")
         self.name:Show()
     else
@@ -6330,6 +6382,30 @@ function NameplateFrame:RefreshNamePosition()
     self.name:SetMaxLines(nameWrap and 2 or 1)
     ns.ReflowFontString(self.name)
     self:ApplyNameVisibility()
+    local nameRaid = self.nameRaidFrame
+    if nameRaid and self._nameRaidMarkerShown and self.name:IsShown() then
+        PP.Size(nameRaid, nameMarkerSize, nameMarkerSize)
+        nameRaid:SetParent((nameSlot == "textSlotTop") and self.topTextFrame or self.healthTextFrame)
+        nameRaid:SetFrameStrata("MEDIUM")
+        nameRaid:SetFrameLevel(901)
+        nameRaid:ClearAllPoints()
+        local textW = self.name:GetWidth() or 0
+        local ok, renderedW = pcall(self.name.GetStringWidth, self.name)
+        if ok and type(renderedW) == "number" and not (issecretvalue and issecretvalue(renderedW)) then
+            textW = math.min(renderedW, textW)
+        end
+        if nameSlot == "textSlotLeft" then
+            nameRaid:SetPoint("RIGHT", self.name, "LEFT", -3, 0)
+        elseif nameSlot == "textSlotRight" then
+            nameRaid:SetPoint("RIGHT", self.name, "RIGHT", -textW - 3, 0)
+        else
+            nameRaid:SetPoint("RIGHT", self.name, "CENTER", -(textW * 0.5) - 3, 0)
+        end
+        nameRaid:Show()
+    elseif nameRaid then
+        nameRaid:Hide()
+    end
+    if localOnly then return end
     self:UpdateAuras()
     self:UpdateClassification()
 end
@@ -8592,6 +8668,7 @@ manager:SetScript("OnEvent", function(self, event, unit)
     elseif event == "RAID_TARGET_UPDATE" then
         for _, plate in pairs(ns.plates) do
             plate:UpdateRaidIcon()
+            if p and p.nameRaidMarkerEnabled == true then plate:RefreshNamePosition(true) end
         end
     elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
         for _, plate in pairs(ns.plates) do
@@ -8711,38 +8788,7 @@ do
         "textSlotTop", "textSlotRight", "textSlotLeft", "textSlotCenter",
         "nameYOffset",
         "healthBarHeight", "healthBarWidth", "castBarHeight",
-        "castNameSize", "castNameColor", "castTargetSize", "castTargetClassColor", "castTargetColor",
-        "showCastTimer", "castTimerSize", "castTimerColor", "targetScale",
-        "debuffSlot", "buffSlot", "ccSlot",
-        "debuffYOffset", "sideAuraXOffset", "auraSpacing",
-        "debuffSpacing", "buffSpacing", "ccSpacing",
-        "debuffTimerPosition", "buffTimerPosition", "ccTimerPosition",
-        "auraDurationTextSize", "auraDurationTextColor",
     }
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "auraDurationTextX"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "auraDurationTextY"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "debuffDurationTextSize"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "debuffDurationTextX"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "debuffDurationTextY"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "debuffDurationTextColor"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "buffDurationTextSize"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "buffDurationTextX"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "buffDurationTextY"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "buffDurationTextColor"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "ccDurationTextSize"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "ccDurationTextX"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "ccDurationTextY"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "ccDurationTextColor"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "castNameSide"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "castTargetSide"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "castTimerSide"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "castNameWidthPct"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "castNameWrap"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "castTargetWidthPct"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "castTargetWrap"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "enemyNameWidthPct"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "enemyNameWrap"
-    ns._displayPresetKeys[#ns._displayPresetKeys + 1] = "wrapBorderCastbar"
     ns._appendDisplayPresetKeys(ns._displayPresetKeys)
 
     -- Also handle spec changes that happen before the UI is ever opened
