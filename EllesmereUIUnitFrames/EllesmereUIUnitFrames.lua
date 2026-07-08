@@ -1856,7 +1856,14 @@ function ns.GetUnitFrameSource(unit)
     if not db or not db.profile then return "eui" end
     if db.profile.enabledFrames[unit] == false then return "hidden" end
     local fs = db.profile.frameSource and db.profile.frameSource[unit]
-    if fs == "blizzard" then return "blizzard" end
+    if fs == "blizzard" then
+        -- Target-of-target / focus-target have no standalone Blizzard frame:
+        -- Blizzard's is a child of the parent target/focus frame, so it can't
+        -- render on its own (and when the parent is the EUI frame it's gone
+        -- entirely). Treat "blizzard" as the EllesmereUI frame for these two.
+        if unit == "targettarget" or unit == "focustarget" then return "eui" end
+        return "blizzard"
+    end
     return "eui"
 end
 

@@ -3841,11 +3841,16 @@ initFrame:SetScript("OnEvent", function(self)
     -- (mini/boss pass Show Portrait when on the EUI source; otherwise the slot is
     -- empty). onBeforeSet(v) runs before the write -- boss uses it to stop the
     -- live preview. Returns row, height.
-    local function BuildFrameSourceRow(Ww, pp, yy, unitKey, onBeforeSet, rightCfg)
+    local function BuildFrameSourceRow(Ww, pp, yy, unitKey, onBeforeSet, rightCfg, noBlizzard)
+        -- Target-of-target / focus-target have no standalone Blizzard frame, so
+        -- they omit the "Blizzard Default" option (see ns.GetUnitFrameSource).
+        local values = noBlizzard and { eui="EllesmereUI", hidden="Hidden" }
+            or { eui="EllesmereUI", blizzard="Blizzard Default", hidden="Hidden" }
+        local order = noBlizzard and { "eui", "hidden" } or { "eui", "blizzard", "hidden" }
         return Ww:DualRow(pp, yy,
             { type="dropdown", text="Frame Source",
-              values = { eui="EllesmereUI", blizzard="Blizzard Default", hidden="Hidden" },
-              order = { "eui", "blizzard", "hidden" },
+              values = values,
+              order = order,
               getValue=function() return ns.GetUnitFrameSource(unitKey) end,
               setValue=function(v)
                 if onBeforeSet then onBeforeSet(v) end
@@ -11909,7 +11914,7 @@ initFrame:SetScript("OnEvent", function(self)
                     settingsTable.showPortrait = v
                     ReloadAndUpdate()
                   end } or nil
-            local row, h = BuildFrameSourceRow(Ww, pp, yy, unitKey, nil, rightCfg)
+            local row, h = BuildFrameSourceRow(Ww, pp, yy, unitKey, nil, rightCfg, true)
             if isEUI then
                 portraitRow = row
                 AttachPortraitSideCog(row._rightRegion, settingsTable)
