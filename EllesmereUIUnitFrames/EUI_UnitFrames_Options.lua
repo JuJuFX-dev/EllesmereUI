@@ -15212,6 +15212,150 @@ initFrame:SetScript("OnEvent", function(self)
     ---------------------------------------------------------------------------
     --  Player Buffs & Debuffs page
     ---------------------------------------------------------------------------
+    local auraTextPosValues = {
+        ["bottom"] = "Bottom",
+        ["top"]    = "Top",
+    }
+    local auraTextPosOrder = { "bottom", "top" }
+
+
+    -- Local, purpose-built copy of the general BuildColorGrid layout pattern
+    -- (that helper lives as an unexported closure inside BuildColorsPage in
+    -- EUI__General_Options.lua). This is just enough to lay out the 6
+    -- debuff-type swatches below -- not a general/reusable API, and not
+    -- wired into the global color system in any way.
+    local function HexColor(hex)
+        local r = tonumber(hex:sub(1, 2), 16) / 255
+        local g = tonumber(hex:sub(3, 4), 16) / 255
+        local b = tonumber(hex:sub(5, 6), 16) / 255
+        return r, g, b
+    end
+
+    -- Mirrors EllesmereUIUnitFrames_PlayerAuras.lua's DEBUFF_TYPE_DEFAULT_HEX
+    -- so the swatch shows the correct color before any DB value is set.
+    local DEBUFF_TYPE_DEFAULT_HEX = {
+        None = "e63333",
+        Magic = "3399ff",
+        Curse = "9900ff",
+        Disease = "996600",
+        Poison = "009900",
+        Bleed = "ff3399",
+    }
+
+    -- Order/labels/DB-prefixes match DEBUFF_TYPE_DB_PREFIX in
+    -- EllesmereUIUnitFrames_PlayerAuras.lua.
+    local DEBUFF_TYPE_GRID = {
+        { key = "None",    db = "debuffTypeColorNone" },
+        { key = "Magic",   db = "debuffTypeColorMagic" },
+        { key = "Curse",   db = "debuffTypeColorCurse" },
+        { key = "Disease", db = "debuffTypeColorDisease" },
+        { key = "Poison",  db = "debuffTypeColorPoison" },
+        { key = "Bleed",   db = "debuffTypeColorBleed" },
+    }
+
+    -- 2-column grid of debuff-type border-color swatches, built from the
+    -- same W:DualRow row system every other setting on this page uses
+    -- (rather than a bespoke frame layout) so it matches spacing, row
+    -- height, and label styling automatically.
+    -- PAGet/PASet are the same accessor closures BuildPlayerAurasPage uses
+    -- for every other playerAuras setting on this page.
+    local function BuildDebuffTypeColorGrid(parent, y, PAGet, PASet, isDisabledFn)
+        local W = EllesmereUI.Widgets
+        local totalH = 0
+        local cells = {}
+        local CB_SPLITS = { 0.333, 0.333, 0.334, rowHeight = 50 }
+
+        local function AddSwatch(rgn, entry)
+            if not (rgn and entry) then return end
+            local swatch, updateSwatch = EllesmereUI.BuildColorSwatch(
+                rgn, rgn:GetFrameLevel() + 3,
+                function()
+                    local r = PAGet(entry.db .. "R")
+                    local g = PAGet(entry.db .. "G")
+                    local b = PAGet(entry.db .. "B")
+                    local a = PAGet(entry.db .. "A")
+                    if r == nil then
+                        r, g, b = HexColor(DEBUFF_TYPE_DEFAULT_HEX[entry.key])
+                    end
+                    return r or 1, g or 1, b or 1, a or 1
+                end,
+                function(r, g, b, a)
+                    PASet(entry.db .. "R", r)
+                    PASet(entry.db .. "G", g)
+                    PASet(entry.db .. "B", b)
+                    PASet(entry.db .. "A", a)
+                    if ns.InvalidateDispelCurve then ns.InvalidateDispelCurve() end
+                end,
+                true, 18)
+            PP.Point(swatch, "RIGHT", rgn, "RIGHT", -20, 0)
+            cells[#cells + 1] = { label = rgn, swatch = swatch, update = updateSwatch }
+        end
+
+        for i = 1, #DEBUFF_TYPE_GRID, 3 do
+            local leftEntry  = DEBUFF_TYPE_GRID[i]
+            local midEntry   = DEBUFF_TYPE_GRID[i + 1]
+            local rightEntry = DEBUFF_TYPE_GRID[i + 2]
+
+            local row, rh    = W:TripleRow(parent, y,
+                {
+                    type = "label",
+                    text = leftEntry.key,
+                    disabled = isDisabledFn
+                },
+                midEntry and {
+                    type = "label",
+                    text = midEntry.key,
+                    disabled = isDisabledFn
+                },
+                rightEntry and {
+                    type = "label",
+                    text = rightEntry.key,
+                    disabled = isDisabledFn
+                } or { type = "label", text = "" },
+                CB_SPLITS
+            )
+
+            y                = y - rh
+            totalH           = totalH + rh
+
+            AddSwatch(row._leftRegion, leftEntry)
+            AddSwatch(row._midRegion, midEntry)
+            AddSwatch(row._rightRegion, rightEntry)
+        end
+
+        local function Refresh()
+            local off = isDisabledFn and isDisabledFn()
+            for _, c in ipairs(cells) do
+                c.update()
+                c.swatch:SetAlpha(off and 0.3 or 1)
+                c.swatch:EnableMouse(not off)
+
+                c.label:SetAlpha(off and 0.3 or 1)
+            end
+        end
+        Refresh()
+        EllesmereUI.RegisterWidgetRefresh(Refresh)
+
+        return totalH
+    end
+    -- Local cog-button helper (mirrors the shared MakeCogBtn pattern used
+    -- elsewhere, but that helper is scoped to BuildSharedSettings only).
+    local function PAMakeCogBtn(rgn, showFn)
+        local cogBtn = CreateFrame("Button", nil, rgn)
+        cogBtn:SetSize(26, 26)
+        cogBtn:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
+        rgn._lastInline = cogBtn
+        cogBtn:SetFrameLevel(rgn:GetFrameLevel() + 5)
+        local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
+        cogTex:SetAllPoints()
+        cogTex:SetTexture(EllesmereUI.COGS_ICON)
+        cogBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.7) end)
+        cogBtn:SetScript("OnLeave", function(self) self:SetAlpha(0.4) end)
+        cogBtn:SetScript("OnClick", function(self) showFn(self) end)
+        cogBtn:SetAlpha(0.4)
+        return cogBtn
+    end
+
     local function BuildPlayerAurasPage(pageName, parent, yOffset)
         local W = EllesmereUI.Widgets
         local y = yOffset
@@ -15227,6 +15371,7 @@ initFrame:SetScript("OnEvent", function(self)
             db.profile.playerAuras[key] = v
             if ns.RefreshPlayerAuras then ns.RefreshPlayerAuras() end
             if ns.ApplyPlayerAuraScale then ns.ApplyPlayerAuraScale() end
+            if ns.ApplyPlayerAuraPadding then ns.ApplyPlayerAuraPadding() end
         end
 
         _, h = W:Spacer(parent, y, 20);  y = y - h
@@ -15238,23 +15383,34 @@ initFrame:SetScript("OnEvent", function(self)
         local function PAOff() return not PAGet("enabled") end
         local paRow1
         paRow1, h = W:DualRow(parent, y,
-            { type = "toggle", text = "Enable Styled Buffs & Debuffs",
-              setValue = EllesmereUI.SectionToggleSetValue(function(v)
-                  PASet("enabled", v)
-                  EllesmereUI:ShowConfirmPopup({
-                      title   = "Reload Required",
-                      message = "This change requires a UI reload to take effect.",
-                      confirmText = "Reload Now",
-                      cancelText  = "Later",
-                      onConfirm = function() ReloadUI() end,
-                  })
-              end),
-              getValue = function() return PAGet("enabled") or false end },
-            { type = "slider", text = "Icon Size", min = 16, max = 60, step = 1,
-              disabled = PAOff, disabledTooltip = "Enable Styled Buffs & Debuffs first", rawTooltip = true,
-              getValue = function() return PAGet("iconSize") or 32 end,
-              setValue = function(v) PASet("iconSize", v) end }
-        );  y = y - h
+            {
+                type = "toggle",
+                text = "Enable Styled Buffs & Debuffs",
+                setValue = EllesmereUI.SectionToggleSetValue(function(v)
+                    PASet("enabled", v)
+                    EllesmereUI:ShowConfirmPopup({
+                        title       = "Reload Required",
+                        message     = "This change requires a UI reload to take effect.",
+                        confirmText = "Reload Now",
+                        cancelText  = "Later",
+                        onConfirm   = function() ReloadUI() end,
+                    })
+                end),
+                getValue = function() return PAGet("enabled") or false end
+            },
+            {
+                type = "slider",
+                text = "Icon Size",
+                min = 16,
+                max = 60,
+                step = 1,
+                disabled = PAOff,
+                disabledTooltip = "Enable Styled Buffs & Debuffs first",
+                rawTooltip = true,
+                getValue = function() return PAGet("iconSize") or 32 end,
+                setValue = function(v) PASet("iconSize", v) end
+            }
+        ); y = y - h
 
         -- Inline cog: Icon Zoom (next to "Icon Size"). Buffs and debuffs
         -- crop independently.
@@ -15263,12 +15419,24 @@ initFrame:SetScript("OnEvent", function(self)
             local _, cogShow = EllesmereUI.BuildCogPopup({
                 title = "Icon Zoom",
                 rows = {
-                    { type = "slider", label = "Buff Zoom", min = 0, max = 0.20, step = 0.01,
-                      get = function() return PAGet("buffIconZoom") or 0.055 end,
-                      set = function(v) PASet("buffIconZoom", v) end },
-                    { type = "slider", label = "Debuff Zoom", min = 0, max = 0.20, step = 0.01,
-                      get = function() return PAGet("debuffIconZoom") or 0.055 end,
-                      set = function(v) PASet("debuffIconZoom", v) end },
+                    {
+                        type = "slider",
+                        label = "Buff Zoom",
+                        min = 0,
+                        max = 0.20,
+                        step = 0.01,
+                        get = function() return PAGet("buffIconZoom") or 0.055 end,
+                        set = function(v) PASet("buffIconZoom", v) end
+                    },
+                    {
+                        type = "slider",
+                        label = "Debuff Zoom",
+                        min = 0,
+                        max = 0.20,
+                        step = 0.01,
+                        get = function() return PAGet("debuffIconZoom") or 0.055 end,
+                        set = function(v) PASet("debuffIconZoom", v) end
+                    },
                 },
             })
             local cogBtn = CreateFrame("Button", nil, rgn)
@@ -15302,192 +15470,407 @@ initFrame:SetScript("OnEvent", function(self)
         -- Rows 2-4 are hidden entirely while the section is disabled (the
         -- enable toggle's SectionToggleSetValue wrapper forces the rebuild).
         if PAGet("enabled") then
-
-        -- Row 2: Show Text | Text Size (+ inline Duration Format cog)
-        local paRow2
-        paRow2, h = W:DualRow(parent, y,
-            { type = "toggle", text = "Show Text",
-              getValue = function() return PAGet("showText") ~= false end,
-              setValue = function(v) PASet("showText", v) end },
-            { type = "slider", text = "Text Size", min = 6, max = 24, step = 1,
-              getValue = function() return PAGet("textSize") or 11 end,
-              setValue = function(v) PASet("textSize", v) end }
-        );  y = y - h
-
-        -- Inline cog: Duration Format (next to "Text Size").
-        do
-            local rgn = paRow2._rightRegion
-            local _, cogShow = EllesmereUI.BuildCogPopup({
-                title = "Duration Format",
-                rows = {
-                    { type = "dropdown", label = "Format",
-                      values = {
-                          blizzard = { text = "Blizzard Default (2 min)" },
-                          compact  = { text = "Standard (5m / 32)" },
-                          colon    = { text = "Colon (5:32)" },
-                          seconds  = { text = "Seconds (152)" },
-                      },
-                      order = { "blizzard", "compact", "colon", "seconds" },
-                      get = function() return PAGet("durationFormat") or "blizzard" end,
-                      set = function(v) PASet("durationFormat", v) end },
+            -- Row 2: Show Text | Text Size (+ inline Duration Format cog)
+            _, h = W:DualRow(parent, y,
+                {
+                    type = "toggle",
+                    text = "Show Text",
+                    getValue = function() return PAGet("showText") ~= false end,
+                    setValue = function(v) PASet("showText", v) end
                 },
-            })
-            local cogBtn = CreateFrame("Button", nil, rgn)
-            cogBtn:SetSize(26, 26)
-            cogBtn:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
-            rgn._lastInline = cogBtn
-            cogBtn:SetFrameLevel(rgn:GetFrameLevel() + 5)
-            cogBtn:SetAlpha(0.4)
-            local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
-            cogTex:SetAllPoints()
-            cogTex:SetTexture(EllesmereUI.COGS_ICON)
-            cogBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.7) end)
-            cogBtn:SetScript("OnLeave", function(self) self:SetAlpha(0.4) end)
-            cogBtn:SetScript("OnClick", function(self) cogShow(self) end)
-        end
+                {
+                    type = "dropdown",
+                    text = "Duration Format",
+                    tooltip =
+                    "How aura duration text is written. All styles except Blizzard Default are short and locale-independent, so they never overflow the icon.",
+                    values = {
+                        blizzard = { text = "Blizzard Default (2 min)" },
+                        compact  = { text = "Standard (5m / 32)" },
+                        colon    = { text = "Colon (5:32)" },
+                        seconds  = { text = "Seconds (152)" },
+                    },
+                    order = { "blizzard", "compact", "colon", "seconds" },
+                    getValue = function() return PAGet("durationFormat") or "blizzard" end,
+                    setValue = function(v) PASet("durationFormat", v) end
+                }
+            ); y = y - h
 
-        -- Row 3: Border Style | Border Size (+ inline color swatch)
-        do
-            local texValues, texOrder = EllesmereUI.GetBorderTextureDropdown()
-            local borderSizeValues = {
-                none = "None", thin = "Thin", normal = "Normal",
-                heavy = "Heavy", strong = "Strong",
-            }
-            local borderSizeOrder = { "none", "thin", "normal", "heavy", "strong" }
-            local borderSizeToNumber = { none = 0, thin = 1, normal = 2, heavy = 3, strong = 4 }
-            local borderNumberToSize = { [0] = "none", [1] = "thin", [2] = "normal", [3] = "heavy", [4] = "strong" }
-            local bsRow
-            bsRow, h = W:DualRow(parent, y,
-                { type = "dropdown", text = "Border Style",
-                  values = texValues, order = texOrder,
-                  getValue = function() return PAGet("borderTexture") or "solid" end,
-                  setValue = function(v)
-                      local color, behind = EllesmereUI.GetBorderStyleSelectDefaults(v)
-                      PASet("borderTexture", v)
-                      PASet("borderTextureOffset", nil); PASet("borderTextureOffsetY", nil)
-                      PASet("borderTextureShiftX", nil); PASet("borderTextureShiftY", nil)
-                      PASet("borderBehind", behind)
-                      PASet("borderR", color.r); PASet("borderG", color.g); PASet("borderB", color.b)
-                      PASet("borderA", 1)
-                      local defSz = EllesmereUI.GetBorderDefaultSize("unitframes", v)
-                      if defSz then PASet("borderSize", defSz) end
-                  end },
-                { type = "dropdown", text = "Border Size",
-                  values = borderSizeValues, order = borderSizeOrder,
-                  getValue = function()
-                      return borderNumberToSize[PAGet("borderSize") or 1] or "thin"
-                  end,
-                  setValue = function(v) PASet("borderSize", borderSizeToNumber[v] or 1) end }
-            );  y = y - h
-
-            -- Textured-border offset and layer controls.
+            -- Row 3: Stacks: Position (dropdown, + cog for X/Y offset) | Stacks: Text Size
             do
-                local rgn = bsRow._leftRegion
-                local _, cogShow = EllesmereUI.BuildCogPopup({
-                    title = "Border Offset",
+                local stackRow
+                stackRow, h = W:DualRow(parent, y,
+                    {
+                        type = "dropdown",
+                        text = "Stacks: Position",
+                        values = auraTextPosValues,
+                        order = auraTextPosOrder,
+                        getValue = function() return PAGet("stackPosition") or "bottom" end,
+                        setValue = function(v) PASet("stackPosition", v) end
+                    },
+                    {
+                        type = "slider",
+                        text = "Stacks: Text Size",
+                        min = 6,
+                        max = 24,
+                        step = 1,
+                        getValue = function() return PAGet("stackTextSize") or 11 end,
+                        setValue = function(v) PASet("stackTextSize", v) end
+                    }
+                ); y = y - h
+
+                local rgn = stackRow._leftRegion
+                local _, stackCogShow = EllesmereUI.BuildCogPopup({
+                    title = "Stacks Position Offsets",
                     rows = {
-                        { type = "slider", label = "Offset X", min = -10, max = 10, step = 1,
-                          get = function()
-                              local v = PAGet("borderTextureOffset")
-                              if v ~= nil then return v end
-                              return EllesmereUI.GetBorderDefaults("unitframes", PAGet("borderTexture") or "solid", PAGet("borderSize") or 1)
-                          end,
-                          set = function(v) PASet("borderTextureOffset", v) end },
-                        { type = "slider", label = "Offset Y", min = -10, max = 10, step = 1,
-                          get = function()
-                              local v = PAGet("borderTextureOffsetY")
-                              if v ~= nil then return v end
-                              local _, oy = EllesmereUI.GetBorderDefaults("unitframes", PAGet("borderTexture") or "solid", PAGet("borderSize") or 1)
-                              return oy
-                          end,
-                          set = function(v) PASet("borderTextureOffsetY", v) end },
-                        { type = "slider", label = "Shift X", min = -10, max = 10, step = 1,
-                          get = function()
-                              local v = PAGet("borderTextureShiftX")
-                              if v ~= nil then return v end
-                              local _, _, sx = EllesmereUI.GetBorderDefaults("unitframes", PAGet("borderTexture") or "solid", PAGet("borderSize") or 1)
-                              return sx
-                          end,
-                          set = function(v) PASet("borderTextureShiftX", v == 0 and nil or v) end },
-                        { type = "slider", label = "Shift Y", min = -10, max = 10, step = 1,
-                          get = function()
-                              local v = PAGet("borderTextureShiftY")
-                              if v ~= nil then return v end
-                              local _, _, _, sy = EllesmereUI.GetBorderDefaults("unitframes", PAGet("borderTexture") or "solid", PAGet("borderSize") or 1)
-                              return sy
-                          end,
-                          set = function(v) PASet("borderTextureShiftY", v == 0 and nil or v) end },
-                        { type = "toggle", label = "Show Behind",
-                          get = function() return PAGet("borderBehind") or false end,
-                          set = function(v) PASet("borderBehind", v) end },
+                        {
+                            type = "slider",
+                            label = "X Offset",
+                            min = -50,
+                            max = 50,
+                            step = 1,
+                            get = function() return PAGet("stackOffsetX") or 0 end,
+                            set = function(v) PASet("stackOffsetX", v) end
+                        },
+                        {
+                            type = "slider",
+                            label = "Y Offset",
+                            min = -50,
+                            max = 50,
+                            step = 1,
+                            get = function() return PAGet("stackOffsetY") or 0 end,
+                            set = function(v) PASet("stackOffsetY", v) end
+                        },
                     },
                 })
-                local cogBtn = CreateFrame("Button", nil, rgn)
-                cogBtn:SetSize(26, 26)
-                cogBtn:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
-                rgn._lastInline = cogBtn
-                cogBtn:SetFrameLevel(rgn:GetFrameLevel() + 5)
-                cogBtn:SetAlpha(0.4)
-                local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
-                cogTex:SetAllPoints()
-                cogTex:SetTexture(EllesmereUI.DIRECTIONS_ICON)
-                cogBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.7) end)
-                cogBtn:SetScript("OnLeave", function(self) self:SetAlpha(0.4) end)
-                cogBtn:SetScript("OnClick", function(self) cogShow(self) end)
-                local function UpdateCogVis()
-                    if (PAGet("borderTexture") or "solid") == "solid" then cogBtn:Hide() else cogBtn:Show() end
-                end
-                EllesmereUI.RegisterWidgetRefresh(UpdateCogVis)
-                UpdateCogVis()
+                PAMakeCogBtn(rgn, stackCogShow)
             end
 
-            -- Inline border color swatch on Border Size dropdown
+            -- Row 4: Duration: Position (dropdown, + cog for X/Y offset) | Duration: Text Size
             do
-                local rgn = bsRow._rightRegion
-                local borderSwatch, updateBorderSwatch = EllesmereUI.BuildColorSwatch(
-                    rgn, bsRow:GetFrameLevel() + 3,
-                    function()
-                        return (PAGet("borderR") or 0), (PAGet("borderG") or 0),
-                               (PAGet("borderB") or 0), (PAGet("borderA") or 1)
-                    end,
-                    function(r, g, b, a)
-                        PASet("borderR", r); PASet("borderG", g); PASet("borderB", b); PASet("borderA", a)
-                    end,
-                    true, 20)
-                PP.Point(borderSwatch, "RIGHT", rgn._control, "LEFT", -8, 0)
-                -- Disable swatch when border size is 0
-                local borderSwatchBlock = CreateFrame("Frame", nil, borderSwatch)
-                borderSwatchBlock:SetAllPoints()
-                borderSwatchBlock:SetFrameLevel(borderSwatch:GetFrameLevel() + 10)
-                borderSwatchBlock:EnableMouse(true)
-                borderSwatchBlock:SetScript("OnEnter", function()
-                    EllesmereUI.ShowWidgetTooltip(borderSwatch, EllesmereUI.DisabledTooltip("This option requires a Border Size above 0."))
-                end)
-                borderSwatchBlock:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
-                local function UpdateBorderSwatchState()
-                    local noBorder = (PAGet("borderSize") or 0) == 0
-                    if noBorder then borderSwatch:SetAlpha(0.3); borderSwatchBlock:Show()
-                    else borderSwatch:SetAlpha(1); borderSwatchBlock:Hide() end
-                end
-                EllesmereUI.RegisterWidgetRefresh(function() updateBorderSwatch(); UpdateBorderSwatchState() end)
-                UpdateBorderSwatchState()
+                local durRow
+                durRow, h = W:DualRow(parent, y,
+                    {
+                        type = "dropdown",
+                        text = "Duration: Position",
+                        values = auraTextPosValues,
+                        order = auraTextPosOrder,
+                        getValue = function() return PAGet("durationPosition") or "bottom" end,
+                        setValue = function(v) PASet("durationPosition", v) end
+                    },
+                    {
+                        type = "slider",
+                        text = "Duration: Text Size",
+                        min = 6,
+                        max = 24,
+                        step = 1,
+                        getValue = function() return PAGet("durationTextSize") or 11 end,
+                        setValue = function(v) PASet("durationTextSize", v) end
+                    }
+                ); y = y - h
+
+                local rgn = durRow._leftRegion
+                local _, durCogShow = EllesmereUI.BuildCogPopup({
+                    title = "Duration Position Offsets",
+                    rows = {
+                        {
+                            type = "slider",
+                            label = "X Offset",
+                            min = -50,
+                            max = 50,
+                            step = 1,
+                            get = function() return PAGet("durationOffsetX") or 0 end,
+                            set = function(v) PASet("durationOffsetX", v) end
+                        },
+                        {
+                            type = "slider",
+                            label = "Y Offset",
+                            min = -50,
+                            max = 50,
+                            step = 1,
+                            get = function() return PAGet("durationOffsetY") or 0 end,
+                            set = function(v) PASet("durationOffsetY", v) end
+                        },
+                    },
+                })
+                PAMakeCogBtn(rgn, durCogShow)
             end
-        end
 
-        -- Row 4: Blizzard debuff borders | buff-frame expand button.
-        _, h = W:DualRow(parent, y,
-            { type = "toggle", text = "No Border on Debuffs",
-              tooltip = "When enabled, debuff icons keep Blizzard's colored border instead of using the custom border.",
-              getValue = function() return PAGet("noBorderDebuffs") ~= false end,
-              setValue = function(v) PASet("noBorderDebuffs", v) end },
-            { type = "toggle", text = "Show Expand Button",
-              getValue = function() return PAGet("showExpandButton") ~= false end,
-              setValue = function(v) PASet("showExpandButton", v) end }
-        );  y = y - h
+            -- Row 5: Border Style | Border Size (+ inline color swatch)
+            do
+                local texValues, texOrder = EllesmereUI.GetBorderTextureDropdown()
+                local borderSizeValues = {
+                    none = "None",
+                    thin = "Thin",
+                    normal = "Normal",
+                    heavy = "Heavy",
+                    strong = "Strong",
+                }
+                local borderSizeOrder = { "none", "thin", "normal", "heavy", "strong" }
+                local borderSizeToNumber = { none = 0, thin = 1, normal = 2, heavy = 3, strong = 4 }
+                local borderNumberToSize = { [0] = "none", [1] = "thin", [2] = "normal", [3] = "heavy", [4] =
+                "strong" }
+                local bsRow
+                bsRow, h = W:DualRow(parent, y,
+                    {
+                        type = "dropdown",
+                        text = "Border Style",
+                        values = texValues,
+                        order = texOrder,
+                        getValue = function() return PAGet("borderTexture") or "solid" end,
+                        setValue = function(v)
+                            local color, behind = EllesmereUI.GetBorderStyleSelectDefaults(v)
+                            PASet("borderTexture", v)
+                            PASet("borderTextureOffset", nil); PASet("borderTextureOffsetY", nil)
+                            PASet("borderTextureShiftX", nil); PASet("borderTextureShiftY", nil)
+                            PASet("borderBehind", behind)
+                            PASet("borderR", color.r); PASet("borderG", color.g); PASet("borderB", color.b)
+                            PASet("borderA", 1)
+                            local defSz = EllesmereUI.GetBorderDefaultSize("unitframes", v)
+                            if defSz then PASet("borderSize", defSz) end
+                        end
+                    },
+                    {
+                        type = "dropdown",
+                        text = "Border Size",
+                        values = borderSizeValues,
+                        order = borderSizeOrder,
+                        getValue = function()
+                            return borderNumberToSize[PAGet("borderSize") or 1] or "thin"
+                        end,
+                        setValue = function(v) PASet("borderSize", borderSizeToNumber[v] or 1) end
+                    }
+                ); y = y - h
 
+                -- Textured-border offset and layer controls.
+                do
+                    local rgn = bsRow._leftRegion
+                    local _, cogShow = EllesmereUI.BuildCogPopup({
+                        title = "Border Offset",
+                        rows = {
+                            {
+                                type = "slider",
+                                label = "Offset X",
+                                min = -10,
+                                max = 10,
+                                step = 1,
+                                get = function()
+                                    local v = PAGet("borderTextureOffset")
+                                    if v ~= nil then return v end
+                                    return EllesmereUI.GetBorderDefaults("unitframes",
+                                        PAGet("borderTexture") or "solid", PAGet("borderSize") or 1)
+                                end,
+                                set = function(v) PASet("borderTextureOffset", v) end
+                            },
+                            {
+                                type = "slider",
+                                label = "Offset Y",
+                                min = -10,
+                                max = 10,
+                                step = 1,
+                                get = function()
+                                    local v = PAGet("borderTextureOffsetY")
+                                    if v ~= nil then return v end
+                                    local _, oy = EllesmereUI.GetBorderDefaults("unitframes",
+                                        PAGet("borderTexture") or "solid", PAGet("borderSize") or 1)
+                                    return oy
+                                end,
+                                set = function(v) PASet("borderTextureOffsetY", v) end
+                            },
+                            {
+                                type = "slider",
+                                label = "Shift X",
+                                min = -10,
+                                max = 10,
+                                step = 1,
+                                get = function()
+                                    local v = PAGet("borderTextureShiftX")
+                                    if v ~= nil then return v end
+                                    local _, _, sx = EllesmereUI.GetBorderDefaults("unitframes",
+                                        PAGet("borderTexture") or "solid", PAGet("borderSize") or 1)
+                                    return sx
+                                end,
+                                set = function(v) PASet("borderTextureShiftX", v == 0 and nil or v) end
+                            },
+                            {
+                                type = "slider",
+                                label = "Shift Y",
+                                min = -10,
+                                max = 10,
+                                step = 1,
+                                get = function()
+                                    local v = PAGet("borderTextureShiftY")
+                                    if v ~= nil then return v end
+                                    local _, _, _, sy = EllesmereUI.GetBorderDefaults("unitframes",
+                                        PAGet("borderTexture") or "solid", PAGet("borderSize") or 1)
+                                    return sy
+                                end,
+                                set = function(v) PASet("borderTextureShiftY", v == 0 and nil or v) end
+                            },
+                            {
+                                type = "toggle",
+                                label = "Show Behind",
+                                get = function() return PAGet("borderBehind") or false end,
+                                set = function(v) PASet("borderBehind", v) end
+                            },
+                        },
+                    })
+                    local cogBtn = CreateFrame("Button", nil, rgn)
+                    cogBtn:SetSize(26, 26)
+                    cogBtn:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
+                    rgn._lastInline = cogBtn
+                    cogBtn:SetFrameLevel(rgn:GetFrameLevel() + 5)
+                    cogBtn:SetAlpha(0.4)
+                    local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
+                    cogTex:SetAllPoints()
+                    cogTex:SetTexture(EllesmereUI.DIRECTIONS_ICON)
+                    cogBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.7) end)
+                    cogBtn:SetScript("OnLeave", function(self) self:SetAlpha(0.4) end)
+                    cogBtn:SetScript("OnClick", function(self) cogShow(self) end)
+                    local function UpdateCogVis()
+                        if (PAGet("borderTexture") or "solid") == "solid" then cogBtn:Hide() else cogBtn:Show() end
+                    end
+                    EllesmereUI.RegisterWidgetRefresh(UpdateCogVis)
+                    UpdateCogVis()
+                end
+
+                -- Inline border color swatch on Border Size dropdown
+                do
+                    local rgn = bsRow._rightRegion
+                    local borderSwatch, updateBorderSwatch = EllesmereUI.BuildColorSwatch(
+                        rgn, bsRow:GetFrameLevel() + 3,
+                        function()
+                            return (PAGet("borderR") or 0), (PAGet("borderG") or 0),
+                                (PAGet("borderB") or 0), (PAGet("borderA") or 1)
+                        end,
+                        function(r, g, b, a)
+                            PASet("borderR", r); PASet("borderG", g); PASet("borderB", b); PASet("borderA", a)
+                        end,
+                        true, 20)
+                    PP.Point(borderSwatch, "RIGHT", rgn._control, "LEFT", -8, 0)
+                    -- Disable swatch when border size is 0
+                    local borderSwatchBlock = CreateFrame("Frame", nil, borderSwatch)
+                    borderSwatchBlock:SetAllPoints()
+                    borderSwatchBlock:SetFrameLevel(borderSwatch:GetFrameLevel() + 10)
+                    borderSwatchBlock:EnableMouse(true)
+                    borderSwatchBlock:SetScript("OnEnter", function()
+                        EllesmereUI.ShowWidgetTooltip(borderSwatch,
+                            EllesmereUI.DisabledTooltip("This option requires a Border Size above 0."))
+                    end)
+                    borderSwatchBlock:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+                    local function UpdateBorderSwatchState()
+                        local noBorder = (PAGet("borderSize") or 0) == 0
+                        if noBorder then
+                            borderSwatch:SetAlpha(0.3); borderSwatchBlock:Show()
+                        else
+                            borderSwatch:SetAlpha(1); borderSwatchBlock:Hide()
+                        end
+                    end
+                    EllesmereUI.RegisterWidgetRefresh(function()
+                        updateBorderSwatch(); UpdateBorderSwatchState()
+                    end)
+                    UpdateBorderSwatchState()
+                end
+            end
+
+            _, h = W:SectionHeader(parent, "MISC", y); y = y - h
+
+            -- Row 1: Hide Blizzard Border / Skin Textures | Hide Collapsing Arrow
+            _, h = W:DualRow(parent, y,
+                {
+                    type = "toggle",
+                    text = "Hide Blizzard Border / Skin Textures",
+                    tooltip =
+                    "Removes any additional Blizzard border/skin textures. (e.g. the colored border on temporary weapon-enchant buffs).",
+                    getValue = function() return PAGet("noBlizzardBorder") ~= false end,
+                    setValue = function(v) PASet("noBlizzardBorder", v) end
+                },
+                {
+                    type = "toggle",
+                    text = "Hide Collpasing Arrow",
+                    tooltip =
+                    "Hides the arrow that appears on the right side of the player aura frame buffs/debuffs.",
+                    -- default true (hidden), matching the previous hard-coded behaviour when no
+                    -- DB value has been saved yet.
+                    getValue = function() return PAGet("hideCollapseArrow") ~= false end,
+                    setValue = function(v)
+                        PASet("hideCollapseArrow", v)
+                        C_CVar.SetCVar("collapseExpandBuffs", v and "0" or "1")
+                        EllesmereUI:ShowConfirmPopup({
+                            title       = "Reload Required",
+                            message     = "This change requires a UI reload to take effect.",
+                            confirmText = "Reload Now",
+                            cancelText  = "Later",
+                            onConfirm   = function() ReloadUI() end,
+                        })
+                    end
+                }
+            ); y = y - h
+
+            -- Row 2: Buff Padding | Debuff Padding
+            _, h = W:DualRow(parent, y,
+                {
+                    type = "slider",
+                    text = "Buffs: Padding",
+                    min = 1,
+                    max = 15,
+                    step = 1,
+                    getValue = function() return PAGet("paddingBuffs") or 5 end,
+                    setValue = function(v) PASet("paddingBuffs", v) end
+                },
+                {
+                    type = "slider",
+                    text = "Debuffs: Padding",
+                    min = 1,
+                    max = 15,
+                    step = 1,
+                    getValue = function() return PAGet("paddingDebuffs") or 5 end,
+                    setValue = function(v) PASet("paddingDebuffs", v) end
+                }
+            ); y = y - h
+
+            _, h = W:SectionHeader(parent, "DEBUFF BORDER", y); y = y - h
+
+            -- Row 1: No Border on Debuff | Color Border by Debuff Type
+            _, h = W:DualRow(parent, y,
+                {
+                    type = "toggle",
+                    text = "No Border on Debuffs",
+                    tooltip =
+                    "When enabled, debuff icons keep Blizzard's colored border instead of using the custom border.",
+                    getValue = function() return PAGet("noBorderDebuffs") ~= false end,
+                    setValue = function(v)
+                        PASet("noBorderDebuffs", v); EllesmereUI:RefreshPage()
+                    end
+                },
+                {
+                    type = "toggle",
+                    text = "Color Border by Debuff Type",
+                    tooltip =
+                    "Colors the custom border according to the debuff's dispel type (Magic, Curse, Poison, Disease, etc.), similar to Blizzard's own debuff border colors. Only applies to debuffs; has no effect when 'No Border on Debuffs' is enabled.",
+                    disabled = function() return PAGet("noBorderDebuffs") ~= false or PAGet("borderTexture") ~= "solid" end,
+                    disabledTooltip =
+                    "This option only works with the 'Solid Border Texture' setting and has no effect when 'No Border on Debuffs' is enabled, as Blizzard's default border is used instead of the custom one.",
+                    getValue = function() return PAGet("colorBorderByDebuffType") or false end,
+                    setValue = function(v) PASet("colorBorderByDebuffType", v) end
+                }
+            ); y = y - h
+
+            _, h = W:SectionHeader(parent, "DEBUFF COLOR", y); y = y - h
+
+            -- Row 2: Debuff-type color grid (None/Magic/Curse/Disease/Poison/Bleed).
+            -- Greyed out under the same conditions as the toggle above: no
+            -- effect while "No Border on Debuffs" is on, or while "Color Border
+            -- by Debuff Type" itself is off.
+            do
+                local gridDisabled = function()
+                    return (PAGet("noBorderDebuffs") ~= false) or not PAGet("colorBorderByDebuffType")
+                end
+                local gh = BuildDebuffTypeColorGrid(parent, y, PAGet, PASet, gridDisabled)
+                y = y - gh - 4
+            end
         end -- PAGet("enabled") section gate
 
-        -----------------------------------------------------------------------
+    -----------------------------------------------------------------------
         --  External Defensives Frame (our own frame; live enable, no reload)
         -----------------------------------------------------------------------
         local function EDGet(key)
@@ -15715,11 +16098,11 @@ initFrame:SetScript("OnEvent", function(self)
     end
 
     EllesmereUI:RegisterModule("EllesmereUIUnitFrames", {
-        title       = "Unit Frames",
-        description = "Configure unit frame appearance and behavior.",
-        pages       = { PAGE_DISPLAY, PAGE_BOSS, PAGE_MINI, PAGE_AURAS },
-        searchTerms = ufSearchTerms,
-        buildPage   = function(pageName, parent, yOffset)
+        title               = "Unit Frames",
+        description         = "Configure unit frame appearance and behavior.",
+        pages               = { PAGE_DISPLAY, PAGE_BOSS, PAGE_MINI, PAGE_AURAS },
+        searchTerms         = ufSearchTerms,
+        buildPage           = function(pageName, parent, yOffset)
             -- Randomize preview creature IDs on every tab switch
             RandomizePreviewCreatures()
             if pageName == PAGE_DISPLAY then
@@ -15732,7 +16115,7 @@ initFrame:SetScript("OnEvent", function(self)
                 return BuildPlayerAurasPage(pageName, parent, yOffset)
             end
         end,
-        getHeaderBuilder = function(pageName)
+        getHeaderBuilder    = function(pageName)
             if pageName == PAGE_DISPLAY then
                 return _displayHeaderBuilder
             elseif pageName == PAGE_BOSS then
@@ -15756,7 +16139,7 @@ initFrame:SetScript("OnEvent", function(self)
             end
             return nil
         end,
-        onPageCacheRestore = function(pageName)
+        onPageCacheRestore  = function(pageName)
             RandomizePreviewCreatures()
             -- Hide all UIParent-parented disabled overlays before restoring
             -- (they persist across tab switches since they're not children of pf)
@@ -15785,7 +16168,7 @@ initFrame:SetScript("OnEvent", function(self)
                 end
             end
         end,
-        onReset     = function()
+        onReset             = function()
             db:ResetProfile()
             ReloadUI()
         end,
