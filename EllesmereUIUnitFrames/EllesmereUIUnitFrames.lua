@@ -6776,7 +6776,7 @@ local function StylePetFrame(frame, unit)
     bg:SetColorTexture(0, 0, 0, 0.5)
     health.bg = bg
 
-    health.colorClass = true
+    health.colorClassPet = true
     health.colorReaction = true
     health.colorTapped = true
     health.colorDisconnected = true
