@@ -27,6 +27,7 @@ initFrame:SetScript("OnEvent", function(self)
     local function RefreshAll()
         if ECHAT.ApplyBackground  then ECHAT.ApplyBackground()  end
         if ECHAT.ApplyFonts       then ECHAT.ApplyFonts()       end
+        if ECHAT.ApplyTabFontSize then ECHAT.ApplyTabFontSize() end
         if ECHAT.RefreshVisibility then ECHAT.RefreshVisibility() end
     end
 
@@ -204,6 +205,13 @@ initFrame:SetScript("OnEvent", function(self)
                                   cancelText  = "Later",
                                   onConfirm   = function() ReloadUI() end,
                               })
+                          end },
+                        { type="slider", label="Tab Font Size",
+                          min = 8, max = 20, step = 1,
+                          get=function() return Cfg("tabFontSize") or 10 end,
+                          set=function(v)
+                              Set("tabFontSize", v)
+                              if ECHAT.ApplyTabFontSize then ECHAT.ApplyTabFontSize() end
                           end },
                     },
                 })

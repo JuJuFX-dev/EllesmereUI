@@ -1960,7 +1960,8 @@ local function UpdateTabStyle(tab)
     -- FCF_OpenTemporaryWindow's secure chain. If taint resurfaces, rip SetFont first.
     local fs = CFD(tab).tabText
     if fs then
-        fs:SetFont(GetFont(), 11, "")
+        local tabSize = ECHAT.DB().tabFontSize or 10
+        fs:SetFont(GetFont(), tabSize, "")
         fs:SetJustifyH("CENTER")
         fs:ClearAllPoints()
         fs:SetPoint("CENTER", tab, 0, 0)
@@ -1980,6 +1981,17 @@ local function UpdateTabStyle(tab)
         if isActive then ns._activeUnderline = CFD(tab).underline end
     end
 
+end
+
+-- Re-apply tab font size to all skinned chat tabs. Called live from the
+-- options page (no reload needed), same pattern as ApplyBackground.
+function ECHAT.ApplyTabFontSize()
+    for i = 1, 20 do
+        local tab = _G["ChatFrame" .. i .. "Tab"]
+        if tab and CFD(tab).skinned then
+            UpdateTabStyle(tab)
+        end
+    end
 end
 
 -- One-time reskin of a Blizzard chat tab (strip textures, add our visuals)
