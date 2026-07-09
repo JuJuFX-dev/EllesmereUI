@@ -1995,26 +1995,15 @@ initFrame:SetScript("OnEvent", function(self)
                       return SVal("nameColorMode", "class") == "accent" and 1 or 0.3
                   end },
               } });  y = y - h
-        -- Cog for name character-count cap and outline (lives on the Name Size slider).
+        -- Cog for name character-count cap (lives on the Name Size slider).
         do
             local rgn = row._leftRegion
-            local nameOutlineValues = {
-                ["__global"] = { text = "EUI Global Default" },
-                ["none"]     = { text = "Drop Shadow" },
-                ["outline"]  = { text = "Outline" },
-                ["thick"]    = { text = "Thick Outline" },
-            }
-            local nameOutlineOrder = { "__global", "none", "outline", "thick" }
             local _, cogShow = EllesmereUI.BuildCogPopup({
-                title = "Name Settings",
+                title = "Name Length",
                 rows = {
                     { type="slider", label="Max Characters (0=off)", min=0, max=30, step=1,
                       get=function() return SVal("nameMaxLength", 15) end,
                       set=function(v) SSet("nameMaxLength", v) end },
-                    { type="dropdown", label="Outline Mode",
-                      values=nameOutlineValues, order=nameOutlineOrder,
-                      get=function() return SVal("nameOutlineMode", "__global") end,
-                      set=function(v) SSet("nameOutlineMode", v) end },
                 },
             })
             local cogBtn = CreateFrame("Button", nil, rgn)

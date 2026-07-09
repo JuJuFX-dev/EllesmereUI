@@ -463,7 +463,6 @@ local defaults = {
 
         -- Text
         nameSize         = 10,
-        nameOutlineMode  = "__global", -- "__global", "none", "outline", "thick"
         nameMaxLength    = 15,  -- max characters shown for unit names (0 = off / no cap)
         nameColorMode    = "custom",  -- "class", "accent", "custom"
         nameCustomColor  = { r = 1, g = 1, b = 1 },
@@ -1033,33 +1032,13 @@ end
 local function GetUseShadow()
     return not EllesmereUI or not EllesmereUI.GetFontUseShadow or EllesmereUI.GetFontUseShadow("raidFrames")
 end
-local function ApplyFont(fs, size, s)
+local function ApplyFont(fs, size)
     if not (fs and fs.SetFont) then return end
     local fontPath = (EllesmereUI.GetFontPath and EllesmereUI.GetFontPath("raidFrames")) or "Fonts\\FRIZQT__.TTF"
-    local outline, useShadow
-    if type(s) == "table" then
-        local mode = s.nameOutlineMode or "__global"
-        if mode == "__global" then
-            outline = GetOutline()
-            useShadow = GetUseShadow()
-        elseif mode == "outline" then
-            outline = (EllesmereUI.SlugFlag and EllesmereUI.SlugFlag("OUTLINE, SLUG")) or "OUTLINE, SLUG"
-            useShadow = false
-        elseif mode == "thick" then
-            outline = (EllesmereUI.SlugFlag and EllesmereUI.SlugFlag("THICKOUTLINE, SLUG")) or "THICKOUTLINE, SLUG"
-            useShadow = false
-        else
-            outline = ""
-            useShadow = true
-        end
-    else
-        outline = GetOutline()
-        useShadow = GetUseShadow()
-    end
-    if EllesmereUI and EllesmereUI.PrimeFontShadow then EllesmereUI.PrimeFontShadow(fs, outline == "" and useShadow) end
+    local outline = GetOutline()
+    if EllesmereUI and EllesmereUI.PrimeFontShadow then EllesmereUI.PrimeFontShadow(fs, outline == "" and GetUseShadow()) end
     fs:SetFont(fontPath, size, outline)
 end
-ns.ApplyFont = ApplyFont
 
 -------------------------------------------------------------------------------
 --  Health bar texture helpers
@@ -3075,7 +3054,7 @@ local function StyleButton(button)
 
     -- Name text
     local nameFS = textCarrier:CreateFontString(nil, "OVERLAY")
-    ApplyFont(nameFS, s.nameSize or 10, s)
+    ApplyFont(nameFS, s.nameSize or 10)
     nameFS:SetJustifyH("CENTER")
     nameFS:SetWordWrap(false)
     d.nameText = nameFS
@@ -6375,7 +6354,7 @@ FB.ApplyStyle = function(owner)
         -- No power bar / top name bar here: health fills the button.
         b._health:SetHeight(h)
 
-        ApplyFont(b._nameText, s.nameSize or 10, s)
+        ApplyFont(b._nameText, s.nameSize or 10)
         ApplyFont(b._healthText, s.healthTextSize or 9)
         b._nameText:SetWidth(w * ns.RF_NAME_WIDTH_FRACTION)
         b._nameText:SetHeight(0)
@@ -6837,7 +6816,7 @@ XF.Layout = function()
         -- size). Bounded to five buttons; runs after the bulk base pass.
         local xs = ns._scaledExtraProxy
         if d.nameText then
-            ApplyFont(d.nameText, xs.nameSize or 10, xs)
+            ApplyFont(d.nameText, xs.nameSize or 10)
             if d.AnchorNameText then d.AnchorNameText() end
             -- AnchorNameText derives width from the BASE frame width; the
             -- offset width is authoritative here.
@@ -8013,7 +7992,7 @@ local function ReloadFrames()
 
         -- Name text
         if d.nameText then
-            ApplyFont(d.nameText, s.nameSize or 10, s)
+            ApplyFont(d.nameText, s.nameSize or 10)
             if d.AnchorNameText then d.AnchorNameText() end
         end
 
@@ -8264,7 +8243,7 @@ ns._ResizePartyButtons = function(w, h)
                         icon:SetSize(pp.defSize or 22, pp.defSize or 22)
                     end
                 end
-                if d.nameText then ApplyFont(d.nameText, pp.nameSize or 10, pp) end
+                if d.nameText then ApplyFont(d.nameText, pp.nameSize or 10) end
                 if d.healthText then ApplyFont(d.healthText, pp.healthTextSize or 9) end
                 if d.healAbsorbText then ApplyFont(d.healAbsorbText, pp.healAbsorbTextSize or 9) end
                 if d.statusText then ApplyFont(d.statusText, pp.statusTextSize or 14) end
@@ -9381,7 +9360,7 @@ do
             "powerShowForHealer", "powerShowForTank", "powerShowForDPS", "smoothPowerBars",
         },
         textDisplay = {
-            "nameSize", "nameOutlineMode", "nameColorMode", "nameCustomColor",
+            "nameSize", "nameColorMode", "nameCustomColor",
             "namePosition", "nameOffsetX", "nameOffsetY",
             "healthTextMode", "healthTextColorMode", "healthTextCustomColor",
             "healthTextSize", "healthTextPosition", "healthTextOffsetX", "healthTextOffsetY",
@@ -10078,7 +10057,7 @@ ns.ReloadPartyFrames = function()
 
         -- Name text
         if d.nameText then
-            ApplyFont(d.nameText, pp.nameSize or 10, pp)
+            ApplyFont(d.nameText, pp.nameSize or 10)
             if d.AnchorNameText then d.AnchorNameText() end
             -- Override width constraint for party button dimensions
             d.nameText:SetWidth(bw * ns.RF_NAME_WIDTH_FRACTION)
@@ -11654,7 +11633,7 @@ local function CreatePreviewFrame(index)
 
     -- Name text (anchoring done by ApplyPreviewData on every refresh)
     local nameFS = textCarrier:CreateFontString(nil, "OVERLAY")
-    ApplyFont(nameFS, s.nameSize or 10, s)
+    ApplyFont(nameFS, s.nameSize or 10)
     nameFS:SetJustifyH("CENTER")
     nameFS:SetWordWrap(false)
     nameFS:SetPoint("CENTER", health, "CENTER", 0, 0)
@@ -12859,7 +12838,7 @@ local function ApplyPreviewData(f, index)
         -- Force text re-render (WoW doesn't visually re-layout on JustifyH change alone)
         f._nameText:SetText("")
         f._nameText:SetText(ns.CapName(name))
-        ApplyFont(f._nameText, s.nameSize or 10, s)
+        ApplyFont(f._nameText, s.nameSize or 10)
         local nameMode = s.nameColorMode or "class"
         if nameMode == "accent" then
             local ar, ag, ab = EllesmereUI.ResolveActiveAccent()
@@ -13870,7 +13849,7 @@ ns._ShowSizePreview = function(tier)
 
         -- Centered unit number.
         if f._nameText then
-            ApplyFont(f._nameText, math.max(11, nameSize), s)
+            ApplyFont(f._nameText, math.max(11, nameSize))
             f._nameText:SetText(tostring(i))
             f._nameText:SetTextColor(0.9, 0.9, 0.9)
             f._nameText:SetWidth(bw)
