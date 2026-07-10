@@ -45,9 +45,7 @@ local C_Timer_After = C_Timer.After
 ns._eabFD = setmetatable({}, { __mode = "k" })
 function ns.EFD(frame)
     local d = ns._eabFD[frame]
-    if not d then
-        d = {}; ns._eabFD[frame] = d
-    end
+    if not d then d = {}; ns._eabFD[frame] = d end
     return d
 end
 
@@ -67,19 +65,19 @@ local BAR_CONFIG = {
     -- sets actionpage from the restricted env for form/vehicle/override paging.
     -- Keyboard input flows through Blizzard's native
     -- ActionButtonDown/Up → GetActionButtonForID → _G["ActionButton"..id].
-    { key = "MainBar",   label = "Action Bar 1 (Main)", barID = 1, count = 12, blizzBtnPrefix = "ActionButton",              blizzFrame = "MainMenuBar",         nativeMainBar = true },
+    { key = "MainBar",   label = "Action Bar 1 (Main)", barID = 1,  count = 12, blizzBtnPrefix = "ActionButton",              blizzFrame = "MainMenuBar", nativeMainBar = true },
     -- nativeActionPage: the Blizzard actionpage for this bar's slot range.
     -- Buttons keep their native IDs and derive the action via
     --   CalculateAction path 1: action = ID + (page - 1) * 12.
     -- Keyboard input flows through Blizzard's native MultiActionButtonDown/Up
     -- so UseAction receives isKeyPress=true (required for press-and-hold casting).
-    { key = "Bar2",      label = "Action Bar 2",        barID = 2, count = 12, blizzBtnPrefix = "MultiBarBottomLeftButton",  blizzFrame = "MultiBarBottomLeft",  nativeActionPage = 6 },
-    { key = "Bar3",      label = "Action Bar 3",        barID = 3, count = 12, blizzBtnPrefix = "MultiBarBottomRightButton", blizzFrame = "MultiBarBottomRight", nativeActionPage = 5 },
-    { key = "Bar4",      label = "Action Bar 4",        barID = 4, count = 12, blizzBtnPrefix = "MultiBarRightButton",       blizzFrame = "MultiBarRight",       nativeActionPage = 3 },
-    { key = "Bar5",      label = "Action Bar 5",        barID = 5, count = 12, blizzBtnPrefix = "MultiBarLeftButton",        blizzFrame = "MultiBarLeft",        nativeActionPage = 4 },
-    { key = "Bar6",      label = "Action Bar 6",        barID = 6, count = 12, blizzBtnPrefix = "MultiBar5Button",           blizzFrame = "MultiBar5",           nativeActionPage = 13 },
-    { key = "Bar7",      label = "Action Bar 7",        barID = 7, count = 12, blizzBtnPrefix = "MultiBar6Button",           blizzFrame = "MultiBar6",           nativeActionPage = 14 },
-    { key = "Bar8",      label = "Action Bar 8",        barID = 8, count = 12, blizzBtnPrefix = "MultiBar7Button",           blizzFrame = "MultiBar7",           nativeActionPage = 15 },
+    { key = "Bar2",      label = "Action Bar 2",        barID = 2,  count = 12, blizzBtnPrefix = "MultiBarBottomLeftButton",   blizzFrame = "MultiBarBottomLeft",  nativeActionPage = 6 },
+    { key = "Bar3",      label = "Action Bar 3",        barID = 3,  count = 12, blizzBtnPrefix = "MultiBarBottomRightButton",  blizzFrame = "MultiBarBottomRight", nativeActionPage = 5 },
+    { key = "Bar4",      label = "Action Bar 4",        barID = 4,  count = 12, blizzBtnPrefix = "MultiBarRightButton",        blizzFrame = "MultiBarRight",       nativeActionPage = 3 },
+    { key = "Bar5",      label = "Action Bar 5",        barID = 5,  count = 12, blizzBtnPrefix = "MultiBarLeftButton",         blizzFrame = "MultiBarLeft",        nativeActionPage = 4 },
+    { key = "Bar6",      label = "Action Bar 6",        barID = 6,  count = 12, blizzBtnPrefix = "MultiBar5Button",          blizzFrame = "MultiBar5",           nativeActionPage = 13 },
+    { key = "Bar7",      label = "Action Bar 7",        barID = 7,  count = 12, blizzBtnPrefix = "MultiBar6Button",          blizzFrame = "MultiBar6",           nativeActionPage = 14 },
+    { key = "Bar8",      label = "Action Bar 8",        barID = 8,  count = 12, blizzBtnPrefix = "MultiBar7Button",          blizzFrame = "MultiBar7",           nativeActionPage = 15 },
     -- Bar9 / Bar10: extra bars with NO native Blizzard frame. They use our own
     -- EABButton<slot> buttons and page identically to Bars 2-8 via the
     -- explicit-action + _childupdate-eab-page system. Bar9 maps to action page 2
@@ -90,28 +88,28 @@ local BAR_CONFIG = {
     -- their keys route through SetOverrideBindingClick using the EUI_BAR9/10_BUTTON
     -- commands defined in Bindings.xml. customPage = the action page these slots
     -- live on.
-    { key = "Bar9",      label = "Action Bar 9",        barID = 0, count = 12, customPage = 2 },
-    { key = "Bar10",     label = "Action Bar 10",       barID = 0, count = 12, customPage = 10 },
-    { key = "StanceBar", label = "Stance Bar",          barID = 0, count = 10, blizzBtnPrefix = "StanceButton",              blizzFrame = "StanceBar",           isStance = true },
-    { key = "PetBar",    label = "Pet Bar",             barID = 0, count = 10, blizzBtnPrefix = "PetActionButton",           blizzFrame = "PetActionBar",        isPetBar = true },
+    { key = "Bar9",      label = "Action Bar 9",        barID = 0,  count = 12, customPage = 2 },
+    { key = "Bar10",     label = "Action Bar 10",       barID = 0,  count = 12, customPage = 10 },
+    { key = "StanceBar", label = "Stance Bar",          barID = 0,  count = 10, blizzBtnPrefix = "StanceButton",               blizzFrame = "StanceBar", isStance = true },
+    { key = "PetBar",    label = "Pet Bar",             barID = 0,  count = 10, blizzBtnPrefix = "PetActionButton",            blizzFrame = "PetActionBar", isPetBar = true },
 }
 
 -- Aliases for the options file (which references these field names)
 for _, info in ipairs(BAR_CONFIG) do
-    info.buttonPrefix  = info.blizzBtnPrefix
-    info.frameName     = info.blizzFrame
+    info.buttonPrefix = info.blizzBtnPrefix
+    info.frameName    = info.blizzFrame
     info.fallbackFrame = nil
 end
 
 local EXTRA_BARS = {
-    { key = "MicroBar",          label = "Micro Menu Bar",      frameName = "MicroMenuContainer", hoverFrame = "MicroMenu", visibilityOnly = true,       blizzOwnedVisibility = true },
-    { key = "BagBar",            label = "Bag Bar",             frameName = "BagsBar",            visibilityOnly = true,    blizzOwnedVisibility = true },
-    { key = "QueueStatus",       label = "Queue Status",        frameName = "QueueStatusButton",  visibilityOnly = true,    blizzOwnedVisibility = true, noManagedVisibility = true },
-    { key = "XPBar",             label = "XP Bar",              visibilityOnly = true,            isDataBar = true },
-    { key = "RepBar",            label = "Reputation Bar",      visibilityOnly = true,            isDataBar = true },
-    { key = "FavorBar",          label = "House Favor Bar",     visibilityOnly = true,            isDataBar = true },
-    { key = "ExtraActionButton", label = "Extra Action Button", visibilityOnly = true,            isBlizzardMovable = true },
-    { key = "EncounterBar",      label = "Encounter Bar",       visibilityOnly = true,            isBlizzardMovable = true },
+    { key = "MicroBar", label = "Micro Menu Bar", frameName = "MicroMenuContainer", hoverFrame = "MicroMenu", visibilityOnly = true, blizzOwnedVisibility = true },
+    { key = "BagBar",   label = "Bag Bar",        frameName = "BagsBar", visibilityOnly = true, blizzOwnedVisibility = true },
+    { key = "QueueStatus", label = "Queue Status", frameName = "QueueStatusButton", visibilityOnly = true, blizzOwnedVisibility = true, noManagedVisibility = true },
+    { key = "XPBar",    label = "XP Bar",         visibilityOnly = true, isDataBar = true },
+    { key = "RepBar",   label = "Reputation Bar",  visibilityOnly = true, isDataBar = true },
+    { key = "FavorBar", label = "House Favor Bar", visibilityOnly = true, isDataBar = true },
+    { key = "ExtraActionButton", label = "Extra Action Button", visibilityOnly = true, isBlizzardMovable = true },
+    { key = "EncounterBar",      label = "Encounter Bar",         visibilityOnly = true, isBlizzardMovable = true },
 }
 
 local ALL_BARS = {}
@@ -223,21 +221,20 @@ local MEDIA_DIR = "Interface\\AddOns\\EllesmereUIActionBars\\Media\\"
 local FONT_PATH = (EllesmereUI and EllesmereUI.GetFontPath and EllesmereUI.GetFontPath("actionBars"))
     or "Interface\\AddOns\\EllesmereUI\\media\\fonts\\Expressway.TTF"
 local function GetEABOutline()
-    return (EllesmereUI and EllesmereUI.GetFontOutlineFlag and EllesmereUI.GetFontOutlineFlag("actionBars")) or
-        "OUTLINE, SLUG"
+    return (EllesmereUI and EllesmereUI.GetFontOutlineFlag and EllesmereUI.GetFontOutlineFlag("actionBars")) or "OUTLINE, SLUG"
 end
 local function GetEABUseShadow()
     return not EllesmereUI or not EllesmereUI.GetFontUseShadow or EllesmereUI.GetFontUseShadow("actionBars")
 end
-local HIGHLIGHT_TEXTURES            = {
+local HIGHLIGHT_TEXTURES = {
     MEDIA_DIR .. "highlight-2.png",
     MEDIA_DIR .. "highlight-3.png",
     MEDIA_DIR .. "highlight-4.png",
 }
-ns.HIGHLIGHT_TEXTURES               = HIGHLIGHT_TEXTURES
+ns.HIGHLIGHT_TEXTURES = HIGHLIGHT_TEXTURES
 
-local SHAPE_MEDIA                   = "Interface\\AddOns\\EllesmereUI\\media\\portraits\\"
-local SHAPE_MASKS                   = {
+local SHAPE_MEDIA = "Interface\\AddOns\\EllesmereUI\\media\\portraits\\"
+local SHAPE_MASKS = {
     circle   = SHAPE_MEDIA .. "circle_mask.tga",
     csquare  = SHAPE_MEDIA .. "csquare_mask.tga",
     diamond  = SHAPE_MEDIA .. "diamond_mask.tga",
@@ -246,7 +243,7 @@ local SHAPE_MASKS                   = {
     shield   = SHAPE_MEDIA .. "shield_mask.tga",
     square   = SHAPE_MEDIA .. "square_mask.tga",
 }
-local SHAPE_BORDERS                 = {
+local SHAPE_BORDERS = {
     circle   = SHAPE_MEDIA .. "circle_border.tga",
     csquare  = SHAPE_MEDIA .. "csquare_border.tga",
     diamond  = SHAPE_MEDIA .. "diamond_border.tga",
@@ -255,75 +252,46 @@ local SHAPE_BORDERS                 = {
     shield   = SHAPE_MEDIA .. "shield_border.tga",
     square   = SHAPE_MEDIA .. "square_border.tga",
 }
-local SHAPE_INSETS                  = {
-    circle = 17,
-    csquare = 17,
-    diamond = 14,
-    hexagon = 17,
-    portrait = 17,
-    shield = 13,
-    square = 17,
+local SHAPE_INSETS = {
+    circle = 17, csquare = 17, diamond = 14,
+    hexagon = 17, portrait = 17, shield = 13, square = 17,
 }
-local SHAPE_ZOOM_DEFAULTS           = {
-    none = 5.5,
-    cropped = 2,
-    square = 6.0,
-    circle = 6.0,
-    csquare = 6.0,
-    diamond = 6.0,
-    hexagon = 6.0,
-    portrait = 6.0,
-    shield = 6.0,
+local SHAPE_ZOOM_DEFAULTS = {
+    none = 5.5, cropped = 2, square = 6.0, circle = 6.0, csquare = 6.0,
+    diamond = 6.0, hexagon = 6.0, portrait = 6.0, shield = 6.0,
 }
-ns.SHAPE_ZOOM_DEFAULTS              = SHAPE_ZOOM_DEFAULTS
-ns.SHAPE_MASKS                      = SHAPE_MASKS
-ns.SHAPE_BORDERS                    = SHAPE_BORDERS
+ns.SHAPE_ZOOM_DEFAULTS = SHAPE_ZOOM_DEFAULTS
+ns.SHAPE_MASKS   = SHAPE_MASKS
+ns.SHAPE_BORDERS = SHAPE_BORDERS
 
-local SHAPE_BTN_EXPAND              = 10
-local SHAPE_ICON_EXPAND             = 7
-ns.SHAPE_BTN_EXPAND                 = SHAPE_BTN_EXPAND
-ns.SHAPE_ICON_EXPAND                = SHAPE_ICON_EXPAND
+local SHAPE_BTN_EXPAND  = 10
+local SHAPE_ICON_EXPAND = 7
+ns.SHAPE_BTN_EXPAND  = SHAPE_BTN_EXPAND
+ns.SHAPE_ICON_EXPAND = SHAPE_ICON_EXPAND
 
-local SHAPE_ICON_EXPAND_OFFSETS     = {
-    circle = 2,
-    csquare = 4,
-    diamond = 2,
-    hexagon = 4,
-    portrait = 2,
-    shield = 2,
-    square = 4,
+local SHAPE_ICON_EXPAND_OFFSETS = {
+    circle = 2, csquare = 4, diamond = 2, hexagon = 4,
+    portrait = 2, shield = 2, square = 4,
 }
-ns.SHAPE_ICON_EXPAND_OFFSETS        = SHAPE_ICON_EXPAND_OFFSETS
-ns.SHAPE_INSETS                     = SHAPE_INSETS
+ns.SHAPE_ICON_EXPAND_OFFSETS = SHAPE_ICON_EXPAND_OFFSETS
+ns.SHAPE_INSETS = SHAPE_INSETS
 
 -- Per-shape edge scale so the circular edge path stays inside the mask.
-local SHAPE_EDGE_SCALES             = {
-    circle = 0.75,
-    csquare = 0.75,
-    diamond = 0.70,
-    hexagon = 0.65,
-    portrait = 0.70,
-    shield = 0.65,
-    square = 0.75,
+local SHAPE_EDGE_SCALES = {
+    circle = 0.75, csquare = 0.75, diamond = 0.70,
+    hexagon = 0.65, portrait = 0.70, shield = 0.65, square = 0.75,
 }
 
 -- Border thickness mapping
-ns.BORDER_THICKNESS                 = {
+ns.BORDER_THICKNESS = {
     none   = { regular = 0, shape = 0 },
     thin   = { regular = 1, shape = 0 },
     normal = { regular = 2, shape = 0 },
     heavy  = { regular = 3, shape = 0 },
     strong = { regular = 4, shape = 7 },
 }
-ns.BORDER_THICKNESS_ORDER           = { "none", "thin", "normal", "heavy", "strong" }
-ns.BORDER_THICKNESS_LABELS          = {
-    none = "None",
-    thin = "Thin",
-    normal = "Normal",
-    heavy = "Heavy",
-    strong =
-    "Strong"
-}
+ns.BORDER_THICKNESS_ORDER  = { "none", "thin", "normal", "heavy", "strong" }
+ns.BORDER_THICKNESS_LABELS = { none="None", thin="Thin", normal="Normal", heavy="Heavy", strong="Strong" }
 ns.BORDER_THICKNESS_DEFAULT_REGULAR = "thin"
 ns.BORDER_THICKNESS_DEFAULT_SHAPE   = "strong"
 
@@ -411,74 +379,74 @@ local defaults = {
 
 for _, info in ipairs(BAR_CONFIG) do
     defaults.profile.bars[info.key] = {
-        enabled               = true,
-        borderEnabled         = true,
-        borderColor           = { r = 0, g = 0, b = 0, a = 1 },
-        borderSize            = 1,
-        borderClassColor      = false,
-        borderTexture         = "solid",
-        borderThickness       = "thin",
-        borderBehind          = false,
-        buttonPadding         = 2,
-        buttonWidth           = 0,
-        buttonHeight          = 0,
-        mouseoverEnabled      = false,
-        mouseoverAlpha        = 1,
-        combatShowEnabled     = false,
-        combatHideEnabled     = false,
-        housingHideEnabled    = false,
-        barVisibility         = "always",
-        visHideHousing        = false,
-        visOnlyInstances      = false,
-        visHideMounted        = false,
-        visHideNoTarget       = false,
-        visHideNoEnemy        = false,
-        hideKeybind           = false,
-        keybindFontSize       = 12,
-        keybindFontColor      = { r = 1, g = 1, b = 1 },
-        hideMacroText         = false,
-        macroFontSize         = 12,
-        macroFontColor        = { r = 1, g = 1, b = 1 },
-        countFontSize         = 12,
-        countFontColor        = { r = 1, g = 1, b = 1 },
-        alwaysHidden          = false,
-        mouseoverSpeed        = 0.15,
-        clickThrough          = false,
-        overrideNumIcons      = nil,
-        overrideNumRows       = nil,
-        growDirection         = "up",
-        reverseIconOrder      = false,
-        alwaysShowButtons     = true,
-        showPagingArrows      = false,
-        pagingArrowsRight     = false,
-        paging                = {},
-        bgEnabled             = false,
-        bgColor               = { r = 0, g = 0, b = 0, a = 0.5 },
-        outOfRangeColoring    = false,
-        outOfRangeColor       = { r = 0.8, g = 0.1, b = 0.1 },
-        buttonShape           = "none",
-        shapeBorderEnabled    = true,
-        shapeBorderColor      = { r = 0, g = 0, b = 0, a = 1 },
-        shapeBorderSize       = 7,
+        enabled = true,
+        borderEnabled = true,
+        borderColor = { r = 0, g = 0, b = 0, a = 1 },
+        borderSize = 1,
+        borderClassColor = false,
+        borderTexture = "solid",
+        borderThickness = "thin",
+        borderBehind = false,
+        buttonPadding = 2,
+        buttonWidth = 0,
+        buttonHeight = 0,
+        mouseoverEnabled = false,
+        mouseoverAlpha = 1,
+        combatShowEnabled = false,
+        combatHideEnabled = false,
+        housingHideEnabled = false,
+        barVisibility = "always",
+        visHideHousing = false,
+        visOnlyInstances = false,
+        visHideMounted = false,
+        visHideNoTarget = false,
+        visHideNoEnemy = false,
+        hideKeybind = false,
+        keybindFontSize = 12,
+        keybindFontColor = { r = 1, g = 1, b = 1 },
+        hideMacroText = false,
+        macroFontSize = 12,
+        macroFontColor = { r = 1, g = 1, b = 1 },
+        countFontSize = 12,
+        countFontColor = { r = 1, g = 1, b = 1 },
+        alwaysHidden = false,
+        mouseoverSpeed = 0.15,
+        clickThrough = false,
+        overrideNumIcons = nil,
+        overrideNumRows  = nil,
+        growDirection    = "up",
+        reverseIconOrder = false,
+        alwaysShowButtons = true,
+        showPagingArrows = false,
+        pagingArrowsRight = false,
+        paging = {},
+        bgEnabled = false,
+        bgColor = { r = 0, g = 0, b = 0, a = 0.5 },
+        outOfRangeColoring = false,
+        outOfRangeColor = { r = 0.8, g = 0.1, b = 0.1 },
+        buttonShape = "none",
+        shapeBorderEnabled = true,
+        shapeBorderColor = { r = 0, g = 0, b = 0, a = 1 },
+        shapeBorderSize = 7,
         shapeBorderClassColor = nil,
-        iconZoom              = nil,
-        keybindOffsetX        = 0,
-        keybindOffsetY        = 0,
-        macroOffsetX          = 0,
-        macroOffsetY          = 0,
-        countOffsetX          = 0,
-        countOffsetY          = 0,
-        cooldownFontSize      = 12,
-        cooldownTextXOffset   = 0,
-        cooldownTextYOffset   = 0,
-        cooldownTextColor     = { r = 1, g = 1, b = 1 },
-        disableTooltips       = false,
-        showRankIcon          = false,
-        orientation           = "horizontal",
-        numIcons              = 12,
-        numRows               = 1,
-        targetWidth           = 0,
-        targetHeight          = 0,
+        iconZoom = nil,
+        keybindOffsetX = 0,
+        keybindOffsetY = 0,
+        macroOffsetX = 0,
+        macroOffsetY = 0,
+        countOffsetX = 0,
+        countOffsetY = 0,
+        cooldownFontSize = 12,
+        cooldownTextXOffset = 0,
+        cooldownTextYOffset = 0,
+        cooldownTextColor = { r = 1, g = 1, b = 1 },
+        disableTooltips = false,
+        showRankIcon = false,
+        orientation = "horizontal",
+        numIcons = 12,
+        numRows = 1,
+        targetWidth = 0,
+        targetHeight = 0,
     }
 end
 
@@ -510,7 +478,7 @@ for _, info in ipairs(EXTRA_BARS) do
         d.width = 400
         d.height = 18
         d.orientation = "HORIZONTAL"
-        d.clickThrough = true -- default on for data bars
+        d.clickThrough = true  -- default on for data bars
     end
 end
 -- House Favor bar ships opt-in: hidden until the user turns it on.
@@ -568,7 +536,7 @@ local function _ExtraFadeOnUpdate(_, elapsed)
             _extraFadeQueue[frame] = nil
         else
             -- Smooth in/out easing
-            local e = t < 0.5 and (2 * t * t) or (1 - (-2 * t + 2) ^ 2 / 2)
+            local e = t < 0.5 and (2 * t * t) or (1 - (-2 * t + 2)^2 / 2)
             frame:SetAlpha(info.fromAlpha + (info.toAlpha - info.fromAlpha) * e)
             anyActive = true
         end
@@ -714,7 +682,7 @@ ns.ButtonHasAction = ButtonHasAction
 -- Stock bar frames to disable. Each entry carries flags for how to handle it:
 --   retainEvents  = true  -> do NOT unregister events (needed for override state)
 local STOCK_BAR_DISPOSAL = {
-    { name = "MainActionBar",      retainEvents = true },
+    { name = "MainActionBar",       retainEvents = true },
     { name = "MainMenuBar" },
     { name = "MultiBarBottomLeft" },
     { name = "MultiBarBottomRight" },
@@ -866,9 +834,7 @@ do
                 if frame.EnableMouseClicks then frame:EnableMouseClicks(false) end
                 if frame.EnableMouseMotion then frame:EnableMouseMotion(false) end
                 -- Hide Edit Mode selection/mover frame
-                if frame.Selection then
-                    frame.Selection:Hide(); frame.Selection:SetAlpha(0)
-                end
+                if frame.Selection then frame.Selection:Hide(); frame.Selection:SetAlpha(0) end
                 -- Hide artwork children (gryphons/endcaps/border)
                 if frame.EndCaps then frame.EndCaps:Hide() end
                 if frame.BorderArt then frame.BorderArt:Hide() end
@@ -904,8 +870,7 @@ end
 --  showgrid, and uses a deferred visibility flush so rapid state changes
 --  batch into a single update pass.
 -------------------------------------------------------------------------------
-local ActionButtonController = CreateFrame("Frame", "EABActionButtonController", UIParent,
-    "SecureHandlerAttributeTemplate")
+local ActionButtonController = CreateFrame("Frame", "EABActionButtonController", UIParent, "SecureHandlerAttributeTemplate")
 
 -- Showgrid reasons (bitwise flags)
 local SHOWGRID = {
@@ -1338,19 +1303,14 @@ local function SecureSetupHandler_Execute(layoutData, barFrameData)
     for slot, d in pairs(layoutData) do
         local actionSlot = d.actionSlot or 0
         _secureHandler:SetAttribute("layout-" .. slot,
-            d.barKey ..
-            "|" .. d.x .. "|" .. d.y .. "|" .. d.w .. "|" .. d.h .. "|" .. (d.show and "1" or "0") .. "|" .. actionSlot)
+            d.barKey .. "|" .. d.x .. "|" .. d.y .. "|" .. d.w .. "|" .. d.h .. "|" .. (d.show and "1" or "0") .. "|" .. actionSlot)
     end
     -- Encode bar frame sizes/positions
     local barFrameCount = 0
     for _, d in ipairs(barFrameData) do
         barFrameCount = barFrameCount + 1
         _secureHandler:SetAttribute("barframe-" .. barFrameCount,
-            d.key ..
-            "|" ..
-            d.w ..
-            "|" ..
-            d.h .. "|" .. d.point .. "|" .. d.relPoint .. "|" .. d.x .. "|" .. d.y .. "|" .. (d.hidden and "1" or "0"))
+            d.key .. "|" .. d.w .. "|" .. d.h .. "|" .. d.point .. "|" .. d.relPoint .. "|" .. d.x .. "|" .. d.y .. "|" .. (d.hidden and "1" or "0"))
     end
     _secureHandler:SetAttribute("barframe-count", barFrameCount)
     -- Trigger the snippet
@@ -1455,6 +1415,7 @@ local function HideBlizzardBars()
     C_CVar.SetCVar("SHOW_MULTI_ACTIONBAR_2", "1")
     C_CVar.SetCVar("SHOW_MULTI_ACTIONBAR_3", "1")
     C_CVar.SetCVar("SHOW_MULTI_ACTIONBAR_4", "1")
+
 end
 
 -------------------------------------------------------------------------------
@@ -1462,18 +1423,18 @@ end
 --  All action bar buttons (slots 1-180) are our own EABButton frames.
 --  Stance/Pet bars still reuse Blizzard buttons.
 -------------------------------------------------------------------------------
-local allButtons            = {} -- [actionSlot] = button
+local allButtons = {}   -- [actionSlot] = button
 -- barButtons: forward-declared above (before SecureSetupHandler_PrepareRefs)
-local buttonToBar           = {} -- [btn] = { barKey, index } for taint-safe slot resolution
-local barFrames             = {} -- [barKey] = secure header frame
-local dataBarFrames         = {} -- [barKey] = data bar frame (XP/Rep) populated later in SetupDataBars
-local blizzMovableHolders   = {} -- [barKey] = holder frame for Blizzard movable frames (ExtraAction, Encounter)
-local extraBarHolders       = {} -- [barKey] = holder frame for extra bars (MicroBar, BagBar)
-local BLIZZ_MOVABLE_OVERLAY = {  -- Fixed overlay sizes for unlock mode movers (not the actual Blizzard frames)
+local buttonToBar = {}  -- [btn] = { barKey, index } for taint-safe slot resolution
+local barFrames  = {}   -- [barKey] = secure header frame
+local dataBarFrames = {} -- [barKey] = data bar frame (XP/Rep) populated later in SetupDataBars
+local blizzMovableHolders = {} -- [barKey] = holder frame for Blizzard movable frames (ExtraAction, Encounter)
+local extraBarHolders = {} -- [barKey] = holder frame for extra bars (MicroBar, BagBar)
+local BLIZZ_MOVABLE_OVERLAY = { -- Fixed overlay sizes for unlock mode movers (not the actual Blizzard frames)
     ExtraActionButton = { w = 100, h = 100 },
     EncounterBar      = { w = 150, h = 40 },
 }
-local barBaseSize           = {} -- [barKey] = { w, h } original button size before any shape/scale
+local barBaseSize = {}  -- [barKey] = { w, h } original button size before any shape/scale
 
 -- Map bar config to action slot ranges
 -- These MUST match Blizzard's internal action slot assignments for each
@@ -1488,23 +1449,23 @@ local barBaseSize           = {} -- [barKey] = { w, h } original button size bef
 --   MultiBar7Button            slots 169-180
 -- Slots 133-144 are reserved/unknown (not used by any bar).
 -- Stance bar: uses StanceButton1-10 (not action slots)
-local BAR_SLOT_OFFSETS      = {
-    MainBar = 0, -- slots 1-12 (paged)
-    Bar2 = 60,   -- slots 61-72  (MultiBarBottomLeft)
-    Bar3 = 48,   -- slots 49-60  (MultiBarBottomRight)
-    Bar4 = 24,   -- slots 25-36  (MultiBarRight)
-    Bar5 = 36,   -- slots 37-48  (MultiBarLeft)
-    Bar6 = 144,  -- slots 145-156 (MultiBar5)
-    Bar7 = 156,  -- slots 157-168 (MultiBar6)
-    Bar8 = 168,  -- slots 169-180 (MultiBar7)
-    Bar9 = 12,   -- slots 13-24   (action page 2 -- custom bar)
-    Bar10 = 108, -- slots 109-120 (action page 10 -- custom bar, no native frame)
+local BAR_SLOT_OFFSETS = {
+    MainBar = 0,    -- slots 1-12 (paged)
+    Bar2 = 60,      -- slots 61-72  (MultiBarBottomLeft)
+    Bar3 = 48,      -- slots 49-60  (MultiBarBottomRight)
+    Bar4 = 24,      -- slots 25-36  (MultiBarRight)
+    Bar5 = 36,      -- slots 37-48  (MultiBarLeft)
+    Bar6 = 144,     -- slots 145-156 (MultiBar5)
+    Bar7 = 156,     -- slots 157-168 (MultiBar6)
+    Bar8 = 168,     -- slots 169-180 (MultiBar7)
+    Bar9 = 12,      -- slots 13-24   (action page 2 -- custom bar)
+    Bar10 = 108,    -- slots 109-120 (action page 10 -- custom bar, no native frame)
 }
 
 -- Keybind binding name prefixes per bar
 -- WoW binding names: MULTIACTIONBAR<N>BUTTON where N maps to the bar's
 -- Blizzard internal numbering (not our sequential bar IDs).
-local BINDING_MAP           = {
+local BINDING_MAP = {
     MainBar = "ACTIONBUTTON",
     Bar2 = "MULTIACTIONBAR1BUTTON",
     Bar3 = "MULTIACTIONBAR2BUTTON",
@@ -1528,7 +1489,7 @@ local BINDING_MAP           = {
 _G.BINDING_HEADER_EUI_BAR9  = "EllesmereUI Action Bar 9"
 _G.BINDING_HEADER_EUI_BAR10 = "EllesmereUI Action Bar 10"
 for i = 1, 12 do
-    _G["BINDING_NAME_EUI_BAR9_BUTTON" .. i] = "Action Bar 9 Button " .. i
+    _G["BINDING_NAME_EUI_BAR9_BUTTON"  .. i] = "Action Bar 9 Button "  .. i
     _G["BINDING_NAME_EUI_BAR10_BUTTON" .. i] = "Action Bar 10 Button " .. i
 end
 
@@ -1681,17 +1642,12 @@ local NUM_AB_PAGES = NUM_ACTIONBAR_PAGES or 6
 -- Stored on EAB_VTABLE to avoid 200-local Lua 5.1 limit.
 do
     local V = EAB_VTABLE
-    V.GetOverrideBarIndex = GetOverrideBarIndex or (C_ActionBar and C_ActionBar.GetOverrideBarIndex) or
-        function() return 14 end
-    V.GetVehicleBarIndex = GetVehicleBarIndex or (C_ActionBar and C_ActionBar.GetVehicleBarIndex) or
-        function() return 12 end
+    V.GetOverrideBarIndex = GetOverrideBarIndex or (C_ActionBar and C_ActionBar.GetOverrideBarIndex) or function() return 14 end
+    V.GetVehicleBarIndex = GetVehicleBarIndex or (C_ActionBar and C_ActionBar.GetVehicleBarIndex) or function() return 12 end
     V.GetActionBarPage = GetActionBarPage or (C_ActionBar and C_ActionBar.GetActionBarPage) or function() return 1 end
-    V.HasVehicleActionBar = HasVehicleActionBar or (C_ActionBar and C_ActionBar.HasVehicleActionBar) or
-        function() return false end
-    V.HasOverrideActionBar = HasOverrideActionBar or (C_ActionBar and C_ActionBar.HasOverrideActionBar) or
-        function() return false end
-    V.HasTempShapeshiftActionBar = HasTempShapeshiftActionBar or (C_ActionBar and C_ActionBar.HasTempShapeshiftActionBar) or
-        function() return false end
+    V.HasVehicleActionBar = HasVehicleActionBar or (C_ActionBar and C_ActionBar.HasVehicleActionBar) or function() return false end
+    V.HasOverrideActionBar = HasOverrideActionBar or (C_ActionBar and C_ActionBar.HasOverrideActionBar) or function() return false end
+    V.HasTempShapeshiftActionBar = HasTempShapeshiftActionBar or (C_ActionBar and C_ActionBar.HasTempShapeshiftActionBar) or function() return false end
 end
 
 -------------------------------------------------------------------------------
@@ -1702,16 +1658,9 @@ end
 
 -- All paging data stored on EAB_VTABLE to avoid 200-local Lua 5.1 limit.
 EAB_VTABLE.BAR_KEY_TO_PAGE = {
-    MainBar = 1,
-    Bar2 = 6,
-    Bar3 = 5,
-    Bar4 = 3,
-    Bar5 = 4,
-    Bar6 = 13,
-    Bar7 = 14,
-    Bar8 = 15,
-    Bar9 = 2,
-    Bar10 = 10,
+    MainBar = 1,  Bar2 = 6,  Bar3 = 5,  Bar4 = 3,
+    Bar5 = 4,     Bar6 = 13, Bar7 = 14, Bar8 = 15,
+    Bar9 = 2,     Bar10 = 10,
 }
 EAB_VTABLE.PAGING_STATES = {
     modifier = {
@@ -1720,8 +1669,8 @@ EAB_VTABLE.PAGING_STATES = {
         { id = "ctrl",  macro = "[mod:ctrl]",  label = "Ctrl" },
     },
     target = {
-        { id = "help", macro = "[help]", label = "Friendly Target" },
-        { id = "harm", macro = "[harm]", label = "Hostile Target" },
+        { id = "help",  macro = "[help]",      label = "Friendly Target" },
+        { id = "harm",  macro = "[harm]",      label = "Hostile Target" },
     },
     class = {
         DRUID = {
@@ -1767,8 +1716,8 @@ function EAB_VTABLE.BuildPagingConditions(barKey, pagingConfig, defaultPage)
     -- unconfigured (nil) states so setting a modifier doesn't break forms.
     -- false = explicitly disabled by user ("None"), nil = unconfigured.
     local CLASS_DEFAULTS = {
-        DRUID = { prowl = 7, cat = 7, tree = 8, bear = 9, moonkin = 10 },
-        ROGUE = { stealth = 7 },
+        DRUID  = { prowl = 7, cat = 7, tree = 8, bear = 9, moonkin = 10 },
+        ROGUE  = { stealth = 7 },
     }
     local classStates = PG.class[class]
     if classStates then
@@ -1848,8 +1797,8 @@ end
 -------------------------------------------------------------------------------
 --  Action Bar 1 Paging Arrows + Page Number
 -------------------------------------------------------------------------------
-local _pagingFrame      -- forward ref
-local LayoutPagingFrame -- forward ref (used inside SetupPagingFrame closure)
+local _pagingFrame    -- forward ref
+local LayoutPagingFrame  -- forward ref (used inside SetupPagingFrame closure)
 
 -- The paging frame is parented to the MainBar frame (see LayoutPagingFrame), so
 -- it inherits the bar's mouseover-fade alpha AND its secure show/hide visibility
@@ -1914,8 +1863,7 @@ local function SetupPagingFrame()
 
     -- Page number text
     local pageText = f:CreateFontString(nil, "OVERLAY")
-    pageText:SetFont(STANDARD_TEXT_FONT, 12,
-        (EllesmereUI and EllesmereUI.SlugFlag and EllesmereUI.SlugFlag("OUTLINE, SLUG")) or "OUTLINE, SLUG")
+    pageText:SetFont(STANDARD_TEXT_FONT, 12, (EllesmereUI and EllesmereUI.SlugFlag and EllesmereUI.SlugFlag("OUTLINE, SLUG")) or "OUTLINE, SLUG")
     pageText:SetTextColor(1, 1, 1, 0.9)
     pageText:SetText("1")
     f._pageText = pageText
@@ -1995,14 +1943,10 @@ LayoutPagingFrame = function()
     if not f then return end
     if InCombatLockdown() then return end
     local mainFrame = barFrames and barFrames["MainBar"]
-    if not mainFrame then
-        f:Hide(); return
-    end
+    if not mainFrame then f:Hide(); return end
 
     local s = EAB and EAB.db and EAB.db.profile and EAB.db.profile.bars and EAB.db.profile.bars["MainBar"]
-    if not s then
-        f:Hide(); return
-    end
+    if not s then f:Hide(); return end
 
     -- Parent the paging frame to the MainBar frame so it inherits the bar's
     -- secure show/hide (visibility settings like combat-only, hide-no-target,
@@ -2038,8 +1982,7 @@ LayoutPagingFrame = function()
 
     f._upBtn:SetSize(arrowSize, arrowSize)
     f._downBtn:SetSize(arrowSize, arrowSize)
-    f._pageText:SetFont(STANDARD_TEXT_FONT, textSize,
-        (EllesmereUI and EllesmereUI.SlugFlag and EllesmereUI.SlugFlag("OUTLINE, SLUG")) or "OUTLINE, SLUG")
+    f._pageText:SetFont(STANDARD_TEXT_FONT, textSize, (EllesmereUI and EllesmereUI.SlugFlag and EllesmereUI.SlugFlag("OUTLINE, SLUG")) or "OUTLINE, SLUG")
 
     f._upBtn:ClearAllPoints()
     f._downBtn:ClearAllPoints()
@@ -2111,8 +2054,7 @@ ns._eabEmpowerSnippet = [[
 -- handler is byte-identical everywhere -- the page change rewrites the secure
 -- "action" attribute (our buttons are ID=0, so actionpage is never consulted).
 function ns._eabBuildPageChildSnippet(baseIndex)
-    return ("local page = tonumber(message) or 1; self:SetAttribute('action', %d + (page - 1) * 12)"):format(baseIndex) ..
-        ns._eabEmpowerSnippet
+    return ("local page = tonumber(message) or 1; self:SetAttribute('action', %d + (page - 1) * 12)"):format(baseIndex) .. ns._eabEmpowerSnippet
 end
 
 -------------------------------------------------------------------------------
@@ -2312,6 +2254,7 @@ function ns.RebuildBarPaging(barKey)
     end
 end
 
+
 -------------------------------------------------------------------------------
 --  Bar Setup creates frames and buttons for each bar
 -------------------------------------------------------------------------------
@@ -2431,7 +2374,7 @@ local function SetupBar(info, skipProtected)
                 -- change, then re-checks hold-release. Shared builder so SetupBar
                 -- and RebuildBarPaging install byte-identical handlers.
                 if (key == "MainBar" or frame._eabPagingInstalled)
-                    and not btn:GetAttribute("_childupdate-eab-page") then
+                   and not btn:GetAttribute("_childupdate-eab-page") then
                     btn:SetAttributeNoHandler("_childupdate-eab-page", ns._eabBuildPageChildSnippet(i))
                 end
                 -- Empower re-check on slot change (spec swap, drag, etc.)
@@ -2503,7 +2446,7 @@ do
         dispatcher:RegisterEvent("UPDATE_VEHICLE_ACTIONBAR")
         dispatcher:RegisterEvent("UPDATE_OVERRIDE_ACTIONBAR")
         dispatcher:RegisterEvent("PLAYER_TARGET_CHANGED")
-        dispatcher:RegisterEvent("CVAR_UPDATE") -- "Show numbers for cooldowns" toggled -> re-apply charge recharge numbers
+        dispatcher:RegisterEvent("CVAR_UPDATE")  -- "Show numbers for cooldowns" toggled -> re-apply charge recharge numbers
         -- Direct API calls bypass the mixin's OnEvent dispatch, which
         -- triggers UpdateButtonArt (noop + hook), icon bg hook, and other
         -- per-button overhead. With 60 populated buttons, the mixin path
@@ -2566,21 +2509,14 @@ do
                                         if icon then
                                             local val = 0
                                             if cdInfo and cdInfo.isActive and durObj and durObj.EvaluateRemainingDuration then
-                                                local useRealCurve = chargeInfo and chargeInfo.maxCharges and
-                                                    chargeInfo.maxCharges > 1
+                                                local useRealCurve = chargeInfo and chargeInfo.maxCharges and chargeInfo.maxCharges > 1
                                                 if not useRealCurve and GetActionInfo(action) == "item" then
                                                     useRealCurve = true
                                                 end
                                                 if useRealCurve then
-                                                    if desatCurveReal then
-                                                        val = durObj:EvaluateRemainingDuration(
-                                                            desatCurveReal, 0)
-                                                    end
+                                                    if desatCurveReal then val = durObj:EvaluateRemainingDuration(desatCurveReal, 0) end
                                                 elseif not cdInfo.isOnGCD then
-                                                    if desatCurveAny then
-                                                        val = durObj:EvaluateRemainingDuration(
-                                                            desatCurveAny, 0)
-                                                    end
+                                                    if desatCurveAny then val = durObj:EvaluateRemainingDuration(desatCurveAny, 0) end
                                                 end
                                             end
                                             if desatOn then icon:SetDesaturation(val or 0) end
@@ -2591,7 +2527,7 @@ do
                                                 -- secret-safe SetAlphaFromBoolean instead. Same real-CD
                                                 -- gating as desat: GCD excluded for plain spells.
                                                 if icon.SetAlphaFromBoolean and cdInfo and cdInfo.isActive
-                                                    and durObj and durObj.IsZero then
+                                                   and durObj and durObj.IsZero then
                                                     local realCd = (chargeInfo and chargeInfo.maxCharges and chargeInfo.maxCharges > 1)
                                                         or (GetActionInfo(action) == "item")
                                                         or (not cdInfo.isOnGCD)
@@ -2657,7 +2593,7 @@ do
                             for _, btn in ipairs(btns) do
                                 local chargeCd = btn.chargeCooldown
                                 if chargeCd and chargeCd.SetHideCountdownNumbers
-                                    and EFD(chargeCd).rechargeNumbersHidden ~= hideNums then
+                                   and EFD(chargeCd).rechargeNumbersHidden ~= hideNums then
                                     EFD(chargeCd).rechargeNumbersHidden = hideNums
                                     chargeCd:SetHideCountdownNumbers(hideNums)
                                 end
@@ -2667,20 +2603,20 @@ do
                                 -- Skip buttons with active range tint -- the
                                 -- range system owns vertex color for those.
                                 if not EFD(btn).rangeTinted then
-                                    local action = btn:GetAttribute("action")
-                                    if action and HasAction(action) then
-                                        local isUsable, notEnoughMana = IsUsableAction(action)
-                                        local icon = btn.icon
-                                        if icon then
-                                            if isUsable then
-                                                icon:SetVertexColor(1.0, 1.0, 1.0)
-                                            elseif notEnoughMana then
-                                                icon:SetVertexColor(0.5, 0.5, 1.0)
-                                            else
-                                                icon:SetVertexColor(0.4, 0.4, 0.4)
-                                            end
+                                local action = btn:GetAttribute("action")
+                                if action and HasAction(action) then
+                                    local isUsable, notEnoughMana = IsUsableAction(action)
+                                    local icon = btn.icon
+                                    if icon then
+                                        if isUsable then
+                                            icon:SetVertexColor(1.0, 1.0, 1.0)
+                                        elseif notEnoughMana then
+                                            icon:SetVertexColor(0.5, 0.5, 1.0)
+                                        else
+                                            icon:SetVertexColor(0.4, 0.4, 0.4)
                                         end
                                     end
+                                end
                                 end
                             end
                         elseif event == "ACTIONBAR_UPDATE_STATE" then
@@ -2714,20 +2650,20 @@ do
                             for _, btn in ipairs(btns) do
                                 if btn.UpdateAction then btn:UpdateAction() end
                                 if not EFD(btn).rangeTinted then
-                                    local action = btn:GetAttribute("action")
-                                    if action and HasAction(action) then
-                                        local isUsable, notEnoughMana = IsUsableAction(action)
-                                        local icon = btn.icon
-                                        if icon then
-                                            if isUsable then
-                                                icon:SetVertexColor(1.0, 1.0, 1.0)
-                                            elseif notEnoughMana then
-                                                icon:SetVertexColor(0.5, 0.5, 1.0)
-                                            else
-                                                icon:SetVertexColor(0.4, 0.4, 0.4)
-                                            end
+                                local action = btn:GetAttribute("action")
+                                if action and HasAction(action) then
+                                    local isUsable, notEnoughMana = IsUsableAction(action)
+                                    local icon = btn.icon
+                                    if icon then
+                                        if isUsable then
+                                            icon:SetVertexColor(1.0, 1.0, 1.0)
+                                        elseif notEnoughMana then
+                                            icon:SetVertexColor(0.5, 0.5, 1.0)
+                                        else
+                                            icon:SetVertexColor(0.4, 0.4, 0.4)
                                         end
                                     end
+                                end
                                 end
                             end
                         end
@@ -2840,6 +2776,7 @@ local function CaptureBlizzardDefaults()
             end
 
             captured["MainBar"] = data
+
         elseif bar and bar:GetPoint(1) then
             local data = {}
 
@@ -3004,25 +2941,25 @@ local function ComputeBarLayout(key)
         btnH = btnH + SHAPE_BTN_EXPAND
     end
     if shape == "cropped" then btnH = btnH * 0.80 end
-    local PPc        = EllesmereUI and EllesmereUI.PP
-    local onePxC     = PPc and PPc.mult or 1
+    local PPc = EllesmereUI and EllesmereUI.PP
+    local onePxC = PPc and PPc.mult or 1
     -- Lock btnW / btnH / padding to exact physical pixel multiples so
     -- positioning (stepW, stepH) and the frame-size math below use the
     -- same pixel grid as the width-match extras (onePxC). Without this,
     -- raw coord values drift sub-pixel as col index grows, shrinking
     -- spacing and making the last button undershoot the match target.
-    local btnWPxC    = math.floor(btnW / onePxC + 0.5)
-    local btnHPxC    = math.floor(btnH / onePxC + 0.5)
+    local btnWPxC    = math.floor(btnW    / onePxC + 0.5)
+    local btnHPxC    = math.floor(btnH    / onePxC + 0.5)
     local paddingPxC = math.floor(padding / onePxC + 0.5)
-    btnW             = btnWPxC * onePxC
-    btnH             = btnHPxC * onePxC
-    padding          = paddingPxC * onePxC
-    local stepW      = btnW + padding
-    local stepH      = btnH + padding
-    local extraWC    = s._matchExtraPixels or 0
-    local extraHC    = s._matchExtraPixelsH or 0
+    btnW    = btnWPxC    * onePxC
+    btnH    = btnHPxC    * onePxC
+    padding = paddingPxC * onePxC
+    local stepW = btnW + padding
+    local stepH = btnH + padding
+    local extraWC = s._matchExtraPixels or 0
+    local extraHC = s._matchExtraPixelsH or 0
 
-    local showEmpty  = s.alwaysShowButtons
+    local showEmpty = s.alwaysShowButtons
     if showEmpty == nil then showEmpty = true end
     if info.isStance then showEmpty = false end
 
@@ -3145,23 +3082,23 @@ local function LayoutBar(key)
     end
 
     -- Width/height match: distribute extra physical pixels across buttons
-    local PP        = EllesmereUI and EllesmereUI.PP
-    local onePx     = PP and PP.mult or 1
+    local PP = EllesmereUI and EllesmereUI.PP
+    local onePx = PP and PP.mult or 1
     -- Lock btnW / btnH / padding to exact physical pixel multiples so
     -- positioning (stepW) and width-match +1px extras share the same
     -- pixel grid. Prevents sub-pixel drift that shrinks visible spacing
     -- at UI scales with PP.mult > 1.
-    local btnWPx    = math.floor(btnW / onePx + 0.5)
-    local btnHPx    = math.floor(btnH / onePx + 0.5)
+    local btnWPx    = math.floor(btnW    / onePx + 0.5)
+    local btnHPx    = math.floor(btnH    / onePx + 0.5)
     local paddingPx = math.floor(padding / onePx + 0.5)
-    btnW            = btnWPx * onePx
-    btnH            = btnHPx * onePx
-    padding         = paddingPx * onePx
-    local stepW     = btnW + padding
-    local stepH     = btnH + padding
+    btnW    = btnWPx    * onePx
+    btnH    = btnHPx    * onePx
+    padding = paddingPx * onePx
+    local stepW = btnW + padding
+    local stepH = btnH + padding
 
-    local extraW    = s._matchExtraPixels or 0
-    local extraH    = s._matchExtraPixelsH or 0
+    local extraW = s._matchExtraPixels or 0
+    local extraH = s._matchExtraPixelsH or 0
 
     -- Show empty slots (stance bar always forces this off)
     local showEmpty = s.alwaysShowButtons
@@ -3328,7 +3265,7 @@ local function LayoutBar(key)
     local isAnchored = EllesmereUI.IsUnlockAnchored
         and EllesmereUI.IsUnlockAnchored(key)
     if not isAnchored then
-        local curPt = ({ frame:GetPoint(1) })[1]
+        local curPt = ({frame:GetPoint(1)})[1]
         local pos = EAB.db.profile.barPositions and EAB.db.profile.barPositions[key]
         if pos and pos.point and pos.relPoint == "CENTER" and curPt ~= pos.point then
             local PPa = EllesmereUI and EllesmereUI.PP
@@ -3375,9 +3312,9 @@ local function LayoutBar(key)
         frame._eabPrevLayoutW = newW
         frame._eabPrevLayoutH = newH
         if (prevW or prevH)
-            and not EllesmereUI._unlockActive
-            and not EllesmereUI._abAnchorSuppressed
-            and not _isApplyingAll then
+           and not EllesmereUI._unlockActive
+           and not EllesmereUI._abAnchorSuppressed
+           and not _isApplyingAll then
             local s = EAB.db.profile.bars[key]
             local grow = s and s.growDirection
             if grow then
@@ -3391,7 +3328,7 @@ local function LayoutBar(key)
                         local uiES = PPo and UIParent:GetEffectiveScale()
                         -- Horizontal growth (LEFT/RIGHT): adjust offsetX on TOP/BOTTOM anchors
                         if prevW and math.abs(newW - prevW) > 0.1
-                            and (side == "TOP" or side == "BOTTOM") then
+                           and (side == "TOP" or side == "BOTTOM") then
                             local dw = newW - prevW
                             if grow == "RIGHT" then
                                 ai.offsetX = ai.offsetX + dw / 2
@@ -3402,7 +3339,7 @@ local function LayoutBar(key)
                         end
                         -- Vertical growth (UP/DOWN): adjust offsetY on LEFT/RIGHT anchors
                         if prevH and math.abs(newH - prevH) > 0.1
-                            and (side == "LEFT" or side == "RIGHT") then
+                           and (side == "LEFT" or side == "RIGHT") then
                             local dh = newH - prevH
                             if grow == "DOWN" then
                                 ai.offsetY = ai.offsetY - dh / 2
@@ -3422,9 +3359,9 @@ local function LayoutBar(key)
     -- direction that opens away from the nearest screen edge.
     local flyDir
     do
-        local cx, cy  = frame:GetCenter()
-        local uiW     = UIParent:GetWidth()
-        local uiH     = UIParent:GetHeight()
+        local cx, cy = frame:GetCenter()
+        local uiW = UIParent:GetWidth()
+        local uiH = UIParent:GetHeight()
         local uiScale = UIParent:GetEffectiveScale()
         local fScale  = frame:GetEffectiveScale()
         -- Convert to UIParent coordinate space
@@ -3757,7 +3694,7 @@ local function MakeButtonSquare(btn)
     -- no animations. The deferred Hide stays as a fallback reset. Runs in the
     -- insecure UNIT_SPELLCAST/OnShow context and is IsForbidden-guarded.
     if (btn.SpellCastAnimFrame and not fd.castHooked)
-        or (btn.InterruptDisplay and not fd.intHooked) then
+       or (btn.InterruptDisplay and not fd.intHooked) then
         local hideCastAnim = function(self)
             local prof = EAB.db and EAB.db.profile
             if not prof then return end
@@ -3840,8 +3777,7 @@ local function EnsureBorders(btn)
     return fd.borders
 end
 
-local function ApplyButtonBorders(btn, on, cr, cg, cb, ca, sz, zoom, textureKey, texOffset, texOffsetY, shiftX, shiftY,
-                                  addonKey, sizeKey, behind)
+local function ApplyButtonBorders(btn, on, cr, cg, cb, ca, sz, zoom, textureKey, texOffset, texOffsetY, shiftX, shiftY, addonKey, sizeKey, behind)
     MakeButtonSquare(btn)
     local PP = EllesmereUI and EllesmereUI.PP
     local fd = EFD(btn)
@@ -3881,8 +3817,7 @@ local function ApplyButtonBorders(btn, on, cr, cg, cb, ca, sz, zoom, textureKey,
                 if ppC._right then ppC._right:SetAlpha(0) end
             end
         end
-        EllesmereUI.ApplyBorderStyle(btn, sz, cr, cg, cb, ca, textureKey, texOffset, texOffsetY, shiftX, shiftY, addonKey,
-            sizeKey)
+        EllesmereUI.ApplyBorderStyle(btn, sz, cr, cg, cb, ca, textureKey, texOffset, texOffsetY, shiftX, shiftY, addonKey, sizeKey)
         -- "Show Behind": textured border frame is a child of btn; equal level draws
         -- in front of the icon, level-1 draws behind it. Solid borders unaffected.
         if texKey ~= "solid" and EllesmereUI._bdBorderData then
@@ -3913,7 +3848,7 @@ end
 -------------------------------------------------------------------------------
 local function MaskFrameTextures(frame, mask)
     if not frame or not mask then return end
-    for _, region in ipairs({ frame:GetRegions() }) do
+    for _, region in ipairs({frame:GetRegions()}) do
         if region.AddMaskTexture then
             pcall(region.AddMaskTexture, region, mask)
         end
@@ -3922,7 +3857,7 @@ end
 
 local function UnmaskFrameTextures(frame, mask)
     if not frame or not mask then return end
-    for _, region in ipairs({ frame:GetRegions() }) do
+    for _, region in ipairs({frame:GetRegions()}) do
         if region.RemoveMaskTexture then
             pcall(region.RemoveMaskTexture, region, mask)
         end
@@ -3966,10 +3901,7 @@ local function ApplyShapeToButton(btn, shape, brdOn, brdR, brdG, brdB, brdA, brd
             if btn.CheckedTexture then pcall(btn.CheckedTexture.RemoveMaskTexture, btn.CheckedTexture, omask) end
             if btn.NewActionTexture then pcall(btn.NewActionTexture.RemoveMaskTexture, btn.NewActionTexture, omask) end
             if btn.Flash then pcall(btn.Flash.RemoveMaskTexture, btn.Flash, omask) end
-            if btn.QuickKeybindHighlightTexture then
-                pcall(btn.QuickKeybindHighlightTexture.RemoveMaskTexture,
-                    btn.QuickKeybindHighlightTexture, omask)
-            end
+            if btn.QuickKeybindHighlightTexture then pcall(btn.QuickKeybindHighlightTexture.RemoveMaskTexture, btn.QuickKeybindHighlightTexture, omask) end
             if btn.Border then pcall(btn.Border.RemoveMaskTexture, btn.Border, omask) end
             local nt = btn.NormalTexture or btn:GetNormalTexture()
             if nt then pcall(nt.RemoveMaskTexture, nt, omask) end
@@ -3989,10 +3921,7 @@ local function ApplyShapeToButton(btn, shape, brdOn, brdR, brdG, brdB, brdA, brd
             if btn.CheckedTexture then pcall(btn.CheckedTexture.RemoveMaskTexture, btn.CheckedTexture, mask) end
             if btn.NewActionTexture then pcall(btn.NewActionTexture.RemoveMaskTexture, btn.NewActionTexture, mask) end
             if btn.Flash then pcall(btn.Flash.RemoveMaskTexture, btn.Flash, mask) end
-            if btn.QuickKeybindHighlightTexture then
-                pcall(btn.QuickKeybindHighlightTexture.RemoveMaskTexture,
-                    btn.QuickKeybindHighlightTexture, mask)
-            end
+            if btn.QuickKeybindHighlightTexture then pcall(btn.QuickKeybindHighlightTexture.RemoveMaskTexture, btn.QuickKeybindHighlightTexture, mask) end
             if btn.Border then pcall(btn.Border.RemoveMaskTexture, btn.Border, mask) end
             local nt = btn.NormalTexture or btn:GetNormalTexture()
             if nt then pcall(nt.RemoveMaskTexture, nt, mask) end
@@ -4025,10 +3954,7 @@ local function ApplyShapeToButton(btn, shape, brdOn, brdR, brdG, brdB, brdA, brd
             if btn.cooldown.SetUseCircularEdge then pcall(btn.cooldown.SetUseCircularEdge, btn.cooldown, false) end
         end
         if btn.chargeCooldown and not btn.chargeCooldown:IsForbidden() then
-            if btn.chargeCooldown.SetUseCircularEdge then
-                pcall(btn.chargeCooldown.SetUseCircularEdge, btn
-                    .chargeCooldown, false)
-            end
+            if btn.chargeCooldown.SetUseCircularEdge then pcall(btn.chargeCooldown.SetUseCircularEdge, btn.chargeCooldown, false) end
         end
         -- Restore icon
         local icon = btn.icon or btn.Icon
@@ -4053,15 +3979,13 @@ local function ApplyShapeToButton(btn, shape, brdOn, brdR, brdG, brdB, brdA, brd
         if fd.borders and brdOn then
             -- Re-apply border style to restore correct type (PP or textured)
             local barKey = fd.barKey
-            local texKey = barKey and EAB.db and EAB.db.profile.bars[barKey] and
-                EAB.db.profile.bars[barKey].borderTexture or "solid"
+            local texKey = barKey and EAB.db and EAB.db.profile.bars[barKey] and EAB.db.profile.bars[barKey].borderTexture or "solid"
             if texKey ~= "solid" then
                 local s = EAB.db.profile.bars[barKey]
-                local c = s and s.borderColor or { r = 0, g = 0, b = 0, a = 1 }
+                local c = s and s.borderColor or { r=0, g=0, b=0, a=1 }
                 local sz = ResolveBorderThickness(s)
                 local thKey = s.borderThickness or "thin"
-                EllesmereUI.ApplyBorderStyle(btn, sz, c.r, c.g, c.b, c.a or 1, texKey, s.borderTextureOffset,
-                    s.borderTextureOffsetY, s.borderTextureShiftX, s.borderTextureShiftY, "actionbars", thKey)
+                EllesmereUI.ApplyBorderStyle(btn, sz, c.r, c.g, c.b, c.a or 1, texKey, s.borderTextureOffset, s.borderTextureOffsetY, s.borderTextureShiftX, s.borderTextureShiftY, "actionbars", thKey)
                 if EllesmereUI._bdBorderData then
                     local bdFrame = EllesmereUI._bdBorderData[btn]
                     if bdFrame then
@@ -4118,10 +4042,7 @@ local function ApplyShapeToButton(btn, shape, brdOn, brdR, brdG, brdB, brdA, brd
         if btn.CheckedTexture then pcall(btn.CheckedTexture.RemoveMaskTexture, btn.CheckedTexture, omask) end
         if btn.NewActionTexture then pcall(btn.NewActionTexture.RemoveMaskTexture, btn.NewActionTexture, omask) end
         if btn.Flash then pcall(btn.Flash.RemoveMaskTexture, btn.Flash, omask) end
-        if btn.QuickKeybindHighlightTexture then
-            pcall(btn.QuickKeybindHighlightTexture.RemoveMaskTexture,
-                btn.QuickKeybindHighlightTexture, omask)
-        end
+        if btn.QuickKeybindHighlightTexture then pcall(btn.QuickKeybindHighlightTexture.RemoveMaskTexture, btn.QuickKeybindHighlightTexture, omask) end
         if btn.Border then pcall(btn.Border.RemoveMaskTexture, btn.Border, omask) end
         local nt2 = btn.NormalTexture or btn:GetNormalTexture()
         if nt2 then pcall(nt2.RemoveMaskTexture, nt2, omask) end
@@ -4136,10 +4057,7 @@ local function ApplyShapeToButton(btn, shape, brdOn, brdR, brdG, brdB, brdA, brd
             if btn.CheckedTexture then pcall(btn.CheckedTexture.RemoveMaskTexture, btn.CheckedTexture, mask) end
             if btn.NewActionTexture then pcall(btn.NewActionTexture.RemoveMaskTexture, btn.NewActionTexture, mask) end
             if btn.Flash then pcall(btn.Flash.RemoveMaskTexture, btn.Flash, mask) end
-            if btn.QuickKeybindHighlightTexture then
-                pcall(btn.QuickKeybindHighlightTexture.RemoveMaskTexture,
-                    btn.QuickKeybindHighlightTexture, mask)
-            end
+            if btn.QuickKeybindHighlightTexture then pcall(btn.QuickKeybindHighlightTexture.RemoveMaskTexture, btn.QuickKeybindHighlightTexture, mask) end
             if btn.Border then pcall(btn.Border.RemoveMaskTexture, btn.Border, mask) end
             if nt2 then pcall(nt2.RemoveMaskTexture, nt2, mask) end
         end
@@ -4182,10 +4100,7 @@ local function ApplyShapeToButton(btn, shape, brdOn, brdR, brdG, brdB, brdA, brd
     if btn.CheckedTexture then pcall(btn.CheckedTexture.AddMaskTexture, btn.CheckedTexture, overlayMask) end
     if btn.NewActionTexture then pcall(btn.NewActionTexture.AddMaskTexture, btn.NewActionTexture, overlayMask) end
     if btn.Flash then pcall(btn.Flash.AddMaskTexture, btn.Flash, overlayMask) end
-    if btn.QuickKeybindHighlightTexture then
-        pcall(btn.QuickKeybindHighlightTexture.AddMaskTexture,
-            btn.QuickKeybindHighlightTexture, overlayMask)
-    end
+    if btn.QuickKeybindHighlightTexture then pcall(btn.QuickKeybindHighlightTexture.AddMaskTexture, btn.QuickKeybindHighlightTexture, overlayMask) end
     -- Hide Blizzard's item quality border (Dragonflight+) for custom shapes
     -- it uses a round atlas that doesn't match non-square shapes.
     if btn.Border then
@@ -4310,7 +4225,7 @@ local function ApplyShapeToButton(btn, shape, brdOn, brdR, brdG, brdB, brdA, brd
                 ca = p.cooldownEdgeColor.a or ca
             end
         end
-        for _, cd in ipairs({ btn.cooldown, btn.chargeCooldown }) do
+        for _, cd in ipairs({btn.cooldown, btn.chargeCooldown}) do
             if cd and not cd:IsForbidden() then
                 if cd.SetEdgeTexture then pcall(cd.SetEdgeTexture, cd, edgeTex) end
                 if cd.SetEdgeColor then pcall(cd.SetEdgeColor, cd, cr, cg, cb, ca) end
@@ -4332,7 +4247,7 @@ function EAB:ApplyBordersForBar(barKey)
     if self.db.profile.useBlizzardStyle then return end
     local s = self.db.profile.bars[barKey]
     if not s then return end
-    local c = s.borderColor or { r = 0, g = 0, b = 0, a = 1 }
+    local c = s.borderColor or { r=0, g=0, b=0, a=1 }
     local sz = ResolveBorderThickness(s)
     local on = sz > 0
     local cr, cg, cb, ca = c.r, c.g, c.b, c.a or 1
@@ -4357,8 +4272,7 @@ function EAB:ApplyBordersForBar(barKey)
         local btn = buttons[i]
         if btn then
             EFD(btn).barKey = barKey
-            ApplyButtonBorders(btn, on, cr, cg, cb, ca, sz, zoom, textureKey, texOffset, texOffsetY, texShiftX, texShiftY,
-                "actionbars", thicknessKey, behind)
+            ApplyButtonBorders(btn, on, cr, cg, cb, ca, sz, zoom, textureKey, texOffset, texOffsetY, texShiftX, texShiftY, "actionbars", thicknessKey, behind)
         end
     end
 end
@@ -4370,6 +4284,7 @@ function EAB:ApplyBorders()
     end
 end
 
+
 function EAB:ApplyShapesForBar(barKey)
     if InCombatLockdown() then return end
     if not self.db then return end
@@ -4380,13 +4295,11 @@ function EAB:ApplyShapesForBar(barKey)
     local zoom = ((s.iconZoom or self.db.profile.iconZoom or 5.5)) / 100
     local brdSz = ResolveBorderThickness(s)
     local brdOn = brdSz > 0
-    local brdColor = s.shapeBorderColor or s.borderColor or { r = 0, g = 0, b = 0, a = 1 }
+    local brdColor = s.shapeBorderColor or s.borderColor or { r=0, g=0, b=0, a=1 }
     local brdR, brdG, brdB, brdA = brdColor.r, brdColor.g, brdColor.b, brdColor.a or 1
     if s.borderClassColor then
         local _, ct = UnitClass("player")
-        if ct then
-            local cc = RAID_CLASS_COLORS[ct]; if cc then brdR, brdG, brdB = cc.r, cc.g, cc.b end
-        end
+        if ct then local cc = RAID_CLASS_COLORS[ct]; if cc then brdR, brdG, brdB = cc.r, cc.g, cc.b end end
     end
     local buttons = barButtons[barKey]
     if not buttons then return end
@@ -4497,9 +4410,9 @@ function EAB:ApplyFontsForBar(barKey)
     -- by 2px so it doesn't overwhelm the icon.
     local info = BAR_LOOKUP[barKey]
     if info and (info.isStance or info.isPetBar) then kbSize = max(kbSize - 2, 6) end
-    local kbColor = s.keybindFontColor or { r = 1, g = 1, b = 1 }
+    local kbColor = s.keybindFontColor or { r=1, g=1, b=1 }
     local ctSize = s.countFontSize or 12
-    local ctColor = s.countFontColor or { r = 1, g = 1, b = 1 }
+    local ctColor = s.countFontColor or { r=1, g=1, b=1 }
     local kbOX = s.keybindOffsetX or 0
     local kbOY = s.keybindOffsetY or 0
     local ctOX = s.countOffsetX or 0
@@ -4507,7 +4420,7 @@ function EAB:ApplyFontsForBar(barKey)
     local hideMacro = s.hideMacroText
     local macroSize = s.macroFontSize or 12
     if info and (info.isStance or info.isPetBar) then macroSize = max(macroSize - 2, 6) end
-    local macroColor = s.macroFontColor or { r = 1, g = 1, b = 1 }
+    local macroColor = s.macroFontColor or { r=1, g=1, b=1 }
     local macroOX = s.macroOffsetX or 0
     local macroOY = s.macroOffsetY or 0
     local RANGE_INDICATOR = RANGE_INDICATOR or "\226\128\162"
@@ -4572,8 +4485,7 @@ function EAB:ApplyFontsForBar(barKey)
             else
                 nm:SetAlpha(1)
                 if EllesmereUI and EllesmereUI.PrimeFontShadow then EllesmereUI.PrimeFontShadow(nm, false) end
-                nm:SetFont(fontPath, macroSize,
-                    (EllesmereUI and EllesmereUI.SlugFlag and EllesmereUI.SlugFlag("OUTLINE, SLUG")) or "OUTLINE, SLUG")
+                nm:SetFont(fontPath, macroSize, (EllesmereUI and EllesmereUI.SlugFlag and EllesmereUI.SlugFlag("OUTLINE, SLUG")) or "OUTLINE, SLUG")
                 nm:SetTextColor(macroColor.r, macroColor.g, macroColor.b)
                 nm:ClearAllPoints()
                 nm:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 1 + macroOX, 4 + macroOY)
@@ -4610,8 +4522,8 @@ function EAB_VTABLE.CooldownFonts.ApplyToFrame(cdFrame, fontPath, cdSize, cdOX, 
     local stamp = cdfd.cdFontStamp
     local cr, cg, cb = cdColor.r, cdColor.g, cdColor.b
     if stamp and stamp[1] == fontPath and stamp[2] == cdSize
-        and stamp[3] == cdOX and stamp[4] == cdOY
-        and stamp[5] == cr and stamp[6] == cg and stamp[7] == cb then
+       and stamp[3] == cdOX and stamp[4] == cdOY
+       and stamp[5] == cr and stamp[6] == cg and stamp[7] == cb then
         return true
     end
 
@@ -4739,7 +4651,7 @@ end
 -------------------------------------------------------------------------------
 --  Background Texture
 -------------------------------------------------------------------------------
-local barBackgrounds = {} -- [barKey] = texture
+local barBackgrounds = {}  -- [barKey] = texture
 
 function EAB:ApplyBackgroundForBar(barKey)
     local s = self.db.profile.bars[barKey]
@@ -4758,7 +4670,7 @@ function EAB:ApplyBackgroundForBar(barKey)
         barBackgrounds[barKey] = bg
     end
 
-    local c = s.bgColor or { r = 0, g = 0, b = 0, a = 0.5 }
+    local c = s.bgColor or { r=0, g=0, b=0, a=0.5 }
     bg:SetColorTexture(c.r, c.g, c.b, c.a)
     local padX = s.bgPadX or 0
     local padY = s.bgPadY or 0
@@ -5023,10 +4935,10 @@ end
 --  for slots we care about.
 -------------------------------------------------------------------------------
 local _range = {
-    slots = {},          -- [actionSlot] = true  (slots with range checking enabled)
-    outOfRange = {},     -- [actionSlot] = true  (currently out of range)
-    eventFrame = nil,    -- lazy-created event frame
-    slotPending = false, -- debounce for per-slot range re-enable
+    slots = {},           -- [actionSlot] = true  (slots with range checking enabled)
+    outOfRange = {},      -- [actionSlot] = true  (currently out of range)
+    eventFrame = nil,     -- lazy-created event frame
+    slotPending = false,  -- debounce for per-slot range re-enable
 }
 
 -- Resolve the action slot for a button without reading btn.action.
@@ -5126,14 +5038,14 @@ function EAB:RecalcFlyoutDirection(barKey)
     local isVert = (s.orientation == "vertical")
     local cx, cy = frame:GetCenter()
     if not cx or not cy then return end
-    local uiW     = UIParent:GetWidth()
-    local uiH     = UIParent:GetHeight()
+    local uiW = UIParent:GetWidth()
+    local uiH = UIParent:GetHeight()
     local uiScale = UIParent:GetEffectiveScale()
     local fScale  = frame:GetEffectiveScale()
-    cx            = cx * fScale / uiScale
-    cy            = cy * fScale / uiScale
-    local thirdW  = uiW / 3
-    local thirdH  = uiH / 3
+    cx = cx * fScale / uiScale
+    cy = cy * fScale / uiScale
+    local thirdW = uiW / 3
+    local thirdH = uiH / 3
     local dir
     if isVert then
         dir = (cx > thirdW * 2) and "LEFT" or "RIGHT"
@@ -5349,8 +5261,8 @@ end
 -------------------------------------------------------------------------------
 --  Mouseover Fade System
 -------------------------------------------------------------------------------
-local hoverStates = {}         -- shared by action bars, data bars, and extra bars
-local AttachExtraBarHoverHooks -- forward declaration; defined near SetupExtraBarHolder
+local hoverStates = {}  -- shared by action bars, data bars, and extra bars
+local AttachExtraBarHoverHooks  -- forward declaration; defined near SetupExtraBarHolder
 
 -- Every mouseover-enabled bar follows the same state machine: entering marks
 -- the bar hovered and fades it in, leaving schedules a guarded fade-out on the
@@ -5395,9 +5307,10 @@ function EAB_VTABLE.Hover.FadeIn(barKey, state)
 end
 
 function EAB_VTABLE.Hover.FadeOut(barKey, state)
-    if _gridState.shown then return end -- keep bars visible during spell drag
+    if _gridState.shown then return end  -- keep bars visible during spell drag
     local s = EAB_VTABLE.Hover.GetSettings(barKey)
     if s and s.mouseoverEnabled and state and state.fadeDir ~= "out" then
+
         state.fadeDir = "out"
         StopFade(state.frame)
         FadeTo(state.frame, 0, s.mouseoverSpeed or 0.15)
@@ -5543,9 +5456,7 @@ function EAB:RefreshMouseover()
         local key = info.key
         local s = self.db.profile.bars[key]
         if s then
-            local frame = barFrames[key] or (info.isDataBar and dataBarFrames[key]) or
-                (info.isBlizzardMovable and blizzMovableHolders[key]) or (extraBarHolders[key]) or
-                (info.visibilityOnly and _G[info.frameName])
+            local frame = barFrames[key] or (info.isDataBar and dataBarFrames[key]) or (info.isBlizzardMovable and blizzMovableHolders[key]) or (extraBarHolders[key]) or (info.visibilityOnly and _G[info.frameName])
             if frame then
                 -- For extra bars (MicroBar, BagBar), fade the Blizzard frame directly
                 -- since that's what AttachExtraBarHoverHooks targets.
@@ -5630,8 +5541,7 @@ local function BuildVisibilityString(info, s, visOverride)
         else
             petShow = "show"
         end
-        return "[petbattle] hide; " ..
-            visOptHide .. "[novehicleui,pet,nooverridebar,nopossessbar] " .. petShow .. "; hide"
+        return "[petbattle] hide; " .. visOptHide .. "[novehicleui,pet,nooverridebar,nopossessbar] " .. petShow .. "; hide"
     end
 
     -- Build the hide-prefix based on bar type
@@ -5661,13 +5571,13 @@ local function BuildVisibilityString(info, s, visOverride)
     elseif vis == "solo" then
         return hidePrefix .. "[nogroup] show; hide"
     elseif vis == "show_dragonriding" then
-        -- No "mounted": Druid Flight Form is a shapeshift, not a mount, so it
-        -- would never match. This covers skyriding mounts and
-        -- Flight Form (advflyable excludes ordinary flying)
+            -- No "mounted": Druid Flight Form is a shapeshift, not a mount, so it
+            -- would never match. This covers skyriding mounts and
+            -- Flight Form (advflyable excludes ordinary flying)
         return hidePrefix .. "[advflyable,flying] show; hide"
     elseif vis == "show_not_dragonriding" then
-        -- Exact inverse of show_dragonriding: hide while dragonriding,
-        -- show otherwise. hidePrefix still force-hides in pet battle/vehicle.
+            -- Exact inverse of show_dragonriding: hide while dragonriding,
+            -- show otherwise. hidePrefix still force-hides in pet battle/vehicle.
         return hidePrefix .. "[advflyable,flying] hide; show"
     end
     return hidePrefix .. "show"
@@ -5851,7 +5761,7 @@ end
 --  frame that monitors [petbattle] and [vehicleui] conditions and calls
 --  methods to show/hide the extra bar frames.
 -------------------------------------------------------------------------------
-local _extraBarVisProxy -- created once, reused
+local _extraBarVisProxy  -- created once, reused
 
 function EAB:ApplyExtraBarVisibility()
     if not _extraBarVisProxy then
@@ -5866,38 +5776,38 @@ function EAB:ApplyExtraBarVisibility()
                 if info.noManagedVisibility or info.blizzOwnedVisibility then
                     -- skip: Blizzard handles pet battle visibility for these
                 else
-                    local key = info.key
-                    local s = EAB.db and EAB.db.profile.bars[key]
-                    if s and not s.alwaysHidden then
-                        local frame
-                        if EAB_VTABLE.ExtraBars.IsManagedNonSecureBar(info) then
-                            frame = EAB_VTABLE.ExtraBars.GetManagedNonSecureFrame(info)
-                        elseif info.isBlizzardMovable then
-                            frame = blizzMovableHolders[key]
-                        else
-                            frame = _G[info.frameName]
-                        end
-                        if frame then
-                            if shouldHide then
-                                if info.blizzOwnedVisibility then
-                                    EAB_VTABLE.ExtraBars.SetManagedBlizzOwnedSuppressed(frame, "petbattle", true)
-                                else
-                                    frame:Hide()
-                                end
+                local key = info.key
+                local s = EAB.db and EAB.db.profile.bars[key]
+                if s and not s.alwaysHidden then
+                    local frame
+                    if EAB_VTABLE.ExtraBars.IsManagedNonSecureBar(info) then
+                        frame = EAB_VTABLE.ExtraBars.GetManagedNonSecureFrame(info)
+                    elseif info.isBlizzardMovable then
+                        frame = blizzMovableHolders[key]
+                    else
+                        frame = _G[info.frameName]
+                    end
+                    if frame then
+                        if shouldHide then
+                            if info.blizzOwnedVisibility then
+                                EAB_VTABLE.ExtraBars.SetManagedBlizzOwnedSuppressed(frame, "petbattle", true)
                             else
-                                if info.blizzOwnedVisibility then
-                                    EAB_VTABLE.ExtraBars.SetManagedBlizzOwnedSuppressed(frame, "petbattle", false)
-                                end
-                                if EAB_VTABLE.ExtraBars.IsManagedNonSecureBar(info) then
-                                    EAB_VTABLE.ExtraBars.ApplyManagedNonSecureVisibility(info)
-                                else
-                                    frame:Show()
-                                end
+                                frame:Hide()
+                            end
+                        else
+                            if info.blizzOwnedVisibility then
+                                EAB_VTABLE.ExtraBars.SetManagedBlizzOwnedSuppressed(frame, "petbattle", false)
+                            end
+                            if EAB_VTABLE.ExtraBars.IsManagedNonSecureBar(info) then
+                                EAB_VTABLE.ExtraBars.ApplyManagedNonSecureVisibility(info)
+                            else
+                                frame:Show()
                             end
                         end
                     end
-                end -- if s
-            end     -- if not noManagedVisibility
+                end
+            end -- if s
+            end -- if not noManagedVisibility
         end
     end
     -- Register the state driver: hide during pet battle, show otherwise
@@ -5912,9 +5822,7 @@ function EAB:ApplyCombatVisibility()
         local key = info.key
         local s = self.db.profile.bars[key]
         if s then
-            local frame = barFrames[key] or (info.isDataBar and dataBarFrames[key]) or
-                (info.isBlizzardMovable and blizzMovableHolders[key]) or (extraBarHolders[key]) or
-                (info.visibilityOnly and _G[info.frameName])
+            local frame = barFrames[key] or (info.isDataBar and dataBarFrames[key]) or (info.isBlizzardMovable and blizzMovableHolders[key]) or (extraBarHolders[key]) or (info.visibilityOnly and _G[info.frameName])
             if frame and not info.visibilityOnly then
                 local newStr
                 if s.alwaysHidden then
@@ -5926,6 +5834,7 @@ function EAB:ApplyCombatVisibility()
                 end
                 -- Skip re-registration if driver string is unchanged (avoids blink from re-evaluation)
                 if frame._eabLastVisStr ~= newStr then
+
                     frame._eabLastVisStr = newStr
                     RegisterAttributeDriver(frame, "state-visibility", newStr)
                 end
@@ -5946,88 +5855,88 @@ function EAB:RefreshRuntimeVisibility()
         elseif EAB_VTABLE.ExtraBars.IsManagedNonSecureBar(info) then
             EAB_VTABLE.ExtraBars.ApplyManagedNonSecureVisibility(info)
         else
-            local frame = barFrames[key] or (info.isDataBar and dataBarFrames[key]) or
-                (info.isBlizzardMovable and blizzMovableHolders[key]) or (extraBarHolders[key]) or
-                (info.visibilityOnly and _G[info.frameName])
-            if frame then
-                local vis = s.barVisibility or "always"
-                local isHidden = (vis == "never") or s.alwaysHidden
-                -- Runtime "Toggle Action Bar" override (keybind-driven, NOT persisted):
-                -- flips a bar between always-shown and hidden without touching the saved
-                -- barVisibility. Only ever set for bars whose saved mode is always/never.
-                local _visToggleOv = EAB._visOverride and EAB._visOverride[key]
-                if _visToggleOv then
-                    vis = _visToggleOv
-                    isHidden = (_visToggleOv == "never")
+        local frame = barFrames[key] or (info.isDataBar and dataBarFrames[key]) or (info.isBlizzardMovable and blizzMovableHolders[key]) or (extraBarHolders[key]) or (info.visibilityOnly and _G[info.frameName])
+        if frame then
+            local vis = s.barVisibility or "always"
+            local isHidden = (vis == "never") or s.alwaysHidden
+            -- Runtime "Toggle Action Bar" override (keybind-driven, NOT persisted):
+            -- flips a bar between always-shown and hidden without touching the saved
+            -- barVisibility. Only ever set for bars whose saved mode is always/never.
+            local _visToggleOv = EAB._visOverride and EAB._visOverride[key]
+            if _visToggleOv then
+                vis = _visToggleOv
+                isHidden = (_visToggleOv == "never")
+            end
+            if ShouldQuickKeybindSurfaceBar(s) and barFrames[key] and frame == barFrames[key] then
+                if not InCombatLockdown() then
+                    RegisterAttributeDriver(frame, "state-visibility", "show")
+                    -- Keep the cache in sync (see EAB_UpdateQuickKeybindVisibility):
+                    -- a stale cache makes QKB exit skip restoring the real driver.
+                    frame._eabLastVisStr = "show"
+                    frame:Show()
+                    SafeEnableMouseMotionOnly(frame, true)
                 end
-                if ShouldQuickKeybindSurfaceBar(s) and barFrames[key] and frame == barFrames[key] then
-                    if not InCombatLockdown() then
-                        RegisterAttributeDriver(frame, "state-visibility", "show")
-                        -- Keep the cache in sync (see EAB_UpdateQuickKeybindVisibility):
-                        -- a stale cache makes QKB exit skip restoring the real driver.
-                        frame._eabLastVisStr = "show"
-                        frame:Show()
-                        SafeEnableMouseMotionOnly(frame, true)
+                -- QuickKeybind temporarily surfaces managed action bars when
+                -- runtime conditions hide them, but not when the user chose
+                -- an explicit "Never" visibility mode.
+            elseif isHidden then
+                if not info.visibilityOnly and not InCombatLockdown() then
+                    if frame._eabLastVisStr ~= "hide" then
+
+                        frame._eabLastVisStr = "hide"
+                        RegisterAttributeDriver(frame, "state-visibility", "hide")
                     end
-                    -- QuickKeybind temporarily surfaces managed action bars when
-                    -- runtime conditions hide them, but not when the user chose
-                    -- an explicit "Never" visibility mode.
-                elseif isHidden then
-                    if not info.visibilityOnly and not InCombatLockdown() then
-                        if frame._eabLastVisStr ~= "hide" then
-                            frame._eabLastVisStr = "hide"
-                            RegisterAttributeDriver(frame, "state-visibility", "hide")
-                        end
-                    elseif info.visibilityOnly then
-                        frame:Hide()
-                        if info.blizzOwnedVisibility then
-                            local bf = _G[info.frameName]
-                            if bf then bf:Hide() end
+                elseif info.visibilityOnly then
+                    frame:Hide()
+                    if info.blizzOwnedVisibility then
+                        local bf = _G[info.frameName]
+                        if bf then bf:Hide() end
+                    end
+                end
+                if not InCombatLockdown() then
+                    SafeEnableMouse(frame, false)
+                end
+            else
+                if not info.visibilityOnly and not InCombatLockdown() then
+                    local newStr
+                    if _visToggleOv == "always" then
+                        -- Forced-show via the toggle keybind: ignore the saved mode
+                        -- (which may be "never") and any non-macro hide options.
+                        newStr = BuildVisibilityString(info, s, "always")
+                    elseif EllesmereUI.CheckVisibilityOptionsNonMacro and EllesmereUI.CheckVisibilityOptionsNonMacro(s) then
+                        newStr = "hide"
+                    else
+                        newStr = BuildVisibilityString(info, s)
+                    end
+                    if frame._eabLastVisStr ~= newStr then
+
+                        frame._eabLastVisStr = newStr
+                        RegisterAttributeDriver(frame, "state-visibility", newStr)
+                    end
+                end
+                if not InCombatLockdown() then
+                    if vis ~= "in_combat" and vis ~= "out_of_combat" and not s.combatShowEnabled then
+                        -- Only Show frames without a state-visibility driver.
+                        -- Frames with a driver (any _eabLastVisStr) are managed by the driver.
+                        if not info.isBlizzardMovable and not info.blizzOwnedVisibility and not frame._eabLastVisStr then
+                            frame:Show()
                         end
                     end
-                    if not InCombatLockdown() then
+                    if barFrames[key] and frame == barFrames[key] then
+                        SafeEnableMouseMotionOnly(frame, not s.clickThrough or s.mouseoverEnabled)
+                    elseif info.noManagedVisibility then
+                        -- skip: Blizzard owns mouse state (e.g. QueueStatusButton)
+                    elseif info.isBlizzardMovable or info.blizzOwnedVisibility then
                         SafeEnableMouse(frame, false)
+                    else
+                        SafeEnableMouse(frame, not s.clickThrough)
                     end
-                else
-                    if not info.visibilityOnly and not InCombatLockdown() then
-                        local newStr
-                        if _visToggleOv == "always" then
-                            -- Forced-show via the toggle keybind: ignore the saved mode
-                            -- (which may be "never") and any non-macro hide options.
-                            newStr = BuildVisibilityString(info, s, "always")
-                        elseif EllesmereUI.CheckVisibilityOptionsNonMacro and EllesmereUI.CheckVisibilityOptionsNonMacro(s) then
-                            newStr = "hide"
-                        else
-                            newStr = BuildVisibilityString(info, s)
-                        end
-                        if frame._eabLastVisStr ~= newStr then
-                            frame._eabLastVisStr = newStr
-                            RegisterAttributeDriver(frame, "state-visibility", newStr)
-                        end
-                    end
-                    if not InCombatLockdown() then
-                        if vis ~= "in_combat" and vis ~= "out_of_combat" and not s.combatShowEnabled then
-                            -- Only Show frames without a state-visibility driver.
-                            -- Frames with a driver (any _eabLastVisStr) are managed by the driver.
-                            if not info.isBlizzardMovable and not info.blizzOwnedVisibility and not frame._eabLastVisStr then
-                                frame:Show()
-                            end
-                        end
-                        if barFrames[key] and frame == barFrames[key] then
-                            SafeEnableMouseMotionOnly(frame, not s.clickThrough or s.mouseoverEnabled)
-                        elseif info.noManagedVisibility then
-                            -- skip: Blizzard owns mouse state (e.g. QueueStatusButton)
-                        elseif info.isBlizzardMovable or info.blizzOwnedVisibility then
-                            SafeEnableMouse(frame, false)
-                        else
-                            SafeEnableMouse(frame, not s.clickThrough)
-                        end
-                    end
-                    if info.isDataBar and frame._updateFunc then
-                        frame._updateFunc()
-                    end
+                end
+                if info.isDataBar and frame._updateFunc then
+                    frame._updateFunc()
                 end
             end
+        end
         end
     end
 end
@@ -6053,82 +5962,82 @@ end
 -- this stays a block upvalue, not a chunk-level local -- this file sits at
 -- Lua 5.1's 200-local-per-chunk cap.
 do
-    local MYSLOT_VIS_FIELDS = {
-        "barVisibility", "alwaysHidden", "mouseoverEnabled", "mouseoverAlpha",
-        "_savedBarAlpha", "combatShowEnabled", "combatHideEnabled", "alwaysShowButtons",
-    }
+local MYSLOT_VIS_FIELDS = {
+    "barVisibility", "alwaysHidden", "mouseoverEnabled", "mouseoverAlpha",
+    "_savedBarAlpha", "combatShowEnabled", "combatHideEnabled", "alwaysShowButtons",
+}
 
-    -- Restore real visibility settings from the persisted backup, then clear it.
-    -- Safe to call anytime (no-op if no backup). NOT gated on Myslot being enabled,
-    -- so it self-heals even if Myslot was disabled since the backup was written.
-    function EAB:RestoreMyslotBackup()
-        local backup = self.db and self.db.profile and self.db.profile._myslotVisBackup
-        if not backup then return false end
-        for key, saved in pairs(backup) do
-            local s = self.db.profile.bars[key]
+-- Restore real visibility settings from the persisted backup, then clear it.
+-- Safe to call anytime (no-op if no backup). NOT gated on Myslot being enabled,
+-- so it self-heals even if Myslot was disabled since the backup was written.
+function EAB:RestoreMyslotBackup()
+    local backup = self.db and self.db.profile and self.db.profile._myslotVisBackup
+    if not backup then return false end
+    for key, saved in pairs(backup) do
+        local s = self.db.profile.bars[key]
+        if s then
+            for _, f in ipairs(MYSLOT_VIS_FIELDS) do s[f] = saved[f] end
+        end
+    end
+    self.db.profile._myslotVisBackup = nil
+    return true
+end
+
+function EAB:SetMyslotForceShow(on)
+    on = not not on
+    -- The persisted backup's presence IS the "are we forcing" state, so this
+    -- survives /reload without a separate flag.
+    local forcing = self.db.profile._myslotVisBackup ~= nil
+    if on == forcing then return end
+
+    if on then
+        -- Capture real values and PERSIST the backup BEFORE overwriting, so the
+        -- backup always exists if any field was changed (crash/reload-safe).
+        local backup = {}
+        for _, info in ipairs(BAR_CONFIG) do
+            local s = self.db.profile.bars[info.key]
             if s then
-                for _, f in ipairs(MYSLOT_VIS_FIELDS) do s[f] = saved[f] end
+                local saved = {}
+                for _, f in ipairs(MYSLOT_VIS_FIELDS) do saved[f] = s[f] end
+                backup[info.key] = saved
             end
         end
-        self.db.profile._myslotVisBackup = nil
-        return true
+        self.db.profile._myslotVisBackup = backup
+        -- Overwrite to "always" + "always show buttons" (mirrors the options'
+        -- ApplyVisibilityKey("always"), incl. restoring a mouseover bar's real
+        -- alpha so it doesn't stay faded).
+        for _, info in ipairs(BAR_CONFIG) do
+            local s = self.db.profile.bars[info.key]
+            if s then
+                local wasMouseover = s.mouseoverEnabled
+                s.barVisibility = "always"
+                s.alwaysHidden = false
+                s.mouseoverEnabled = false
+                if wasMouseover and s._savedBarAlpha then
+                    s.mouseoverAlpha = s._savedBarAlpha
+                    s._savedBarAlpha = nil
+                end
+                s.combatShowEnabled = false
+                s.combatHideEnabled = false
+                s.alwaysShowButtons = true
+            end
+        end
+    else
+        self:RestoreMyslotBackup()
     end
 
-    function EAB:SetMyslotForceShow(on)
-        on = not not on
-        -- The persisted backup's presence IS the "are we forcing" state, so this
-        -- survives /reload without a separate flag.
-        local forcing = self.db.profile._myslotVisBackup ~= nil
-        if on == forcing then return end
-
-        if on then
-            -- Capture real values and PERSIST the backup BEFORE overwriting, so the
-            -- backup always exists if any field was changed (crash/reload-safe).
-            local backup = {}
-            for _, info in ipairs(BAR_CONFIG) do
-                local s = self.db.profile.bars[info.key]
-                if s then
-                    local saved = {}
-                    for _, f in ipairs(MYSLOT_VIS_FIELDS) do saved[f] = s[f] end
-                    backup[info.key] = saved
-                end
-            end
-            self.db.profile._myslotVisBackup = backup
-            -- Overwrite to "always" + "always show buttons" (mirrors the options'
-            -- ApplyVisibilityKey("always"), incl. restoring a mouseover bar's real
-            -- alpha so it doesn't stay faded).
-            for _, info in ipairs(BAR_CONFIG) do
-                local s = self.db.profile.bars[info.key]
-                if s then
-                    local wasMouseover = s.mouseoverEnabled
-                    s.barVisibility = "always"
-                    s.alwaysHidden = false
-                    s.mouseoverEnabled = false
-                    if wasMouseover and s._savedBarAlpha then
-                        s.mouseoverAlpha = s._savedBarAlpha
-                        s._savedBarAlpha = nil
-                    end
-                    s.combatShowEnabled = false
-                    s.combatHideEnabled = false
-                    s.alwaysShowButtons = true
-                end
-            end
-        else
-            self:RestoreMyslotBackup()
+    -- Re-apply -- the same calls the options "Visibility"/"Always Show Buttons"
+    -- toggles make, now that the real settings reflect the desired state.
+    if not InCombatLockdown() then
+        self:RefreshRuntimeVisibility()
+        self:RefreshMouseover()
+        self:ApplyCombatVisibility()
+        for _, info in ipairs(BAR_CONFIG) do
+            self:ApplyAlwaysShowButtons(info.key)
         end
-
-        -- Re-apply -- the same calls the options "Visibility"/"Always Show Buttons"
-        -- toggles make, now that the real settings reflect the desired state.
-        if not InCombatLockdown() then
-            self:RefreshRuntimeVisibility()
-            self:RefreshMouseover()
-            self:ApplyCombatVisibility()
-            for _, info in ipairs(BAR_CONFIG) do
-                self:ApplyAlwaysShowButtons(info.key)
-            end
-        end
-        if EllesmereUI and EllesmereUI.RefreshPage then EllesmereUI:RefreshPage() end
     end
+    if EllesmereUI and EllesmereUI.RefreshPage then EllesmereUI:RefreshPage() end
+end
 end -- do: MYSLOT_VIS_FIELDS scope
 
 do
@@ -6389,74 +6298,72 @@ function EAB:UpdateHousingVisibility()
                 if EAB_VTABLE.ExtraBars.IsManagedNonSecureBar(info) then
                     EAB_VTABLE.ExtraBars.ApplyManagedNonSecureVisibility(info)
                 else
-                    local frame = barFrames[key] or (info.isDataBar and dataBarFrames[key]) or
-                        (info.isBlizzardMovable and blizzMovableHolders[key]) or (extraBarHolders[key]) or
-                        (info.visibilityOnly and _G[info.frameName])
-                    if frame then
-                        -- Secure action bar frames use the state driver for
-                        -- target/enemy options; mounted-like druid forms are
-                        -- additionally handled in ShouldHideNonMacro().
-                        -- Non-secure frames (data bars, extra bars, visibility-only)
-                        -- need the full check since they have no state driver.
-                        local isSecure = not info.visibilityOnly and not info.isDataBar and not info.isBlizzardMovable and
-                            barFrames[key]
-                        local shouldHide = isSecure and ShouldHideNonMacro(s) or
-                            (not isSecure and EllesmereUI.CheckVisibilityOptions(s))
-                        -- Runtime "Toggle Action Bar" keybind override wins over the saved
-                        -- mode and the non-macro hide checks, exactly as RefreshRuntimeVisibility
-                        -- does. Without these two branches any event routed through here
-                        -- (target change, group/mount/housing) re-applies the saved visibility
-                        -- and re-shows a bar the player toggled off with its keybind. Secure
-                        -- managed bars only (the override is never set for other frame types).
-                        local _visToggleOv = isSecure and self._visOverride and self._visOverride[key]
-                        if _visToggleOv == "never" then
+                    local frame = barFrames[key] or (info.isDataBar and dataBarFrames[key]) or (info.isBlizzardMovable and blizzMovableHolders[key]) or (extraBarHolders[key]) or (info.visibilityOnly and _G[info.frameName])
+                if frame then
+                    -- Secure action bar frames use the state driver for
+                    -- target/enemy options; mounted-like druid forms are
+                    -- additionally handled in ShouldHideNonMacro().
+                    -- Non-secure frames (data bars, extra bars, visibility-only)
+                    -- need the full check since they have no state driver.
+                    local isSecure = not info.visibilityOnly and not info.isDataBar and not info.isBlizzardMovable and barFrames[key]
+                    local shouldHide = isSecure and ShouldHideNonMacro(s) or (not isSecure and EllesmereUI.CheckVisibilityOptions(s))
+                    -- Runtime "Toggle Action Bar" keybind override wins over the saved
+                    -- mode and the non-macro hide checks, exactly as RefreshRuntimeVisibility
+                    -- does. Without these two branches any event routed through here
+                    -- (target change, group/mount/housing) re-applies the saved visibility
+                    -- and re-shows a bar the player toggled off with its keybind. Secure
+                    -- managed bars only (the override is never set for other frame types).
+                    local _visToggleOv = isSecure and self._visOverride and self._visOverride[key]
+                    if _visToggleOv == "never" then
+                        if frame._eabLastVisStr ~= "hide" then
+                            frame._eabLastVisStr = "hide"
+                            RegisterAttributeDriver(frame, "state-visibility", "hide")
+                        end
+                    elseif _visToggleOv == "always" then
+                        local ovStr = BuildVisibilityString(info, s, "always")
+                        if frame._eabLastVisStr ~= ovStr then
+                            frame._eabLastVisStr = ovStr
+                            RegisterAttributeDriver(frame, "state-visibility", ovStr)
+                        end
+                    elseif shouldHide then
+                        if isSecure then
                             if frame._eabLastVisStr ~= "hide" then
+
                                 frame._eabLastVisStr = "hide"
                                 RegisterAttributeDriver(frame, "state-visibility", "hide")
                             end
-                        elseif _visToggleOv == "always" then
-                            local ovStr = BuildVisibilityString(info, s, "always")
-                            if frame._eabLastVisStr ~= ovStr then
-                                frame._eabLastVisStr = ovStr
-                                RegisterAttributeDriver(frame, "state-visibility", ovStr)
+                        elseif info.blizzOwnedVisibility then
+                            local bf = _G[info.frameName]
+                            if bf then
+                                EFD(bf).visWasShown = bf:IsShown()
+                                bf:Hide()
                             end
-                        elseif shouldHide then
-                            if isSecure then
-                                if frame._eabLastVisStr ~= "hide" then
-                                    frame._eabLastVisStr = "hide"
-                                    RegisterAttributeDriver(frame, "state-visibility", "hide")
-                                end
-                            elseif info.blizzOwnedVisibility then
-                                local bf = _G[info.frameName]
-                                if bf then
-                                    EFD(bf).visWasShown = bf:IsShown()
-                                    bf:Hide()
-                                end
-                            else
-                                frame:Hide()
+                        else
+                            frame:Hide()
+                        end
+                    elseif not s.alwaysHidden and (s.barVisibility or "always") ~= "never" then
+                        if isSecure then
+                            local newStr = BuildVisibilityString(info, s)
+                            if frame._eabLastVisStr ~= newStr then
+
+                                frame._eabLastVisStr = newStr
+                                RegisterAttributeDriver(frame, "state-visibility", newStr)
                             end
-                        elseif not s.alwaysHidden and (s.barVisibility or "always") ~= "never" then
-                            if isSecure then
-                                local newStr = BuildVisibilityString(info, s)
-                                if frame._eabLastVisStr ~= newStr then
-                                    frame._eabLastVisStr = newStr
-                                    RegisterAttributeDriver(frame, "state-visibility", newStr)
-                                end
-                            elseif info.blizzOwnedVisibility then
-                                local bf = _G[info.frameName]
-                                if bf and EFD(bf).visWasShown then
-                                    bf:Show()
-                                end
-                                if bf then EFD(bf).visWasShown = nil end
-                            elseif not info.isBlizzardMovable then
-                                frame:Show()
+                        elseif info.blizzOwnedVisibility then
+                            local bf = _G[info.frameName]
+                            if bf and EFD(bf).visWasShown then
+                                bf:Show()
                             end
-                            -- Data bars may need to re-hide (max level, max renown, etc.)
-                            if info.isDataBar and frame._updateFunc then
-                                frame._updateFunc()
-                            end
+                            if bf then EFD(bf).visWasShown = nil end
+                        elseif not info.isBlizzardMovable then
+                            frame:Show()
+                        end
+                        -- Data bars may need to re-hide (max level, max renown, etc.)
+                        if info.isDataBar and frame._updateFunc then
+                            frame._updateFunc()
                         end
                     end
+                end
                 end
             end
         end
@@ -6468,27 +6375,25 @@ end
 --  These are global settings that apply to ALL action bar buttons.
 -------------------------------------------------------------------------------
 local PUSHED_TYPES = {
-    [1] = "light",  -- Light overlay
-    [2] = "medium", -- Medium overlay
-    [3] = "strong", -- Strong overlay
-    [4] = "solid",  -- Solid color fill
-    [5] = "border", -- Border only
-    [6] = "none",   -- No pushed effect
+    [1] = "light",   -- Light overlay
+    [2] = "medium",  -- Medium overlay
+    [3] = "strong",  -- Strong overlay
+    [4] = "solid",   -- Solid color fill
+    [5] = "border",  -- Border only
+    [6] = "none",    -- No pushed effect
 }
 
 function EAB:ApplyPushedTextures()
     local p = self.db.profile
     local pType = p.pushedTextureType or 2
     local useCC = p.pushedUseClassColor
-    local customC = p.pushedCustomColor or { r = 0.973, g = 0.839, b = 0.604, a = 1 }
+    local customC = p.pushedCustomColor or { r=0.973, g=0.839, b=0.604, a=1 }
     local brdSize = p.pushedBorderSize or 4
 
     local cr, cg, cb = customC.r, customC.g, customC.b
     if useCC then
         local _, ct = UnitClass("player")
-        if ct then
-            local cc = RAID_CLASS_COLORS[ct]; if cc then cr, cg, cb = cc.r, cc.g, cc.b end
-        end
+        if ct then local cc = RAID_CLASS_COLORS[ct]; if cc then cr, cg, cb = cc.r, cc.g, cc.b end end
     end
 
     for _, info in ipairs(BAR_CONFIG) do
@@ -6536,9 +6441,9 @@ end
 -------------------------------------------------------------------------------
 do
     local _pushedHooked = false
-    local _activePushed = {} -- btn -> true
+    local _activePushed = {}  -- btn -> true
     local _activePushedN = 0
-    local _btnKeys = {}      -- btn -> { k1, k2 } (reused, no alloc per press)
+    local _btnKeys = {}       -- btn -> { k1, k2 } (reused, no alloc per press)
     local _pollFrame
     function EAB:HookPushedFlash()
         if _pushedHooked then return end
@@ -6554,9 +6459,7 @@ do
                 local held = false
                 if keys then
                     for i = 1, #keys do
-                        if IsKeyDown(keys[i]) then
-                            held = true; break
-                        end
+                        if IsKeyDown(keys[i]) then held = true; break end
                     end
                 end
                 if not held then
@@ -6588,9 +6491,7 @@ do
             local k1, k2 = GetBindingKey(cmd)
             if not k1 then return end
             local keys = _btnKeys[btn]
-            if not keys then
-                keys = {}; _btnKeys[btn] = keys
-            end
+            if not keys then keys = {}; _btnKeys[btn] = keys end
             keys[1] = BaseKey(k1); keys[2] = BaseKey(k2); keys[3] = nil
             btn.PushedTexture:Show()
             if not _activePushed[btn] then
@@ -6627,44 +6528,41 @@ function EAB:ApplyHighlightTextures()
     local p = self.db.profile
     local hType = p.highlightTextureType or 2
     local useCC = p.highlightUseClassColor
-    local customC = p.highlightCustomColor or { r = 0.973, g = 0.839, b = 0.604, a = 1 }
+    local customC = p.highlightCustomColor or { r=0.973, g=0.839, b=0.604, a=1 }
 
     local cr, cg, cb = customC.r, customC.g, customC.b
     if useCC then
         local _, ct = UnitClass("player")
-        if ct then
-            local cc = RAID_CLASS_COLORS[ct]; if cc then cr, cg, cb = cc.r, cc.g, cc.b end
-        end
+        if ct then local cc = RAID_CLASS_COLORS[ct]; if cc then cr, cg, cb = cc.r, cc.g, cc.b end end
     end
 
     for _, info in ipairs(BAR_CONFIG) do
         if p.useBlizzardStyle then
             -- skip -- let Blizzard handle highlight textures
         else
-            local buttons = barButtons[info.key]
-            if buttons then
-                for i = 1, #buttons do
-                    local btn = buttons[i]
-                    if btn and btn.HighlightTexture then
-                        if hType == 6 then
-                            btn.HighlightTexture:SetAlpha(0)
-                        else
-                            btn.HighlightTexture:SetAlpha(1)
-                            if hType <= 3 then
-                                SetSquareTexture(btn.HighlightTexture, HIGHLIGHT_TEXTURES[hType] or HIGHLIGHT_TEXTURES
-                                    [1])
-                                btn.HighlightTexture:SetVertexColor(cr, cg, cb, 1)
-                            elseif hType == 4 then
-                                btn.HighlightTexture:SetColorTexture(cr, cg, cb, 0.35)
-                            elseif hType == 5 then
-                                SetSquareTexture(btn.HighlightTexture, HIGHLIGHT_TEXTURES[1])
-                                btn.HighlightTexture:SetVertexColor(cr, cg, cb, 1)
-                            end
+        local buttons = barButtons[info.key]
+        if buttons then
+            for i = 1, #buttons do
+                local btn = buttons[i]
+                if btn and btn.HighlightTexture then
+                    if hType == 6 then
+                        btn.HighlightTexture:SetAlpha(0)
+                    else
+                        btn.HighlightTexture:SetAlpha(1)
+                        if hType <= 3 then
+                            SetSquareTexture(btn.HighlightTexture, HIGHLIGHT_TEXTURES[hType] or HIGHLIGHT_TEXTURES[1])
+                            btn.HighlightTexture:SetVertexColor(cr, cg, cb, 1)
+                        elseif hType == 4 then
+                            btn.HighlightTexture:SetColorTexture(cr, cg, cb, 0.35)
+                        elseif hType == 5 then
+                            SetSquareTexture(btn.HighlightTexture, HIGHLIGHT_TEXTURES[1])
+                            btn.HighlightTexture:SetVertexColor(cr, cg, cb, 1)
                         end
                     end
-                    _quickKeybindState.art.RefreshButton(btn)
                 end
+                _quickKeybindState.art.RefreshButton(btn)
             end
+        end
         end -- useBlizzardStyle
     end
 
@@ -6682,31 +6580,22 @@ end
 
 -- Loop glow types: atlas-based Blizzard FlipBook styles + procedural engines
 local LOOP_GLOW_TYPES = {
-    { name = "Pixel Glow",       procedural = true },
-    { name = "Custom Proc Glow", buttonGlow = true },
-    { name = "Auto-Cast Shine",  autocast = true },
-    { name = "Shape Glow",       shapeGlow = true },
-    { name = "GCD",              atlas = "RotationHelper_Ants_Flipbook",        texPadding = 1.6 },
-    { name = "Modern WoW Glow",  atlas = "UI-HUD-ActionBar-Proc-Loop-Flipbook", texPadding = 1.4 },
-    {
-        name = "Classic WoW Glow",
-        texture = "Interface\\SpellActivationOverlay\\IconAlertAnts",
-        rows = 5,
-        columns = 5,
-        frames = 25,
-        duration = 0.3,
-        frameW = 48,
-        frameH = 48,
-        texPadding = 1.25
-    },
+    { name = "Pixel Glow",           procedural = true },
+    { name = "Custom Proc Glow",     buttonGlow = true },
+    { name = "Auto-Cast Shine",      autocast = true },
+    { name = "Shape Glow",           shapeGlow = true },
+    { name = "GCD",                  atlas = "RotationHelper_Ants_Flipbook", texPadding = 1.6 },
+    { name = "Modern WoW Glow",      atlas = "UI-HUD-ActionBar-Proc-Loop-Flipbook", texPadding = 1.4 },
+    { name = "Classic WoW Glow",     texture = "Interface\\SpellActivationOverlay\\IconAlertAnts",
+      rows = 5, columns = 5, frames = 25, duration = 0.3, frameW = 48, frameH = 48, texPadding = 1.25 },
 }
 ns.LOOP_GLOW_TYPES = LOOP_GLOW_TYPES
 
 -- Proc start types: the initial burst animation
 local PROC_START_TYPES = {
-    { name = "Modern Blizzard Proc", atlas = "UI-HUD-ActionBar-Proc-Start-Flipbook" },
-    { name = "Blue Proc",            atlas = "RotationHelper-ProcStartBlue-Flipbook-2x" },
-    { name = "Hide",                 hide = true },
+    { name = "Modern Blizzard Proc",  atlas = "UI-HUD-ActionBar-Proc-Start-Flipbook" },
+    { name = "Blue Proc",             atlas = "RotationHelper-ProcStartBlue-Flipbook-2x" },
+    { name = "Hide",                  hide = true },
 }
 ns.PROC_START_TYPES = PROC_START_TYPES
 
@@ -6725,7 +6614,7 @@ local _procState = { hooked = false, active = {} }
 local function GetFlipBookAnim(animGroup)
     if not animGroup then return nil end
     if animGroup.FlipAnim then return animGroup.FlipAnim end
-    for _, anim in pairs({ animGroup:GetAnimations() }) do
+    for _, anim in pairs({animGroup:GetAnimations()}) do
         if anim.SetFlipBookRows then return anim end
     end
     return nil
@@ -6735,7 +6624,7 @@ local function UpdateFlipbook(btn)
     local region = btn.SpellActivationAlert
     local fd = EFD(btn)
     if region and fd.shapeMask and fd.shapeApplied and not EFD(region).shapeMasked then
-        for _, tex in ipairs({ region:GetRegions() }) do
+        for _, tex in ipairs({region:GetRegions()}) do
             if tex and tex.AddMaskTexture then
                 pcall(tex.AddMaskTexture, tex, fd.shapeMask)
             end
@@ -6819,9 +6708,7 @@ local function UpdateFlipbook(btn)
     -- Force Shape Glow for custom shapes regardless of user selection
     if fd.shapeMask and fd.shapeApplied then
         for si, entry in ipairs(LOOP_GLOW_TYPES) do
-            if entry.shapeGlow then
-                loopIdx = si; break
-            end
+            if entry.shapeGlow then loopIdx = si; break end
         end
     end
     local loopEntry = LOOP_GLOW_TYPES[loopIdx]
@@ -6947,9 +6834,7 @@ function EAB:HookProcGlow()
             gw:Hide()
         end
         local sa = btn.SpellActivationAlert
-        if sa then
-            sa:SetAlpha(1); sa:Hide()
-        end
+        if sa then sa:SetAlpha(1); sa:Hide() end
     end
     local GetButtonSpellID = _procState.GetButtonSpellID
 
@@ -7047,8 +6932,8 @@ function EAB:HookProcGlow()
     if ActionButtonSpellAlertManager and ActionButtonSpellAlertManager.ShowAlert then
         hooksecurefunc(ActionButtonSpellAlertManager, "ShowAlert", function(_, btn)
             if btn and EFD(btn).squared and not IsBlizzStyle()
-                and not _procState.active[btn]
-                and btn.SpellActivationAlert then
+               and not _procState.active[btn]
+               and btn.SpellActivationAlert then
                 btn.SpellActivationAlert:SetAlpha(0)
             end
         end)
@@ -7208,7 +7093,7 @@ end
 -- Per-button hooks avoid tainting the secure execution path.
 local _cdEdge = {
     hooked = false,
-    pending = {}, -- reusable { [cdFrame] = btn, ... }
+    pending = {},       -- reusable { [cdFrame] = btn, ... }
     pendingCount = 0,
     timerScheduled = false,
 }
@@ -7216,9 +7101,7 @@ local _cdEdge = {
 local function _FlushCDPatch()
     _cdEdge.timerScheduled = false
     local p = EAB.db and EAB.db.profile
-    if not p then
-        wipe(_cdEdge.pending); _cdEdge.pendingCount = 0; return
-    end
+    if not p then wipe(_cdEdge.pending); _cdEdge.pendingCount = 0; return end
     local cr, cg, cb, ca = ResolveCooldownEdgeColor(p)
     local baseSz = p.cooldownEdgeSize or 2.1
     for cdFrame, btn in pairs(_cdEdge.pending) do
@@ -7374,9 +7257,7 @@ function EAB:ApplyMiscTextures()
     local cr, cg, cb, ca = customC.r, customC.g, customC.b, customC.a or 1
     if useCC then
         local _, ct = UnitClass("player")
-        if ct then
-            local cc = RAID_CLASS_COLORS[ct]; if cc then cr, cg, cb = cc.r, cc.g, cc.b end
-        end
+        if ct then local cc = RAID_CLASS_COLORS[ct]; if cc then cr, cg, cb = cc.r, cc.g, cc.b end end
     end
     for _, info in ipairs(BAR_CONFIG) do
         local buttons = barButtons[info.key]
@@ -7387,9 +7268,7 @@ function EAB:ApplyMiscTextures()
                     -- Do NOT color CheckedTexture or Border Blizzard uses
                     -- these for item rarity borders (green/blue/purple) on
                     -- active trinkets / equipped items.
-                    if btn.NewActionTexture then
-                        btn.NewActionTexture:SetDesaturated(true); btn.NewActionTexture:SetVertexColor(cr, cg, cb, ca)
-                    end
+                    if btn.NewActionTexture then btn.NewActionTexture:SetDesaturated(true); btn.NewActionTexture:SetVertexColor(cr, cg, cb, ca) end
                 end
             end
         end
@@ -7438,7 +7317,7 @@ function EAB:RefreshChargeRechargeNumbers()
                 for _, btn in ipairs(buttons) do
                     local chargeCd = btn.chargeCooldown
                     if chargeCd and chargeCd.SetHideCountdownNumbers
-                        and EFD(chargeCd).rechargeNumbersHidden ~= hideNums then
+                       and EFD(chargeCd).rechargeNumbersHidden ~= hideNums then
                         EFD(chargeCd).rechargeNumbersHidden = hideNums
                         chargeCd:SetHideCountdownNumbers(hideNums)
                     end
@@ -7508,7 +7387,7 @@ local function UpdateKeybinds()
                                 spellID = id
                             end
                             if spellID and not (issecretvalue and issecretvalue(spellID))
-                                and C_Spell.IsPressHoldReleaseSpell(spellID) then
+                               and C_Spell.IsPressHoldReleaseSpell(spellID) then
                                 useClick = true
                             end
                         end
@@ -7869,14 +7748,10 @@ function EAB:ConvertCenterToEdge(barKey, point, x, y)
     if not frame then return point, x, y end
     local fw = frame:GetWidth() or 0
     local fh = frame:GetHeight() or 0
-    if grow == "RIGHT" and fw > 0 then
-        return "LEFT", x - fw / 2, y
-    elseif grow == "LEFT" and fw > 0 then
-        return "RIGHT", x + fw / 2, y
-    elseif grow == "DOWN" and fh > 0 then
-        return "TOP", x, y + fh / 2
-    elseif grow == "UP" and fh > 0 then
-        return "BOTTOM", x, y - fh / 2
+    if grow == "RIGHT" and fw > 0 then return "LEFT", x - fw / 2, y
+    elseif grow == "LEFT" and fw > 0 then return "RIGHT", x + fw / 2, y
+    elseif grow == "DOWN" and fh > 0 then return "TOP", x, y + fh / 2
+    elseif grow == "UP" and fh > 0 then return "BOTTOM", x, y - fh / 2
     end
     return point, x, y
 end
@@ -7891,14 +7766,10 @@ function EAB:ConvertEdgeToCenter(barKey, pos)
     local fw = frame:GetWidth() or 0
     local fh = frame:GetHeight() or 0
     local cx, cy = pos.x or 0, pos.y or 0
-    if pt == "LEFT" then
-        cx = cx + fw / 2
-    elseif pt == "RIGHT" then
-        cx = cx - fw / 2
-    elseif pt == "TOP" then
-        cy = cy - fh / 2
-    elseif pt == "BOTTOM" then
-        cy = cy + fh / 2
+    if pt == "LEFT" then cx = cx + fw / 2
+    elseif pt == "RIGHT" then cx = cx - fw / 2
+    elseif pt == "TOP" then cy = cy - fh / 2
+    elseif pt == "BOTTOM" then cy = cy + fh / 2
     end
     return { point = "CENTER", relPoint = pos.relPoint, x = cx, y = cy }
 end
@@ -7937,38 +7808,38 @@ local function RestoreBarPositions()
             -- Skip bars owned by the unlock anchor system -- their position
             -- is computed from the anchor chain, not from saved barPositions.
             local anchored = EllesmereUI and EllesmereUI.IsUnlockAnchored
-                and EllesmereUI.IsUnlockAnchored(key)
+                             and EllesmereUI.IsUnlockAnchored(key)
             if anchored then
                 -- skip: anchor system owns this bar's position
             else
-                local pt = pos.point or "CENTER"
-                local rpt = pos.relPoint or pt
-                local px = pos.x or 0
-                local py = pos.y or 0
-                -- Skip CENTER 0,0: this is never an intentional position.
-                -- Anchored bars save 0,0 as a placeholder; their real position
-                -- comes from the anchor chain which resolves later.
-                if pt == "CENTER" and rpt == "CENTER" and px == 0 and py == 0 then
-                    -- skip
-                else
-                    -- Snap to physical pixel grid. For CENTER-anchored bars use
-                    -- SnapCenterForDim with the frame's actual size so odd-pixel
-                    -- dimensions get the +0.5 center offset they need (plain
-                    -- SnapForES drifts by 1px on save & exit for odd dimensions).
-                    if PPa then
-                        local es = frame:GetEffectiveScale()
-                        local isCenterAnchor = (pt == "CENTER" and rpt == "CENTER")
-                        if isCenterAnchor and PPa.SnapCenterForDim then
-                            px = PPa.SnapCenterForDim(px, frame:GetWidth() or 0, es)
-                            py = PPa.SnapCenterForDim(py, frame:GetHeight() or 0, es)
-                        elseif PPa.SnapForES then
-                            px = PPa.SnapForES(px, es)
-                            py = PPa.SnapForES(py, es)
-                        end
+            local pt = pos.point or "CENTER"
+            local rpt = pos.relPoint or pt
+            local px = pos.x or 0
+            local py = pos.y or 0
+            -- Skip CENTER 0,0: this is never an intentional position.
+            -- Anchored bars save 0,0 as a placeholder; their real position
+            -- comes from the anchor chain which resolves later.
+            if pt == "CENTER" and rpt == "CENTER" and px == 0 and py == 0 then
+                -- skip
+            else
+                -- Snap to physical pixel grid. For CENTER-anchored bars use
+                -- SnapCenterForDim with the frame's actual size so odd-pixel
+                -- dimensions get the +0.5 center offset they need (plain
+                -- SnapForES drifts by 1px on save & exit for odd dimensions).
+                if PPa then
+                    local es = frame:GetEffectiveScale()
+                    local isCenterAnchor = (pt == "CENTER" and rpt == "CENTER")
+                    if isCenterAnchor and PPa.SnapCenterForDim then
+                        px = PPa.SnapCenterForDim(px, frame:GetWidth() or 0, es)
+                        py = PPa.SnapCenterForDim(py, frame:GetHeight() or 0, es)
+                    elseif PPa.SnapForES then
+                        px = PPa.SnapForES(px, es)
+                        py = PPa.SnapForES(py, es)
                     end
-                    frame:ClearAllPoints()
-                    frame:SetPoint(pt, UIParent, rpt, px, py)
                 end
+                frame:ClearAllPoints()
+                frame:SetPoint(pt, UIParent, rpt, px, py)
+            end
             end -- anchored else
         end
     end
@@ -7992,49 +7863,49 @@ local function RegisterWithUnlockMode()
     for idx, info in ipairs(BAR_CONFIG) do
         local key = info.key
         elements[#elements + 1] = MK({
-            key              = key,
-            label            = info.label,
-            group            = "Action Bars",
-            order            = orderBase + idx,
-            isHidden         = function()
+            key   = key,
+            label = info.label,
+            group = "Action Bars",
+            order = orderBase + idx,
+            isHidden = function()
                 local s = EAB.db.profile.bars[info.key]
                 return s and s.alwaysHidden
             end,
-            getFrame         = function() return barFrames[info.key] end,
-            getSize          = function()
+            getFrame = function() return barFrames[info.key] end,
+            getSize = function()
                 local frame = barFrames[info.key]
                 if not frame then return 1, 1 end
                 return frame:GetWidth(), frame:GetHeight()
             end,
             linkedDimensions = true,
-            setWidth         = function(_, w)
+            setWidth = function(_, w)
                 local s = EAB.db.profile.bars[info.key]
                 if not s then return end
                 -- Reverse-engineer square button size from total bar width
                 -- using physical pixel math to distribute remainder pixels.
                 local numIcons = s.overrideNumIcons or s.numIcons or info.count
-                local numRows  = s.overrideNumRows or s.numRows or 1
+                local numRows  = s.overrideNumRows  or s.numRows  or 1
                 if numRows < 1 then numRows = 1 end
-                local stride = math.ceil(numIcons / numRows)
+                local stride   = math.ceil(numIcons / numRows)
                 if stride < 1 then stride = 1 end
-                local isVert     = (s.orientation == "vertical")
-                local pad        = s.buttonPadding or 2
-                local shape      = s.buttonShape or "none"
-                local cols       = isVert and numRows or stride
-                local PP         = EllesmereUI and EllesmereUI.PP
-                local onePx      = PP and PP.mult or 1
+                local isVert   = (s.orientation == "vertical")
+                local pad      = s.buttonPadding or 2
+                local shape    = s.buttonShape or "none"
+                local cols     = isVert and numRows or stride
+                local PP = EllesmereUI and EllesmereUI.PP
+                local onePx = PP and PP.mult or 1
                 local physTarget = math.floor(w / onePx + 0.5)
-                local physPad    = math.floor(pad / onePx + 0.5)
+                local physPad = math.floor(pad / onePx + 0.5)
                 local rawPhysBtn = (physTarget - (cols - 1) * physPad) / cols
                 if shape ~= "none" and shape ~= "cropped" then
                     rawPhysBtn = rawPhysBtn - math.floor((SHAPE_BTN_EXPAND or 10) / onePx + 0.5)
                 end
                 if rawPhysBtn < 8 then rawPhysBtn = 8 end
                 local basePhysBtn = math.floor(rawPhysBtn)
-                s.buttonWidth     = basePhysBtn * onePx
-                s.buttonHeight    = s.buttonWidth
+                s.buttonWidth  = basePhysBtn * onePx
+                s.buttonHeight = s.buttonWidth
                 -- Compute remainder pixels to distribute across columns
-                local shapePhys   = 0
+                local shapePhys = 0
                 if shape ~= "none" and shape ~= "cropped" then
                     shapePhys = math.floor((SHAPE_BTN_EXPAND or 10) / onePx + 0.5)
                 end
@@ -8047,24 +7918,24 @@ local function RegisterWithUnlockMode()
                 end
                 LayoutBar(info.key)
             end,
-            setHeight        = function(_, h)
+            setHeight = function(_, h)
                 local s = EAB.db.profile.bars[info.key]
                 if not s then return end
                 -- Reverse-engineer square button size from total bar height
                 -- using physical pixel math to distribute remainder pixels.
                 local numIcons = s.overrideNumIcons or s.numIcons or info.count
-                local numRows  = s.overrideNumRows or s.numRows or 1
+                local numRows  = s.overrideNumRows  or s.numRows  or 1
                 if numRows < 1 then numRows = 1 end
-                local stride = math.ceil(numIcons / numRows)
+                local stride   = math.ceil(numIcons / numRows)
                 if stride < 1 then stride = 1 end
-                local isVert     = (s.orientation == "vertical")
-                local pad        = s.buttonPadding or 2
-                local shape      = s.buttonShape or "none"
-                local rows       = isVert and stride or numRows
-                local PP         = EllesmereUI and EllesmereUI.PP
-                local onePx      = PP and PP.mult or 1
+                local isVert   = (s.orientation == "vertical")
+                local pad      = s.buttonPadding or 2
+                local shape    = s.buttonShape or "none"
+                local rows     = isVert and stride or numRows
+                local PP = EllesmereUI and EllesmereUI.PP
+                local onePx = PP and PP.mult or 1
                 local physTarget = math.floor(h / onePx + 0.5)
-                local physPad    = math.floor(pad / onePx + 0.5)
+                local physPad = math.floor(pad / onePx + 0.5)
                 local rawPhysBtn = (physTarget - (rows - 1) * physPad) / rows
                 if shape ~= "none" and shape ~= "cropped" then
                     rawPhysBtn = rawPhysBtn - math.floor((SHAPE_BTN_EXPAND or 10) / onePx + 0.5)
@@ -8073,10 +7944,10 @@ local function RegisterWithUnlockMode()
                 end
                 if rawPhysBtn < 8 then rawPhysBtn = 8 end
                 local basePhysBtn = math.floor(rawPhysBtn)
-                s.buttonWidth     = basePhysBtn * onePx
-                s.buttonHeight    = s.buttonWidth
+                s.buttonWidth  = basePhysBtn * onePx
+                s.buttonHeight = s.buttonWidth
                 -- Compute remainder pixels to distribute across rows
-                local shapePhys   = 0
+                local shapePhys = 0
                 if shape ~= "none" and shape ~= "cropped" then
                     shapePhys = math.floor((SHAPE_BTN_EXPAND or 10) / onePx + 0.5)
                 end
@@ -8093,7 +7964,7 @@ local function RegisterWithUnlockMode()
                 end
                 LayoutBar(info.key)
             end,
-            savePos          = function(_, point, relPoint, x, y)
+            savePos = function(_, point, relPoint, x, y)
                 if point and x and y then
                     local sp, sx, sy = EAB:ConvertCenterToEdge(info.key, point, x, y)
                     EAB.db.profile.barPositions[info.key] = {
@@ -8114,7 +7985,7 @@ local function RegisterWithUnlockMode()
                     local s = EAB.db.profile.bars[info.key]
                     local gd = s and (s.growDirection or "up"):upper()
                     if entry and gd and gd ~= "CENTER"
-                        and EllesmereUI.GetAnchorTargetCenterUI then
+                       and EllesmereUI.GetAnchorTargetCenterUI then
                         entry.tgtx, entry.tgty = EllesmereUI.GetAnchorTargetCenterUI("StanceBar")
                         if EllesmereUI.GetAnchorTargetEdgesUI then
                             entry.tgtL, entry.tgtR, entry.tgtT, entry.tgtB =
@@ -8123,19 +7994,19 @@ local function RegisterWithUnlockMode()
                     end
                 end
             end,
-            loadPos          = function()
+            loadPos = function()
                 return EAB:ConvertEdgeToCenter(info.key, EAB.db.profile.barPositions[info.key])
             end,
-            clearPos         = function()
+            clearPos = function()
                 EAB.db.profile.barPositions[info.key] = nil
             end,
-            applyPos         = function()
+            applyPos = function()
                 EAB:RecalcFlyoutDirection(info.key)
                 -- Anchored bars: position owned by anchor system. But bars
                 -- with growth direction need edge bounds applied first so the
                 -- live-edge reading in ApplyAnchorPosition has correct data.
                 if EllesmereUI and EllesmereUI.IsUnlockAnchored
-                    and EllesmereUI.IsUnlockAnchored(info.key) then
+                   and EllesmereUI.IsUnlockAnchored(info.key) then
                     local s = EAB.db.profile.bars[info.key]
                     local gd = s and (s.growDirection or "up"):upper()
                     if gd and gd ~= "CENTER" and gd ~= "UP" then
@@ -8202,18 +8073,18 @@ local function RegisterWithUnlockMode()
             blizzOrder = blizzOrder + 1
             local bk = info.key
             elements[#elements + 1] = MK({
-                key      = bk,
-                label    = info.label,
-                group    = "Action Bars",
-                order    = blizzOrder,
+                key   = bk,
+                label = info.label,
+                group = "Action Bars",
+                order = blizzOrder,
                 noResize = true,
                 getFrame = function() return blizzMovableHolders[bk] end,
-                getSize  = function()
+                getSize = function()
                     local ov = BLIZZ_MOVABLE_OVERLAY[bk]
                     if ov then return ov.w, ov.h end
                     return 50, 50
                 end,
-                savePos  = function(_, point, relPoint, x, y)
+                savePos = function(_, point, relPoint, x, y)
                     if point and x and y then
                         EAB.db.profile.barPositions[bk] = {
                             point = point, relPoint = relPoint or point, x = x, y = y,
@@ -8227,7 +8098,7 @@ local function RegisterWithUnlockMode()
                         end
                     end
                 end,
-                loadPos  = function()
+                loadPos = function()
                     local pos = EAB.db.profile.barPositions[bk]
                     if not pos then return nil end
                     local pt = pos.point
@@ -8396,6 +8267,7 @@ function EAB:OnInitialize()
             QuickKeybindFrame:Show()
         end
     end
+
 end
 
 function EAB:OnEnable()
@@ -8457,10 +8329,8 @@ function EAB:OnFirstLogin()
             end
             if data.point then
                 self.db.profile.barPositions[barKey] = {
-                    point = data.point,
-                    relPoint = data.relPoint,
-                    x = data.x,
-                    y = data.y,
+                    point = data.point, relPoint = data.relPoint,
+                    x = data.x, y = data.y,
                 }
             end
         end
@@ -8474,9 +8344,9 @@ function EAB:OnFirstLogin()
     -- show/hide based on shapeshift form availability.
     local sb = self.db.profile.bars["StanceBar"]
     if sb then
-        sb.alwaysHidden      = false
-        sb.combatShowEnabled = false
-        sb.combatHideEnabled = false
+        sb.alwaysHidden       = false
+        sb.combatShowEnabled  = false
+        sb.combatHideEnabled  = false
     end
 
     -- Now proceed with normal setup
@@ -8641,16 +8511,9 @@ function EAB:FinishSetup()
                     local relPoint = pos and pos.relPoint or "CENTER"
                     local px = pos and pos.x or 0
                     local py = pos and pos.y or 0
-                    tinsert(barFrameData, {
-                        key = key,
-                        w = frameW,
-                        h = frameH,
-                        point = point,
-                        relPoint = relPoint,
-                        x = px,
-                        y = py,
-                        hidden = (s and (s.alwaysHidden or s.enabled == false)) and true or false
-                    })
+                    tinsert(barFrameData, { key = key, w = frameW, h = frameH,
+                        point = point, relPoint = relPoint, x = px, y = py,
+                        hidden = (s and (s.alwaysHidden or s.enabled == false)) and true or false })
 
                     for i, btnData in pairs(btnLayout) do
                         local btn = buttons[i]
@@ -8667,10 +8530,8 @@ function EAB:FinishSetup()
                             end
                             layoutData[btn._secureSlotIdx] = {
                                 barKey = key,
-                                x = btnData.x,
-                                y = btnData.y,
-                                w = btnData.w,
-                                h = btnData.h,
+                                x = btnData.x, y = btnData.y,
+                                w = btnData.w, h = btnData.h,
                                 show = btnData.show,
                                 actionSlot = actionSlot,
                             }
@@ -8801,15 +8662,11 @@ function EAB:FinishSetup()
                     local state = hoverStates[key]
                     StopFade(frame)
                     if frame:IsMouseOver() then
-                        if state then
-                            state.isHovered = true; state.fadeDir = "in"
-                        end
+                        if state then state.isHovered = true; state.fadeDir = "in" end
                         frame:SetAlpha(s._savedBarAlpha or 1)
                         if key == "MainBar" then SyncPagingAlpha(s._savedBarAlpha or 1) end
                     else
-                        if state then
-                            state.isHovered = false; state.fadeDir = "out"
-                        end
+                        if state then state.isHovered = false; state.fadeDir = "out" end
                         frame:SetAlpha(0)
                         if key == "MainBar" then SyncPagingAlpha(0) end
                     end
@@ -8992,14 +8849,11 @@ function EAB:FinishSetup()
     -- Also show mouseover-faded bars while dragging so the player can drop
     -- spells/items onto them.  Purely visual -- no secure frame access.
     local DRAG_TYPES = {
-        spell = true,
-        macro = true,
-        petaction = true,
-        mount = true,
-        companion = true,
+        spell = true, macro = true,
+        petaction = true, mount = true, companion = true,
     }
     _dragState.visible = false
-    _dragState.strataCache = {} -- [frame] = originalStrata
+    _dragState.strataCache = {}  -- [frame] = originalStrata
     local function ResetDragState()
         -- Force-restore all strata and clear drag visibility without the
         -- guard check, so stale state from spec changes etc. is always cleaned.
@@ -9020,59 +8874,59 @@ function EAB:FinishSetup()
             local s = self.db.profile.bars[key]
             if not s then -- skip bars without settings
             else
-                local frame = barFrames[key]
-                    or (info.isDataBar and dataBarFrames[key])
-                    or (info.isBlizzardMovable and blizzMovableHolders[key])
-                    or extraBarHolders[key]
-                    or (info.visibilityOnly and _G[info.frameName])
-                -- For extra bars, alpha is managed on the Blizzard frame directly
-                if info.visibilityOnly and not info.isDataBar and not info.isBlizzardMovable then
-                    local bf = _G[info.frameName]
-                    if bf then frame = bf end
-                end
-                if frame then
-                    local state = hoverStates[key]
-                    if show then
-                        -- Raise strata so bars render above the spellbook.
-                        -- SetFrameStrata is protected on secure frames in combat,
-                        -- so only do this out of combat.
-                        if not InCombatLockdown() then
-                            if not _dragState.strataCache[frame] then
-                                _dragState.strataCache[frame] = frame:GetFrameStrata()
-                            end
-                            frame:SetFrameStrata("FULLSCREEN_DIALOG")
+            local frame = barFrames[key]
+                or (info.isDataBar and dataBarFrames[key])
+                or (info.isBlizzardMovable and blizzMovableHolders[key])
+                or extraBarHolders[key]
+                or (info.visibilityOnly and _G[info.frameName])
+            -- For extra bars, alpha is managed on the Blizzard frame directly
+            if info.visibilityOnly and not info.isDataBar and not info.isBlizzardMovable then
+                local bf = _G[info.frameName]
+                if bf then frame = bf end
+            end
+            if frame then
+                local state = hoverStates[key]
+                if show then
+                    -- Raise strata so bars render above the spellbook.
+                    -- SetFrameStrata is protected on secure frames in combat,
+                    -- so only do this out of combat.
+                    if not InCombatLockdown() then
+                        if not _dragState.strataCache[frame] then
+                            _dragState.strataCache[frame] = frame:GetFrameStrata()
                         end
-                        -- Show mouseover-faded bars at full opacity
-                        if s.mouseoverEnabled then
+                        frame:SetFrameStrata("FULLSCREEN_DIALOG")
+                    end
+                    -- Show mouseover-faded bars at full opacity
+                    if s.mouseoverEnabled then
+                        StopFade(frame)
+                        local fullAlpha = s._savedBarAlpha or 1
+                        frame:SetAlpha(fullAlpha)
+                        if state then state.fadeDir = "in" end
+                        if key == "MainBar" then SyncPagingAlpha(fullAlpha) end
+                    end
+                else
+                    -- Restore original strata (only if we changed it)
+                    if not InCombatLockdown() then
+                        local orig = _dragState.strataCache[frame]
+                        if orig then
+                            frame:SetFrameStrata(orig)
+                            _dragState.strataCache[frame] = nil
+                        end
+                    end
+                    -- Fade back out if mouseover-enabled and not hovered. Skip
+                    -- position-only Blizzard-owned bars (the QueueStatus eye): EUI
+                    -- controls only their position, never fades them out.
+                    if s.mouseoverEnabled and not info.noManagedVisibility then
+                        if not (state and state.isHovered) then
                             StopFade(frame)
-                            local fullAlpha = s._savedBarAlpha or 1
-                            frame:SetAlpha(fullAlpha)
-                            if state then state.fadeDir = "in" end
-                            if key == "MainBar" then SyncPagingAlpha(fullAlpha) end
-                        end
-                    else
-                        -- Restore original strata (only if we changed it)
-                        if not InCombatLockdown() then
-                            local orig = _dragState.strataCache[frame]
-                            if orig then
-                                frame:SetFrameStrata(orig)
-                                _dragState.strataCache[frame] = nil
-                            end
-                        end
-                        -- Fade back out if mouseover-enabled and not hovered. Skip
-                        -- position-only Blizzard-owned bars (the QueueStatus eye): EUI
-                        -- controls only their position, never fades them out.
-                        if s.mouseoverEnabled and not info.noManagedVisibility then
-                            if not (state and state.isHovered) then
-                                StopFade(frame)
-                                FadeTo(frame, 0, s.mouseoverSpeed or 0.15)
-                                if state then state.fadeDir = "out" end
-                                if key == "MainBar" then SyncPagingAlpha(0) end
-                            end
+                            FadeTo(frame, 0, s.mouseoverSpeed or 0.15)
+                            if state then state.fadeDir = "out" end
+                            if key == "MainBar" then SyncPagingAlpha(0) end
                         end
                     end
                 end
             end
+        end
         end
     end
 
@@ -9136,7 +8990,7 @@ function EAB:FinishSetup()
             -- Reset stale flags -- if we're not actually in a vehicle/housing
             -- the flags should be false
             local inVehicle = (UnitInVehicle and UnitInVehicle("player"))
-                or EAB_VTABLE.HasVehicleActionBar()
+                              or EAB_VTABLE.HasVehicleActionBar()
 
             local inHousing = IsHouseEditorActive and IsHouseEditorActive()
             if not inHousing and _bindState.housingCleared then
@@ -9234,53 +9088,15 @@ function EAB:FinishSetup()
         end
     end
     self:RegisterEvent("PLAYER_TARGET_CHANGED", function()
-        -- Defer: UnitExists("target") is not always updated at the exact
-        -- moment PLAYER_TARGET_CHANGED fires, so an immediate check can
-        -- wrongly see no hard target and keep the bar hidden. Run next frame.
-        C_Timer.After(0, function()
-            ImmediateSoftTargetCheck()
-            self:UpdateHousingVisibility()
-        end)
+        ImmediateSoftTargetCheck()
+        self:UpdateHousingVisibility()
     end)
     self:RegisterEvent("PLAYER_SOFT_INTERACT_CHANGED", function()
         ImmediateSoftTargetCheck()
-        self:UpdateHousingVisibility()
-    end)
-    local function RegisterIfValid(event, fn)
-        if C_EventUtils and C_EventUtils.IsEventValid and C_EventUtils.IsEventValid(event) then
-            self:RegisterEvent(event, fn)
-        end
-    end
-    RegisterIfValid("PLAYER_SOFT_ENEMY_CHANGED", function()
-        ImmediateSoftTargetCheck()
-        self:UpdateHousingVisibility()
-    end)
-    RegisterIfValid("PLAYER_SOFT_FRIEND_CHANGED", function()
-        ImmediateSoftTargetCheck()
-        self:UpdateHousingVisibility()
     end)
     self:RegisterEvent("GROUP_ROSTER_UPDATE", function()
         self:UpdateHousingVisibility()
     end)
-    -- Polling fallback: some soft-target transitions (notably Action Targeting
-    -- walking into range) do not reliably fire the dedicated soft-target events
-    -- on every client/patch. Check the soft-target unit tokens every 0.1s and
-    -- sync visibility only when the state actually changes. This is cheap because
-    -- the heavy work is skipped when state is unchanged.
-    local lastSoftState
-    local function PollSoftTargetState()
-        if InCombatLockdown() then return end
-        local state = (UnitExists("softinteract") and "I" or "")
-            .. (UnitExists("softenemy") and "E" or "")
-            .. (UnitExists("softfriend") and "F" or "")
-            .. (UnitExists("target") and "T" or "")
-        if state ~= lastSoftState then
-            lastSoftState = state
-            ImmediateSoftTargetCheck()
-            self:UpdateHousingVisibility()
-        end
-    end
-    C_Timer.NewTicker(0.1, PollSoftTargetState)
     -- Combat exit: synchronously restore all visHideNoTarget bar state drivers.
     -- During combat, ImmediateSoftTargetCheck and UpdateHousingVisibility are
     -- blocked by InCombatLockdown. If a bar's driver was overridden to "hide"
@@ -9433,11 +9249,8 @@ function EAB:FinishSetup()
                     if btn then
                         local name, texture, isToken, isActive, autoCastAllowed, autoCastEnabled = GetPetActionInfo(i)
                         if hasPetBar and texture then
-                            if isToken then
-                                btn.icon:SetTexture(_G[texture])
-                            else
-                                btn.icon:SetTexture(texture)
-                            end
+                            if isToken then btn.icon:SetTexture(_G[texture])
+                            else btn.icon:SetTexture(texture) end
                             -- Dim icon when the ability is not currently usable.
                             local usable = GetPetActionSlotUsable(i)
                             local shade = usable and 1 or 0.4
@@ -9494,11 +9307,8 @@ function EAB:FinishSetup()
                     if btn then
                         local name, texture, isToken = GetPetActionInfo(i)
                         if texture then
-                            if isToken then
-                                btn.icon:SetTexture(_G[texture])
-                            else
-                                btn.icon:SetTexture(texture)
-                            end
+                            if isToken then btn.icon:SetTexture(_G[texture])
+                            else btn.icon:SetTexture(texture) end
                             btn.icon:Show()
                         else
                             btn.icon:Hide()
@@ -9631,21 +9441,21 @@ ns.dataBarFrames = dataBarFrames
 
 -- Data bar colors
 local DATA_BAR_COLORS = {
-    xpRested   = { r = 0.00, g = 0.44, b = 0.87 }, -- shaman blue (XP when rested)
-    xpNoRest   = { r = 0.60, g = 0.40, b = 0.85 }, -- purple (XP when no rested)
-    xpRestedBG = { r = 0.15, g = 0.30, b = 0.60 }, -- dark blue (rested overlay)
-    favor      = { r = 0.85, g = 0.64, b = 0.22 }, -- warm gold (house favor)
-    rep        = {
-        [1] = { r = 0.80, g = 0.20, b = 0.20 },    -- Hated
-        [2] = { r = 0.75, g = 0.30, b = 0.15 },    -- Hostile
-        [3] = { r = 0.75, g = 0.45, b = 0.15 },    -- Unfriendly
-        [4] = { r = 0.80, g = 0.70, b = 0.20 },    -- Neutral
-        [5] = { r = 0.30, g = 0.70, b = 0.25 },    -- Friendly
-        [6] = { r = 0.25, g = 0.65, b = 0.50 },    -- Honored
-        [7] = { r = 0.25, g = 0.50, b = 0.75 },    -- Revered
-        [8] = { r = 0.35, g = 0.30, b = 0.80 },    -- Exalted
-        [9] = { r = 0.80, g = 0.65, b = 0.20 },    -- Paragon
-        [10] = { r = 0.20, g = 0.70, b = 0.85 },   -- Renown
+    xpRested   = { r = 0.00, g = 0.44, b = 0.87 },  -- shaman blue (XP when rested)
+    xpNoRest   = { r = 0.60, g = 0.40, b = 0.85 },  -- purple (XP when no rested)
+    xpRestedBG = { r = 0.15, g = 0.30, b = 0.60 },  -- dark blue (rested overlay)
+    favor = { r = 0.85, g = 0.64, b = 0.22 },   -- warm gold (house favor)
+    rep = {
+        [1] = { r = 0.80, g = 0.20, b = 0.20 },  -- Hated
+        [2] = { r = 0.75, g = 0.30, b = 0.15 },  -- Hostile
+        [3] = { r = 0.75, g = 0.45, b = 0.15 },  -- Unfriendly
+        [4] = { r = 0.80, g = 0.70, b = 0.20 },  -- Neutral
+        [5] = { r = 0.30, g = 0.70, b = 0.25 },  -- Friendly
+        [6] = { r = 0.25, g = 0.65, b = 0.50 },  -- Honored
+        [7] = { r = 0.25, g = 0.50, b = 0.75 },  -- Revered
+        [8] = { r = 0.35, g = 0.30, b = 0.80 },  -- Exalted
+        [9] = { r = 0.80, g = 0.65, b = 0.20 },  -- Paragon
+        [10] = { r = 0.20, g = 0.70, b = 0.85 }, -- Renown
     },
 }
 
@@ -9654,42 +9464,42 @@ local DATA_BAR_COLORS = {
 do
     local base = "Interface\\AddOns\\EllesmereUI\\media\\textures\\"
     local lookup = {
-        ["none"]             = nil,
-        ["melli"]            = base .. "melli.tga",
-        ["beautiful"]        = base .. "beautiful.tga",
-        ["plating"]          = base .. "plating.tga",
-        ["atrocity"]         = base .. "atrocity.tga",
-        ["divide"]           = base .. "divide.tga",
-        ["glass"]            = base .. "glass.tga",
-        ["fade-right"]       = base .. "fade-right.tga",
-        ["thin-line-top"]    = base .. "thin-line-top.tga",
+        ["none"]          = nil,
+        ["melli"]         = base .. "melli.tga",
+        ["beautiful"]     = base .. "beautiful.tga",
+        ["plating"]       = base .. "plating.tga",
+        ["atrocity"]      = base .. "atrocity.tga",
+        ["divide"]        = base .. "divide.tga",
+        ["glass"]         = base .. "glass.tga",
+        ["fade-right"]    = base .. "fade-right.tga",
+        ["thin-line-top"] = base .. "thin-line-top.tga",
         ["thin-line-bottom"] = base .. "thin-line-bottom.tga",
-        ["fade"]             = base .. "fade.tga",
-        ["gradient-lr"]      = base .. "gradient-lr.tga",
-        ["gradient-rl"]      = base .. "gradient-rl.tga",
-        ["gradient-bt"]      = base .. "gradient-bt.tga",
-        ["gradient-tb"]      = base .. "gradient-tb.tga",
-        ["matte"]            = base .. "matte.tga",
-        ["sheer"]            = base .. "sheer.tga",
+        ["fade"]          = base .. "fade.tga",
+        ["gradient-lr"]   = base .. "gradient-lr.tga",
+        ["gradient-rl"]   = base .. "gradient-rl.tga",
+        ["gradient-bt"]   = base .. "gradient-bt.tga",
+        ["gradient-tb"]   = base .. "gradient-tb.tga",
+        ["matte"]         = base .. "matte.tga",
+        ["sheer"]         = base .. "sheer.tga",
     }
     local names = {
-        ["none"]             = "None",
-        ["melli"]            = "Melli (ElvUI)",
-        ["beautiful"]        = "Beautiful",
-        ["plating"]          = "Plating",
-        ["atrocity"]         = "Atrocity",
-        ["divide"]           = "Divide",
-        ["glass"]            = "Glass",
-        ["fade-right"]       = "Fade Right",
-        ["thin-line-top"]    = "Thin Line Top",
+        ["none"]          = "None",
+        ["melli"]         = "Melli (ElvUI)",
+        ["beautiful"]     = "Beautiful",
+        ["plating"]       = "Plating",
+        ["atrocity"]      = "Atrocity",
+        ["divide"]        = "Divide",
+        ["glass"]         = "Glass",
+        ["fade-right"]    = "Fade Right",
+        ["thin-line-top"] = "Thin Line Top",
         ["thin-line-bottom"] = "Thin Line Bottom",
-        ["fade"]             = "Fade",
-        ["gradient-lr"]      = "Gradient Right",
-        ["gradient-rl"]      = "Gradient Left",
-        ["gradient-bt"]      = "Gradient Up",
-        ["gradient-tb"]      = "Gradient Down",
-        ["matte"]            = "Matte",
-        ["sheer"]            = "Sheer",
+        ["fade"]          = "Fade",
+        ["gradient-lr"]   = "Gradient Right",
+        ["gradient-rl"]   = "Gradient Left",
+        ["gradient-bt"]   = "Gradient Up",
+        ["gradient-tb"]   = "Gradient Down",
+        ["matte"]         = "Matte",
+        ["sheer"]         = "Sheer",
     }
     local order = {
         "none", "melli", "atrocity",
@@ -9734,15 +9544,12 @@ end
 
 -- Accent-mode bars repaint live when the user changes the accent color.
 if EllesmereUI.RegAccent then
-    EllesmereUI.RegAccent({
-        type = "callback",
-        fn = function()
-            for _, bk in ipairs({ "XPBar", "RepBar", "FavorBar" }) do
-                local f = dataBarFrames[bk]
-                if f and f._updateFunc then f._updateFunc() end
-            end
+    EllesmereUI.RegAccent({ type = "callback", fn = function()
+        for _, bk in ipairs({ "XPBar", "RepBar", "FavorBar" }) do
+            local f = dataBarFrames[bk]
+            if f and f._updateFunc then f._updateFunc() end
         end
-    })
+    end })
 end
 
 local function ApplyDataBarLayout(barKey)
@@ -9901,16 +9708,13 @@ local function UpdateXPBar()
     -- Rested XP overlay
     local restedBar = frame._restedBar
     if restedXP > 0 then
-        bar:SetStatusBarColor(ns.ResolveDataBarColor(s, DATA_BAR_COLORS.xpRested.r, DATA_BAR_COLORS.xpRested.g,
-            DATA_BAR_COLORS.xpRested.b))
+        bar:SetStatusBarColor(ns.ResolveDataBarColor(s, DATA_BAR_COLORS.xpRested.r, DATA_BAR_COLORS.xpRested.g, DATA_BAR_COLORS.xpRested.b))
         restedBar:SetMinMaxValues(0, maxXP)
         restedBar:SetValue(min(currentXP + restedXP, maxXP))
-        restedBar:SetStatusBarColor(DATA_BAR_COLORS.xpRestedBG.r, DATA_BAR_COLORS.xpRestedBG.g,
-            DATA_BAR_COLORS.xpRestedBG.b, 0.5)
+        restedBar:SetStatusBarColor(DATA_BAR_COLORS.xpRestedBG.r, DATA_BAR_COLORS.xpRestedBG.g, DATA_BAR_COLORS.xpRestedBG.b, 0.5)
         restedBar:Show()
     else
-        bar:SetStatusBarColor(ns.ResolveDataBarColor(s, DATA_BAR_COLORS.xpNoRest.r, DATA_BAR_COLORS.xpNoRest.g,
-            DATA_BAR_COLORS.xpNoRest.b))
+        bar:SetStatusBarColor(ns.ResolveDataBarColor(s, DATA_BAR_COLORS.xpNoRest.r, DATA_BAR_COLORS.xpNoRest.g, DATA_BAR_COLORS.xpNoRest.b))
         restedBar:Hide()
     end
 
@@ -9971,9 +9775,7 @@ local function CreateXPBar()
     holder:EnableMouse(true)
     holder:SetScript("OnEnter", function(self)
         if (IsLevelAtEffectiveMaxLevel and IsLevelAtEffectiveMaxLevel(UnitLevel("player")))
-            or (IsXPUserDisabled and IsXPUserDisabled()) then
-            return
-        end
+            or (IsXPUserDisabled and IsXPUserDisabled()) then return end
         GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
         GameTooltip:ClearLines()
         local currentXP = UnitXP("player")
@@ -9984,12 +9786,10 @@ local function CreateXPBar()
         local remain = maxXP - currentXP
         GameTooltip:AddLine("Experience", 1, 1, 1)
         GameTooltip:AddDoubleLine("Level", tostring(UnitLevel("player")), 1, 1, 1, 1, 1, 1)
-        GameTooltip:AddDoubleLine("XP",
-            format("%s / %s (%.1f%%)", BreakUpLargeNumbers(currentXP), BreakUpLargeNumbers(maxXP), pct), 1, 1, 1, 1, 1, 1)
+        GameTooltip:AddDoubleLine("XP", format("%s / %s (%.1f%%)", BreakUpLargeNumbers(currentXP), BreakUpLargeNumbers(maxXP), pct), 1, 1, 1, 1, 1, 1)
         GameTooltip:AddDoubleLine("Remaining", BreakUpLargeNumbers(remain), 1, 1, 1, 1, 1, 1)
         if restedXP > 0 then
-            GameTooltip:AddDoubleLine("Rested",
-                format("+%s (%.1f%%)", BreakUpLargeNumbers(restedXP), (restedXP / maxXP) * 100), 1, 1, 1, 1, 1, 1)
+            GameTooltip:AddDoubleLine("Rested", format("+%s (%.1f%%)", BreakUpLargeNumbers(restedXP), (restedXP / maxXP) * 100), 1, 1, 1, 1, 1, 1)
         end
         GameTooltip:Show()
     end)
@@ -10035,8 +9835,7 @@ local function UpdateRepBar()
     -- Friendship handling (check first friendships override normal standing)
     local isFriendship = false
     if factionID then
-        local friendInfo = C_GossipInfo and C_GossipInfo.GetFriendshipReputation and
-            C_GossipInfo.GetFriendshipReputation(factionID)
+        local friendInfo = C_GossipInfo and C_GossipInfo.GetFriendshipReputation and C_GossipInfo.GetFriendshipReputation(factionID)
         if friendInfo and friendInfo.friendshipFactionID and friendInfo.friendshipFactionID > 0 then
             isFriendship = true
             standing = friendInfo.reaction
@@ -10062,8 +9861,7 @@ local function UpdateRepBar()
 
     -- Renown handling (only if not already paragon or friendship)
     if not isParagon and not isFriendship and factionID and C_Reputation.IsMajorFaction and C_Reputation.IsMajorFaction(factionID) then
-        local majorData = C_MajorFactions and C_MajorFactions.GetMajorFactionData and
-            C_MajorFactions.GetMajorFactionData(factionID)
+        local majorData = C_MajorFactions and C_MajorFactions.GetMajorFactionData and C_MajorFactions.GetMajorFactionData(factionID)
         if majorData then
             local hasMax = C_MajorFactions.HasMaximumRenown and C_MajorFactions.HasMaximumRenown(factionID)
             if hasMax then
@@ -10129,8 +9927,7 @@ local function CreateRepBar()
         local maximum = (data.nextReactionThreshold or 1) - (data.currentReactionThreshold or 0)
         if maximum <= 0 then maximum = 1 end
         local pct = (current / maximum) * 100
-        GameTooltip:AddDoubleLine("Reputation",
-            format("%s / %s (%.1f%%)", BreakUpLargeNumbers(current), BreakUpLargeNumbers(maximum), pct), 1, 1, 1, 1, 1, 1)
+        GameTooltip:AddDoubleLine("Reputation", format("%s / %s (%.1f%%)", BreakUpLargeNumbers(current), BreakUpLargeNumbers(maximum), pct), 1, 1, 1, 1, 1, 1)
         GameTooltip:Show()
     end)
     holder:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -10162,149 +9959,146 @@ end
 -- do-end scoped + ns export: the file-scope local budget is nearly at the
 -- Lua 5.1 200 cap.
 do
-    local favorState     -- { level, displayLevel, favor, needed } from the last payload
-    local favorEv, favorArmed
-    local ArmFavorEvents -- forward: mutual recursion with UpdateFavorBar
+local favorState  -- { level, displayLevel, favor, needed } from the last payload
+local favorEv, favorArmed
+local ArmFavorEvents  -- forward: mutual recursion with UpdateFavorBar
 
-    -- No favor requests or repaints inside an active keystone or a raid
-    -- instance.
-    local function FavorBlocked()
-        if C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive
-            and C_ChallengeMode.IsChallengeModeActive() then
-            return true
-        end
-        local inInst, instType = IsInInstance()
-        return (inInst and instType == "raid") and true or false
+-- No favor requests or repaints inside an active keystone or a raid
+-- instance.
+local function FavorBlocked()
+    if C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive
+        and C_ChallengeMode.IsChallengeModeActive() then
+        return true
+    end
+    local inInst, instType = IsInInstance()
+    return (inInst and instType == "raid") and true or false
+end
+
+-- Zero cost while hidden: events stay unregistered unless the bar can
+-- actually show.
+local function FavorWanted()
+    if not (C_Housing and C_Housing.GetPlayerOwnedHouses) then return false end
+    local p = EAB.db and EAB.db.profile
+    if not p or p.useBlizzardDataBars then return false end
+    local s = p.bars and p.bars.FavorBar
+    return (s and not s.alwaysHidden) and true or false
+end
+
+local function UpdateFavorBar()
+    if ArmFavorEvents then ArmFavorEvents() end
+    local frame, s = EAB_VTABLE.ExtraBars.BeginManagedDataBarUpdate("FavorBar")
+    if not frame then return end
+
+    local bar = frame._bar
+    local text = frame._text
+
+    -- No house / no data yet / max house level (no next-level requirement).
+    local st = favorState
+    if not st or not st.needed or st.needed <= 0 then
+        EAB_VTABLE.ExtraBars.ApplyManagedNonSecurePresentation(BAR_LOOKUP["FavorBar"], frame, s, false, true)
+        return
     end
 
-    -- Zero cost while hidden: events stay unregistered unless the bar can
-    -- actually show.
-    local function FavorWanted()
-        if not (C_Housing and C_Housing.GetPlayerOwnedHouses) then return false end
-        local p = EAB.db and EAB.db.profile
-        if not p or p.useBlizzardDataBars then return false end
-        local s = p.bars and p.bars.FavorBar
-        return (s and not s.alwaysHidden) and true or false
+    local current = st.favor or 0
+    if current > st.needed then current = st.needed end
+    bar:SetMinMaxValues(0, st.needed)
+    bar:SetValue(current)
+    bar:SetStatusBarColor(ns.ResolveDataBarColor(s, DATA_BAR_COLORS.favor.r, DATA_BAR_COLORS.favor.g, DATA_BAR_COLORS.favor.b))
+
+    local pct = (current / st.needed) * 100
+    text:SetText(format("House Level %d: %d / %d", st.displayLevel or 1, current, st.needed))
+
+    -- Auto-size text if bar is too narrow
+    local barW = frame:GetWidth()
+    if text:GetStringWidth() > barW - 4 then
+        text:SetText(format("%.0f%%", pct))
     end
 
-    local function UpdateFavorBar()
-        if ArmFavorEvents then ArmFavorEvents() end
-        local frame, s = EAB_VTABLE.ExtraBars.BeginManagedDataBarUpdate("FavorBar")
-        if not frame then return end
+    EAB_VTABLE.ExtraBars.FinishManagedDataBarUpdate("FavorBar", frame, s)
+end
 
-        local bar = frame._bar
-        local text = frame._text
-
-        -- No house / no data yet / max house level (no next-level requirement).
-        local st = favorState
-        if not st or not st.needed or st.needed <= 0 then
-            EAB_VTABLE.ExtraBars.ApplyManagedNonSecurePresentation(BAR_LOOKUP["FavorBar"], frame, s, false, true)
-            return
-        end
-
-        local current = st.favor or 0
-        if current > st.needed then current = st.needed end
-        bar:SetMinMaxValues(0, st.needed)
-        bar:SetValue(current)
-        bar:SetStatusBarColor(ns.ResolveDataBarColor(s, DATA_BAR_COLORS.favor.r, DATA_BAR_COLORS.favor.g,
-            DATA_BAR_COLORS.favor.b))
-
-        local pct = (current / st.needed) * 100
-        text:SetText(format("House Level %d: %d / %d", st.displayLevel or 1, current, st.needed))
-
-        -- Auto-size text if bar is too narrow
-        local barW = frame:GetWidth()
-        if text:GetStringWidth() > barW - 4 then
-            text:SetText(format("%.0f%%", pct))
-        end
-
-        EAB_VTABLE.ExtraBars.FinishManagedDataBarUpdate("FavorBar", frame, s)
-    end
-
-    local function OnFavorEvent(_, event, arg1)
-        if FavorBlocked() then return end
-        if not (C_Housing and C_Housing.GetPlayerOwnedHouses) then return end
-        if event == "PLAYER_ENTERING_WORLD" then
-            C_Housing.GetPlayerOwnedHouses()
-        elseif event == "PLAYER_HOUSE_LIST_UPDATED" then
-            local info = type(arg1) == "table" and arg1[1]
-            local guid = info and info.houseGUID
-            if guid and C_Housing.GetCurrentHouseLevelFavor then
-                C_Housing.GetCurrentHouseLevelFavor(guid)
-            else
-                favorState = nil
-                UpdateFavorBar()
-            end
-        elseif event == "HOUSE_LEVEL_FAVOR_UPDATED" then
-            if type(arg1) == "table" and arg1.houseLevel ~= nil then
-                local level = arg1.houseLevel or 0
-                local needed = C_Housing.GetHouseLevelFavorForLevel
-                    and C_Housing.GetHouseLevelFavorForLevel(level + 1)
-                favorState = {
-                    level = level,
-                    displayLevel = level + 1,
-                    favor = arg1.houseFavor or 0,
-                    needed = needed or 0,
-                }
-            else
-                favorState = nil
-            end
+local function OnFavorEvent(_, event, arg1)
+    if FavorBlocked() then return end
+    if not (C_Housing and C_Housing.GetPlayerOwnedHouses) then return end
+    if event == "PLAYER_ENTERING_WORLD" then
+        C_Housing.GetPlayerOwnedHouses()
+    elseif event == "PLAYER_HOUSE_LIST_UPDATED" then
+        local info = type(arg1) == "table" and arg1[1]
+        local guid = info and info.houseGUID
+        if guid and C_Housing.GetCurrentHouseLevelFavor then
+            C_Housing.GetCurrentHouseLevelFavor(guid)
+        else
+            favorState = nil
             UpdateFavorBar()
         end
-    end
-
-    ArmFavorEvents = function()
-        local want = FavorWanted()
-        if want and not favorArmed then
-            favorArmed = true
-            if not favorEv then
-                favorEv = CreateFrame("Frame")
-                favorEv:SetScript("OnEvent", OnFavorEvent)
-            end
-            favorEv:RegisterEvent("PLAYER_ENTERING_WORLD")
-            favorEv:RegisterEvent("PLAYER_HOUSE_LIST_UPDATED")
-            favorEv:RegisterEvent("HOUSE_LEVEL_FAVOR_UPDATED")
-            -- Kick the async chain now; if inside blocked content the next
-            -- world-enter re-kicks instead.
-            if not FavorBlocked() then
-                C_Housing.GetPlayerOwnedHouses()
-            end
-        elseif not want and favorArmed then
-            favorArmed = false
-            if favorEv then favorEv:UnregisterAllEvents() end
+    elseif event == "HOUSE_LEVEL_FAVOR_UPDATED" then
+        if type(arg1) == "table" and arg1.houseLevel ~= nil then
+            local level = arg1.houseLevel or 0
+            local needed = C_Housing.GetHouseLevelFavorForLevel
+                and C_Housing.GetHouseLevelFavorForLevel(level + 1)
+            favorState = {
+                level = level,
+                displayLevel = level + 1,
+                favor = arg1.houseFavor or 0,
+                needed = needed or 0,
+            }
+        else
+            favorState = nil
         end
-    end
-
-    local function CreateFavorBar()
-        local holder = CreateDataBarFrame("FavorBar", UpdateFavorBar)
-        holder:SetPoint("TOP", UIParent, "TOP", 0, -68)
-
-        -- Tooltip
-        holder:EnableMouse(true)
-        holder:SetScript("OnEnter", function(self)
-            local st = favorState
-            if not st or not st.needed or st.needed <= 0 then return end
-            GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
-            GameTooltip:ClearLines()
-            GameTooltip:AddLine("House Favor", 1, 1, 1)
-            GameTooltip:AddDoubleLine("House Level", tostring(st.displayLevel or 1), 1, 1, 1, 1, 1, 1)
-            local current = math.min(st.favor or 0, st.needed)
-            local pct = (current / st.needed) * 100
-            GameTooltip:AddDoubleLine("Favor",
-                format("%s / %s (%.1f%%)", BreakUpLargeNumbers(current), BreakUpLargeNumbers(st.needed), pct), 1, 1, 1, 1,
-                1, 1)
-            GameTooltip:AddDoubleLine("Remaining", BreakUpLargeNumbers(st.needed - current), 1, 1, 1, 1, 1, 1)
-            GameTooltip:Show()
-        end)
-        holder:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-        -- Event registration is handled by ArmFavorEvents (via UpdateFavorBar):
-        -- nothing is registered while the bar is hidden.
-        ApplyDataBarLayout("FavorBar")
         UpdateFavorBar()
     end
+end
 
-    ns._CreateFavorBar = CreateFavorBar
+ArmFavorEvents = function()
+    local want = FavorWanted()
+    if want and not favorArmed then
+        favorArmed = true
+        if not favorEv then
+            favorEv = CreateFrame("Frame")
+            favorEv:SetScript("OnEvent", OnFavorEvent)
+        end
+        favorEv:RegisterEvent("PLAYER_ENTERING_WORLD")
+        favorEv:RegisterEvent("PLAYER_HOUSE_LIST_UPDATED")
+        favorEv:RegisterEvent("HOUSE_LEVEL_FAVOR_UPDATED")
+        -- Kick the async chain now; if inside blocked content the next
+        -- world-enter re-kicks instead.
+        if not FavorBlocked() then
+            C_Housing.GetPlayerOwnedHouses()
+        end
+    elseif not want and favorArmed then
+        favorArmed = false
+        if favorEv then favorEv:UnregisterAllEvents() end
+    end
+end
+
+local function CreateFavorBar()
+    local holder = CreateDataBarFrame("FavorBar", UpdateFavorBar)
+    holder:SetPoint("TOP", UIParent, "TOP", 0, -68)
+
+    -- Tooltip
+    holder:EnableMouse(true)
+    holder:SetScript("OnEnter", function(self)
+        local st = favorState
+        if not st or not st.needed or st.needed <= 0 then return end
+        GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine("House Favor", 1, 1, 1)
+        GameTooltip:AddDoubleLine("House Level", tostring(st.displayLevel or 1), 1, 1, 1, 1, 1, 1)
+        local current = math.min(st.favor or 0, st.needed)
+        local pct = (current / st.needed) * 100
+        GameTooltip:AddDoubleLine("Favor", format("%s / %s (%.1f%%)", BreakUpLargeNumbers(current), BreakUpLargeNumbers(st.needed), pct), 1, 1, 1, 1, 1, 1)
+        GameTooltip:AddDoubleLine("Remaining", BreakUpLargeNumbers(st.needed - current), 1, 1, 1, 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    holder:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    -- Event registration is handled by ArmFavorEvents (via UpdateFavorBar):
+    -- nothing is registered while the bar is hidden.
+    ApplyDataBarLayout("FavorBar")
+    UpdateFavorBar()
+end
+
+ns._CreateFavorBar = CreateFavorBar
 end
 
 -------------------------------------------------------------------------------
@@ -10321,19 +10115,19 @@ local function RegisterDataBarsWithUnlockMode()
         if info.isDataBar then
             local bk = info.key
             elements[#elements + 1] = MK({
-                key       = bk,
-                label     = info.label,
-                group     = "Action Bars",
-                order     = orderBase + idx,
-                getFrame  = function() return dataBarFrames[bk] end,
-                getSize   = function()
+                key   = bk,
+                label = info.label,
+                group = "Action Bars",
+                order = orderBase + idx,
+                getFrame = function() return dataBarFrames[bk] end,
+                getSize = function()
                     -- Return stored DB values so cog menu shows what the
                     -- user typed, not the pixel-snapped frame size.
                     local s = EAB.db.profile.bars[bk]
                     if s then return s.width or 400, s.height or 18 end
                     return 400, 18
                 end,
-                setWidth  = function(_, w)
+                setWidth = function(_, w)
                     local s = EAB.db.profile.bars[bk]
                     local PPab = EllesmereUI and EllesmereUI.PP
                     if s then s.width = PPab and PPab.Snap(w) or math.floor(w + 0.5) end
@@ -10345,7 +10139,7 @@ local function RegisterDataBarsWithUnlockMode()
                     if s then s.height = PPab and PPab.Snap(h) or math.floor(h + 0.5) end
                     ApplyDataBarLayout(bk)
                 end,
-                savePos   = function(_, point, relPoint, x, y)
+                savePos = function(_, point, relPoint, x, y)
                     if point and x and y then
                         EAB.db.profile.barPositions[bk] = {
                             point = point, relPoint = relPoint or point, x = x, y = y,
@@ -10359,16 +10153,16 @@ local function RegisterDataBarsWithUnlockMode()
                         end
                     end
                 end,
-                loadPos   = function()
+                loadPos = function()
                     local pos = EAB.db.profile.barPositions[bk]
                     if not pos then return nil end
                     local pt = pos.point
                     return { point = pt, relPoint = pos.relPoint or pt, x = pos.x, y = pos.y }
                 end,
-                clearPos  = function()
+                clearPos = function()
                     EAB.db.profile.barPositions[bk] = nil
                 end,
-                applyPos  = function()
+                applyPos = function()
                     local pos = EAB.db.profile.barPositions[bk]
                     local frame = dataBarFrames[bk]
                     if not frame then return end
@@ -10524,7 +10318,7 @@ local function SetupBlizzardMovableFrame(barKey)
 
     -- Identify which Blizzard frames to manage for this bar key.
     -- extraFrames = all frames that get reparented into the holder.
-    local primaryFrame -- the frame we read position from before reparenting
+    local primaryFrame   -- the frame we read position from before reparenting
     local extraFrames = {}
 
     if barKey == "ExtraActionButton" then
@@ -11246,61 +11040,61 @@ local function RegisterExtraBarsWithUnlockMode()
             if bk == "MicroBar" or bk == "BagBar" then
                 -- no-op: visibility-only holder, no unlock mover
             else
-                local isBlizzOwned = (bk == "QueueStatus")
-                elements[#elements + 1] = MK({
-                    key            = bk,
-                    label          = info.label,
-                    group          = "Action Bars",
-                    order          = orderBase + idx,
-                    noResize       = true,
-                    noAnchorTo     = isBlizzOwned,
-                    noAnchorTarget = isBlizzOwned,
-                    isHidden       = function()
-                        local s = EAB.db.profile.bars[bk]
-                        return s and s.alwaysHidden
-                    end,
-                    getFrame       = function() return extraBarHolders[bk] end,
-                    getSize        = function()
+            local isBlizzOwned = (bk == "QueueStatus")
+            elements[#elements + 1] = MK({
+                key   = bk,
+                label = info.label,
+                group = "Action Bars",
+                order = orderBase + idx,
+                noResize = true,
+                noAnchorTo = isBlizzOwned,
+                noAnchorTarget = isBlizzOwned,
+                isHidden = function()
+                    local s = EAB.db.profile.bars[bk]
+                    return s and s.alwaysHidden
+                end,
+                getFrame = function() return extraBarHolders[bk] end,
+                getSize = function()
+                    local holder = extraBarHolders[bk]
+                    if holder then return holder:GetWidth(), holder:GetHeight() end
+                    return 200, 40
+                end,
+                savePos = function(_, point, relPoint, x, y)
+                    if point and x and y then
+                        EAB.db.profile.barPositions[bk] = {
+                            point = point, relPoint = relPoint or point, x = x, y = y,
+                        }
+                    end
+                    if not EllesmereUI._unlockActive then
                         local holder = extraBarHolders[bk]
-                        if holder then return holder:GetWidth(), holder:GetHeight() end
-                        return 200, 40
-                    end,
-                    savePos        = function(_, point, relPoint, x, y)
-                        if point and x and y then
-                            EAB.db.profile.barPositions[bk] = {
-                                point = point, relPoint = relPoint or point, x = x, y = y,
-                            }
+                        if holder and point and x and y then
+                            holder:ClearAllPoints()
+                            holder:SetPoint(point, UIParent, relPoint or point, x, y)
                         end
-                        if not EllesmereUI._unlockActive then
-                            local holder = extraBarHolders[bk]
-                            if holder and point and x and y then
-                                holder:ClearAllPoints()
-                                holder:SetPoint(point, UIParent, relPoint or point, x, y)
-                            end
-                        end
-                    end,
-                    loadPos        = function()
-                        local pos = EAB.db.profile.barPositions[bk]
-                        if not pos then return nil end
-                        return { point = pos.point, relPoint = pos.relPoint or pos.point, x = pos.x, y = pos.y }
-                    end,
-                    clearPos       = function()
-                        EAB.db.profile.barPositions[bk] = nil
-                    end,
-                    applyPos       = function()
-                        local pos = EAB.db.profile.barPositions[bk]
-                        local holder = extraBarHolders[bk]
-                        if not holder then return end
-                        -- MicroBar/BagBar: Blizzard owns position, never move
-                        if bk == "MicroBar" or bk == "BagBar" then return end
-                        holder:ClearAllPoints()
-                        if pos and pos.point then
-                            holder:SetPoint(pos.point, UIParent, pos.relPoint or pos.point, pos.x, pos.y)
-                        else
-                            holder:SetPoint("CENTER", UIParent, "CENTER", 0, -200)
-                        end
-                    end,
-                })
+                    end
+                end,
+                loadPos = function()
+                    local pos = EAB.db.profile.barPositions[bk]
+                    if not pos then return nil end
+                    return { point = pos.point, relPoint = pos.relPoint or pos.point, x = pos.x, y = pos.y }
+                end,
+                clearPos = function()
+                    EAB.db.profile.barPositions[bk] = nil
+                end,
+                applyPos = function()
+                    local pos = EAB.db.profile.barPositions[bk]
+                    local holder = extraBarHolders[bk]
+                    if not holder then return end
+                    -- MicroBar/BagBar: Blizzard owns position, never move
+                    if bk == "MicroBar" or bk == "BagBar" then return end
+                    holder:ClearAllPoints()
+                    if pos and pos.point then
+                        holder:SetPoint(pos.point, UIParent, pos.relPoint or pos.point, pos.x, pos.y)
+                    else
+                        holder:SetPoint("CENTER", UIParent, "CENTER", 0, -200)
+                    end
+                end,
+            })
             end -- else (not MicroBar/BagBar)
         end
     end
@@ -11335,7 +11129,7 @@ local function SetupExtraBars()
                     AttachExtraBarHoverHooks(info)
                 end
             end
-        end -- not isDataBar/isBlizzardMovable
+        end  -- not isDataBar/isBlizzardMovable
     end
 
     _quickKeybindState.art.ForEachSpecialButton(_quickKeybindState.art.InitializeButton)
@@ -11828,8 +11622,7 @@ _quickKeybindState.InitButtons = function()
                                 if hl then
                                     local p = EAB and EAB.db and EAB.db.profile
                                     local useCC = p and p.highlightUseClassColor
-                                    local cc = (p and p.highlightCustomColor) or
-                                        { r = 0.973, g = 0.839, b = 0.604, a = 1 }
+                                    local cc = (p and p.highlightCustomColor) or { r = 0.973, g = 0.839, b = 0.604, a = 1 }
                                     local hr, hg, hb = cc.r, cc.g, cc.b
                                     if useCC then
                                         local _, ct = UnitClass("player")
@@ -12028,7 +11821,7 @@ end)
 --  Scans all EABButton slots for Swiftmend by matching icon file ID.
 --  Re-scans on slot changes so bar rearrangement is covered.
 -------------------------------------------------------------------------------
-; (function()
+;(function()
     local function ScanABSwiftmend()
         local _, cls = UnitClass("player")
         if cls ~= "DRUID" then return end
