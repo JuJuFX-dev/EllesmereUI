@@ -722,6 +722,7 @@ initFrame:SetScript("OnEvent", function(self)
             -- store left/right/center, so a plain == "up" check never fired).
             local _gd = settings.growDirection or "up"
             local growUp = (_gd == "up" or _gd == "center")
+            local colFlip, rowFlip, cornerFill = ns.GetOrderFlips(settings, isVertical, growUp)
             for i = 1, maxBtns do
                 local entry = buttons[i]
                 local bf    = entry.frame
@@ -732,34 +733,51 @@ initFrame:SetScript("OnEvent", function(self)
                     local idx = i - leftmost  -- 0-based index
                     local col, row
                     if isVertical then
-                        col = math.floor(idx / stride)
-                        row = idx % stride
+                        if cornerFill then
+                            -- Corner modes fill across the columns first
+                            -- (gridCols = column count), then wrap down.
+                            col = idx % gridCols
+                            row = math.floor(idx / gridCols)
+                        else
+                            col = math.floor(idx / stride)
+                            row = idx % stride
+                        end
                     else
                         col = idx % stride
                         row = math.floor(idx / stride)
                     end
-                    if settings.reverseIconOrder then
-                        if isVertical then
-                            row = stride - 1 - row
-                        else
-                            col = stride - 1 - col
-                        end
+                    -- dispCol/dispRow: visual position after icon order flips.
+                    -- col keeps identifying the content column so the vertical
+                    -- centering math below still measures the right buttons.
+                    local dispCol, dispRow = col, row
+                    if isVertical then
+                        if colFlip then dispCol = gridCols - 1 - dispCol end
+                        if rowFlip then dispRow = stride - 1 - dispRow end
+                    else
+                        if colFlip then dispCol = stride - 1 - dispCol end
+                        if rowFlip then dispRow = numRows - 1 - dispRow end
                     end
 
                     local xOff, yOff
                     if isVertical then
                         -- Vertical: center each column vertically when last column is shorter
-                        local colStart = col * stride + 1
-                        local colEnd = math.min(colStart + stride - 1, previewCount)
-                        local countInCol = colEnd - colStart + 1
+                        local countInCol
+                        if cornerFill then
+                            -- Row-major fill: column c holds every gridCols-th button.
+                            countInCol = math.floor((previewCount - 1 - col) / gridCols) + 1
+                        else
+                            local colStart = col * stride + 1
+                            local colEnd = math.min(colStart + stride - 1, previewCount)
+                            countInCol = colEnd - colStart + 1
+                        end
                         local colH = countInCol * scaledBtnH + (countInCol - 1) * scaledPad
                         local colOffY = Snap((gridH - colH) / 2)
-                        xOff = Snap(gridStartX + col * (scaledBtnW + scaledPad))
-                        yOff = startY - colOffY - Snap(row * (scaledBtnH + scaledPad))
+                        xOff = Snap(gridStartX + dispCol * (scaledBtnW + scaledPad))
+                        yOff = startY - colOffY - Snap(dispRow * (scaledBtnH + scaledPad))
                     else
                         -- Horizontal: left-align rows to match actual bar layout
-                        xOff = Snap(gridStartX + col * (scaledBtnW + scaledPad))
-                        local displayRow = growUp and ((numRows - 1) - row) or row
+                        xOff = Snap(gridStartX + dispCol * (scaledBtnW + scaledPad))
+                        local displayRow = growUp and ((numRows - 1) - dispRow) or dispRow
                         yOff = startY - Snap(displayRow * (scaledBtnH + scaledPad))
                     end
                     bf:SetSize(scaledBtnW, scaledBtnH)
@@ -1109,6 +1127,15 @@ initFrame:SetScript("OnEvent", function(self)
         FavorBar = "Favor",
     }
 
+    -- Spec Overrides capture: report which bar is selected so captured
+    -- entries are labeled with their element ("Action Bars > Bar 1 > ...").
+    if EllesmereUI.RegisterCaptureContext then
+        EllesmereUI.RegisterCaptureContext("EllesmereUIActionBars", function()
+            local key = SelectedKey()
+            return SHORT_LABELS[key] or key
+        end)
+    end
+
     -- Keep the legacy boolean flags and the newer visibility-mode dropdown in
     -- sync. The runtime still reads both shapes in different code paths.
     local function GetVisibilityKey(s)
@@ -1299,7 +1326,7 @@ initFrame:SetScript("OnEvent", function(self)
         _, h = W:Spacer(parent, y, 12);  y = y - h
 
         -------------------------------------------------------------------
-        --  EXPERIENCE BAR / REPUTATION BAR
+        --  EXPERIENCE BAR / REPUTATION BAR / HOUSE FAVOR BAR
         -------------------------------------------------------------------
         -- Shared bar-texture dropdown tables (built-ins + SharedMedia, with
         -- menu preview backgrounds -- same treatment as the nameplate Bar
@@ -1336,6 +1363,8 @@ initFrame:SetScript("OnEvent", function(self)
 
         local function BuildDataBarSection(barKey, sectionTitle, visLabel)
             local visRow, sizeRow
+            local function S() return EAB.db.profile.bars[barKey] end
+
             _, h = W:SectionHeader(parent, sectionTitle, y);  y = y - h
             visRow = BuildVisRow(barKey, visLabel, _blizzDis, BLIZZ_DIS_TIP)
 
@@ -1344,22 +1373,21 @@ initFrame:SetScript("OnEvent", function(self)
             sizeRow, h = W:DualRow(parent, y,
                 { type="slider", text="Width", min=50, max=600, step=1,
                   disabled=wDis, disabledTooltip=wTip, rawTooltip=wRaw,
-                  getValue=function() return EAB.db.profile.bars[barKey].width or 400 end,
+                  getValue=function() return S().width or 400 end,
                   setValue=function(v)
-                      EAB.db.profile.bars[barKey].width = v
+                      S().width = v
                       if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout(barKey) end
                   end },
                 { type="slider", text="Height", min=4, max=40, step=1,
                   disabled=hDis, disabledTooltip=hTip, rawTooltip=hRaw,
-                  getValue=function() return EAB.db.profile.bars[barKey].height or 18 end,
+                  getValue=function() return S().height or 18 end,
                   setValue=function(v)
-                      EAB.db.profile.bars[barKey].height = v
+                      S().height = v
                       if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout(barKey) end
                   end });  y = y - h
 
             -- Color mode (custom | accent | reactive) + bar texture.
             local rp = REACTIVE_PREVIEW[barKey] or { 1, 1, 1 }
-            local function S() return EAB.db.profile.bars[barKey] end
             _, h = W:DualRow(parent, y,
                 { type="multiSwatch", text="Color",
                   swatches = {
@@ -1421,6 +1449,17 @@ initFrame:SetScript("OnEvent", function(self)
                       S().barTexture = v
                       if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout(barKey) end
                   end });  y = y - h
+
+            -- Click Through | (empty)
+            _, h = W:DualRow(parent, y,
+                { type="toggle", text="Click Through",
+                  tooltip="Mouse clicks pass through the bar. Disable to allow the mouseover tooltip.",
+                  getValue=function() return S().clickThrough end,
+                  setValue=function(v)
+                      S().clickThrough = v
+                      EAB:ApplyClickThroughForBar(barKey)
+                  end },
+                { type="label", text="" });  y = y - h
 
             return visRow, sizeRow
         end
@@ -1822,6 +1861,7 @@ initFrame:SetScript("OnEvent", function(self)
                         SB().toggleVisKey = nil
                         EAB:RebuildVisToggleBindings()
                         RefreshLabel()
+                        if EllesmereUI._NotifySettingWrite then EllesmereUI._NotifySettingWrite(rgn) end
                         return
                     end
                     if listening then return end
@@ -1849,6 +1889,7 @@ initFrame:SetScript("OnEvent", function(self)
                     listening = false
                     self:EnableKeyboard(false)
                     RefreshLabel()
+                    if EllesmereUI._NotifySettingWrite then EllesmereUI._NotifySettingWrite(rgn) end
                 end)
 
                 kbBtn:SetScript("OnEnter", function(self)
@@ -1877,6 +1918,19 @@ initFrame:SetScript("OnEvent", function(self)
 
                 RefreshState()
                 EllesmereUI.RegisterWidgetRefresh(RefreshState)
+
+                -- Spec Overrides capture: bespoke widget, so its SLOT opts in
+                -- with a synthetic accessor (the left half is a plain label
+                -- cfg, which carries no get/set of its own).
+                EllesmereUI.AddCaptureAccessor(rgn, {
+                    type = "keybind", text = "Toggle Action Bar Visibility",
+                    getValue = function() return SB().toggleVisKey end,
+                    setValue = function(v)
+                        SB().toggleVisKey = v
+                        EAB:RebuildVisToggleBindings()
+                        RefreshLabel()
+                    end,
+                })
             end
             -- Sync icon: Click Through (right)
             do
@@ -2397,13 +2451,34 @@ initFrame:SetScript("OnEvent", function(self)
                 end
             end
 
-            -- Row 4: Reverse Icon Order | (empty)
+            -- Row 4: Icon Order | (empty)
+            -- Supersedes the old Reverse Icon Order toggle. "default" and
+            -- "reversed" map exactly onto the legacy boolean (kept in sync
+            -- so older readers of the flag stay correct); the corner values
+            -- place button 1 in that corner of the bar's grid.
+            local iconOrderValues = {
+                default     = "Default",
+                reversed    = "Reversed",
+                TOPLEFT     = "Top Left",
+                TOPRIGHT    = "Top Right",
+                BOTTOMLEFT  = "Bottom Left",
+                BOTTOMRIGHT = "Bottom Right",
+            }
+            local iconOrderOrder = { "default", "reversed", "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT" }
             _, h = W:DualRow(parent, y,
-                { type="toggle", text="Reverse Icon Order",
-                  tooltip="Reverse the order of buttons on this bar.",
-                  getValue=function() return SVal("reverseIconOrder", false) end,
+                { type="dropdown", text="Icon Order",
+                  tooltip="Order of the buttons on this bar; corner options place the first button in that corner.",
+                  values=iconOrderValues, order=iconOrderOrder,
+                  getValue=function()
+                      local v = SVal("iconOrder", nil)
+                      if v == nil then
+                          v = SVal("reverseIconOrder", false) and "reversed" or "default"
+                      end
+                      return v
+                  end,
                   setValue=function(v)
-                      SSet("reverseIconOrder", v, function(k) EAB:ApplyIconRowOverrides(k) end)
+                      SDB().reverseIconOrder = (v == "reversed")
+                      SSet("iconOrder", v, function(k) EAB:ApplyIconRowOverrides(k) end)
                       SUpdatePreviewAndResize()
                   end },
                 { type="label", text="" });  y = y - h
@@ -2521,6 +2596,7 @@ initFrame:SetScript("OnEvent", function(self)
                     local rgn = abBsRow._leftRegion
                     local _, cogShow = EllesmereUI.BuildCogPopup({
                         title = "Border Offset",
+                        captureRegion = rgn,
                         rows = {
                             { type = "slider", label = "Offset X", min = -10, max = 10, step = 1,
                               get = function()

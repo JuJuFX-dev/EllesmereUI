@@ -68,13 +68,14 @@ Advanced is off for this spec, its bars use Simple mode.
 All
 All Bank Tabs
 All Items
+After anchoring, drag to an edge and choose a grow direction to maintain its relative position as either bar changes size.
 All Warbank Tabs
 All selected profiles will keep their %1$s settings in sync: changes made on any of them carry over to the others. Choose which profile's settings the group starts from.
 Already assigned to %s
+Already customized by the group '%s'
 Already on %s
 Already used by another card for this spec
 Anchor
-Anchor Direction
 Anchor to %1$s
 Anchored
 Apply
@@ -148,6 +149,8 @@ Cursor Light\nDisabled
 Cursor Light\nEnabled
 Custom
 Custom Buff ID
+Customize Unlock Mode
+Customizing Unlock Mode: %s (changes apply only to this group's specs)
 Custom Icon ID:
 Custom Item
 Custom Item ID
@@ -309,6 +312,7 @@ No talent reminders configured
 None
 None (Disabled)
 Not Available Yet
+Not spec-customizable
 Not Bound
 Not Included
 Not Loaded
@@ -361,11 +365,15 @@ Remove
 Remove Active State
 Remove Advanced Spec
 Remove Anchor
+Remove Override
+Remove Spec Override
 Remove Spell
 Remove \
 Remove advanced settings for \
 Rename
 Rename Preset
+Revert '%s' to the shared layout? The '%s' specs lose their custom layout for it.
+Revert this element to the shared layout? The '%s' specs lose their custom layout for it.
 Rename Profile
 Renders this slot's element above the rest of the nameplate.
 Reposition freely with
@@ -432,6 +440,7 @@ Stack
 Status
 Stone
 Stop Moving
+Switch to a spec in this group to customize its Unlock Mode
 Sync
 Sync settings from:
 Synced
@@ -454,6 +463,8 @@ Threshold
 Threshold Settings
 Toggle On/Off Keybind
 Total
+Tracking Bar Group %d
+Tracking Bar: %s
 Trinket 1
 Trinket 2
 Turn on Enabled above to customise (saved settings are kept.)
@@ -464,6 +475,7 @@ Unknown
 Unknown Item
 Unknown Macro
 Unknown Spell
+Unlock Layout
 Unknown error
 Unlock Mode
 Up to

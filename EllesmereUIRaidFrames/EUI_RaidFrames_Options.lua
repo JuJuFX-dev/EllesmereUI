@@ -2577,8 +2577,7 @@ initFrame:SetScript("OnEvent", function(self)
         local readyCheckPositionOrder = { "topleft", "top", "topright", "left", "center", "right", "bottomleft", "bottom", "bottomright" }
         local rcRow
         rcRow, h = W:DualRow(parent, y,
-            -- HELD (PR #610 incoming rez, disabled for this build): text="Ready Check / Summon / Rez"
-            { type="dropdown", text="Ready Check & Summon", values=readyCheckPositionValues, order=readyCheckPositionOrder,
+            { type="dropdown", text="Ready Check / Summon / Rez", values=readyCheckPositionValues, order=readyCheckPositionOrder,
               getValue=function() return SVal("readyCheckPosition", "center") end,
               setValue=function(v) SSet("readyCheckPosition", v) end },
             { type="slider", text="Icon Size", min=8, max=40, step=1,
@@ -2588,8 +2587,7 @@ initFrame:SetScript("OnEvent", function(self)
         do
             local rgn = rcRow._leftRegion
             local _, cogShow = EllesmereUI.BuildCogPopup({
-                -- HELD (PR #610 incoming rez, disabled for this build): title = "Ready Check / Summon / Rez"
-                title = "Ready Check / Summon",
+                title = "Ready Check / Summon / Rez",
                 rows = {
                     { type="toggle", label="Show Ready Check",
                       get=function() return SVal("showReadyCheck", true) end,
@@ -2597,10 +2595,9 @@ initFrame:SetScript("OnEvent", function(self)
                     { type="toggle", label="Show Incoming Summon",
                       get=function() return SVal("showSummonPending", true) end,
                       set=function(v) SSet("showSummonPending", v) end },
-                    -- HELD (PR #610 incoming rez, disabled for this build):
-                    -- { type="toggle", label="Show Incoming Resurrection",
-                    --   get=function() return SVal("showIncomingRez", true) end,
-                    --   set=function(v) SSet("showIncomingRez", v) end },
+                    { type="toggle", label="Show Incoming Resurrection",
+                      get=function() return SVal("showIncomingRez", true) end,
+                      set=function(v) SSet("showIncomingRez", v) end },
                     { type="slider", label="Offset X", min=-50, max=50, step=1,
                       get=function() return SVal("readyCheckOffsetX", 0) end,
                       set=function(v) SSet("readyCheckOffsetX", v) end },
@@ -2888,8 +2885,9 @@ initFrame:SetScript("OnEvent", function(self)
             fill     = "Fill Overlay",
             full     = "Full Overlay",
             gradient = "Gradient Overlay",
+            gradient_sharp = "Gradient Sharp",
         }
-        local dispelOverlayOrder = { "none", "fill", "full", "gradient" }
+        local dispelOverlayOrder = { "none", "fill", "full", "gradient", "gradient_sharp" }
 
         -- Row 1: Dispel Overlay | Overlay Opacity
         _, h = W:DualRow(parent, y,
@@ -3038,6 +3036,10 @@ initFrame:SetScript("OnEvent", function(self)
             local _, cogShow = EllesmereUI.BuildCogPopup({
                 title = "Dispellable Debuff Location",
                 rows = {
+                    -- 0 = match the main Debuff Size (the pre-existing behavior).
+                    { type="slider", label="Icon Size", min=0, max=40, step=1,
+                      get=function() return SVal("dispellableDebuffSize", 0) end,
+                      set=function(v) SSet("dispellableDebuffSize", v) end },
                     { type="dropdown", label="Growth Direction", values=dispGrowValues, order=dispGrowOrder,
                       get=function() return SVal("dispellableDebuffGrowDirection", "RIGHT") end,
                       set=function(v) SSet("dispellableDebuffGrowDirection", v) end },

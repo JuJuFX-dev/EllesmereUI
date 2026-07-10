@@ -194,8 +194,7 @@ local UnitExists            = UnitExists
 local UnitIsConnected       = UnitIsConnected
 local UnitIsVisible         = UnitIsVisible
 local UnitIsDeadOrGhost     = UnitIsDeadOrGhost
--- HELD (PR #610 incoming rez, disabled for this build):
--- local UnitHasIncomingResurrection = UnitHasIncomingResurrection
+local UnitHasIncomingResurrection = UnitHasIncomingResurrection
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local UnitThreatSituation   = UnitThreatSituation
 local UnitIsUnit            = UnitIsUnit
@@ -559,7 +558,7 @@ local defaults = {
         raidMarkerOffsetY  = 0,
         showReadyCheck   = true,
         showSummonPending = true,
-        -- showIncomingRez  = true,  -- HELD (PR #610 incoming rez, disabled for this build)
+        showIncomingRez  = true,
         readyCheckSize   = 20,
         readyCheckPosition = "center",  -- "topleft", "top", "topright", "left", "center", "right", "bottomleft", "bottom"
         readyCheckOffsetX  = 0,
@@ -595,7 +594,7 @@ local defaults = {
 
         -- Dispels
         dispelBorderSize = 0,
-        dispelOverlay    = "fill",   -- "none", "fill", "full", "gradient"
+        dispelOverlay    = "fill",   -- "none", "fill", "full", "gradient", "gradient_sharp"
         dispelOverlayOpacity = 100,
         dispelShowAll             = true,   -- true = highlight any dispellable debuff; false = only player-dispellable
         dispelOverlayPosition     = 0,      -- 0=Top, 1=Bottom, 2=Left (aura-organization-type for private aura dispel container)
@@ -610,6 +609,7 @@ local defaults = {
         dispellableDebuffGrowDirection = "RIGHT",
         dispellableDebuffOffsetX = 0,
         dispellableDebuffOffsetY = 0,
+        dispellableDebuffSize = 0,               -- icon size at the separate anchor (0 = match Debuff Size)
         -- Per-dispel-type colors (defaults mirror DISPEL_COLORS). "Bleed" is the
         -- no-dispelName/physical type (stored under the "" key in DISPEL_COLORS).
         dispelColorMagic   = { r = 0.349, g = 0.475, b = 1.0 },
@@ -2628,13 +2628,24 @@ end
 -------------------------------------------------------------------------------
 --  Debuff grid layout (shared by the live render and the options preview)
 -------------------------------------------------------------------------------
+-- Effective icon size for dispellable debuffs routed to their own anchor
+-- ("Dispellable Debuff Location"): 0 = match the main Debuff Size. Reads
+-- scaled proxies transparently (the key is in INDICATOR_SCALE_KEYS; 0 scales
+-- to 0, so the match sentinel survives). On ns (200-local cap).
+function ns.DispellableDebuffSize(s)
+    local v = s.dispellableDebuffSize
+    if v and v > 0 then return v end
+    return s.debuffSize or 18
+end
+
 -- Mirrors the Buff Manager's AnchorSimpleGrid.
--- opts (optional) overrides pos/grow/ox/oy for a sub-group (e.g. dispellable
--- debuffs routed to their own anchor); size/spacing/wrap/perRow stay shared.
+-- opts (optional) overrides pos/grow/ox/oy/size for a sub-group (e.g.
+-- dispellable debuffs routed to their own anchor, which may carry its own
+-- icon size); spacing/wrap/perRow stay shared.
 function ns.DebuffGridPoint(s, idx0, total, opts)
     local pos    = (opts and opts.pos)  or s.debuffPosition or "bottomleft"
     local grow   = (opts and opts.grow) or s.debuffGrowDirection or "RIGHT"
-    local sz     = s.debuffSize or 18
+    local sz     = (opts and opts.size) or s.debuffSize or 18
     local spc    = PixelSnap(s.debuffSpacing or 1)
     local step   = sz + spc
     local ox     = (opts and opts.ox) or s.debuffOffsetX or 0
@@ -3284,6 +3295,10 @@ local function StyleButton(button)
     -- Debuff icons (pre-created, anchored dynamically)
     d.debuffIcons = {}
     local cap = s.debuffCap or 3
+    -- 12.1: engine containers own debuff rendering; the legacy pool would
+    -- be dead frames built inside the login screen (every consumer
+    -- iterates this table, so leaving it empty is safe).
+    if ns.RFC_OwnsDebuffs then cap = 0 end
     for i = 1, cap do
         local icon = CreateFrame("Frame", nil, button)
         icon:SetFrameLevel(button:GetFrameLevel() + ns.LVL_AURA)
@@ -3407,11 +3422,18 @@ local function StyleButton(button)
     local function AnchorDebuffs(visibleCount)
         local s = LiveS()   -- party/extra-aware (see LiveS note above)
         local total = visibleCount or #d.debuffIcons
+        local baseSz = s.debuffSize or 18
 
         -- Dispellable debuffs can be routed to their own anchor + growth + offsets
         -- ("Dispellable Debuff Location"); "same" keeps everything in one grid.
         if (s.dispellableDebuffLocation or "same") == "same" then
             for i, icon in ipairs(d.debuffIcons) do
+                -- Undo any lingering per-icon dispellable size once the split
+                -- is off (size writes are change-guarded via icon._euiSz).
+                if icon._euiSz ~= baseSz then
+                    icon._euiSz = baseSz
+                    icon:SetSize(baseSz, baseSz)
+                end
                 icon:ClearAllPoints()
                 local corner, fx, fy = ns.DebuffGridPoint(s, i - 1, total)
                 icon:SetPoint(corner, health, corner, fx, fy)
@@ -3419,10 +3441,12 @@ local function StyleButton(button)
             return
         end
 
+        local dispSz = ns.DispellableDebuffSize(s)
         _dispOpts.pos  = s.dispellableDebuffLocation
         _dispOpts.grow = s.dispellableDebuffGrowDirection or "RIGHT"
         _dispOpts.ox   = s.dispellableDebuffOffsetX or 0
         _dispOpts.oy   = s.dispellableDebuffOffsetY or 0
+        _dispOpts.size = dispSz
 
         -- Per-group VISIBLE totals so CENTER growth centers each group correctly.
         local nTotal, dTotal = 0, 0
@@ -3437,10 +3461,20 @@ local function StyleButton(button)
         for _, icon in ipairs(d.debuffIcons) do
             icon:ClearAllPoints()
             if icon._isDispellable then
+                -- Icons are pool-reused across groups, so the size rides the
+                -- per-render classification (guarded: same value = no engine call).
+                if icon._euiSz ~= dispSz then
+                    icon._euiSz = dispSz
+                    icon:SetSize(dispSz, dispSz)
+                end
                 local corner, fx, fy = ns.DebuffGridPoint(s, dIdx, dTotal, _dispOpts)
                 icon:SetPoint(corner, health, corner, fx, fy)
                 dIdx = dIdx + 1
             else
+                if icon._euiSz ~= baseSz then
+                    icon._euiSz = baseSz
+                    icon:SetSize(baseSz, baseSz)
+                end
                 local corner, fx, fy = ns.DebuffGridPoint(s, nIdx, nTotal, nil)
                 icon:SetPoint(corner, health, corner, fx, fy)
                 nIdx = nIdx + 1
@@ -3452,6 +3486,9 @@ local function StyleButton(button)
 
     -- Defensive/external icon pool (same structure as debuff icons)
     local DEF_CAP = 4
+    -- 12.1: containers own defensives; skip the dead legacy pool (see the
+    -- debuff pool note above).
+    if ns.RFC_OwnsDefensives then DEF_CAP = 0 end
     d.defIcons = {}
     for i = 1, DEF_CAP do
         local defIcon = CreateFrame("Frame", nil, button)
@@ -3820,6 +3857,10 @@ local function StyleButton(button)
                 -- map owned by XF_Apply
             elseif d._isParty then ns._partyUnitToButton[u] = self
             else unitToButton[u] = self end
+            -- Containers first: legacy refresh below still has restriction-era
+            -- failure modes, and an error there must not starve the container
+            -- of its unit assignment.
+            if ns.RFC_OnUnitAssigned then ns.RFC_OnUnitAssigned(self, d, u) end
             if ns._RefreshAssignedButton then ns._RefreshAssignedButton(self, u) end
             if ns._UpdateButtonRange then ns._UpdateButtonRange(u, self) end
             -- Only re-register private aura anchors when the unit actually
@@ -3885,12 +3926,25 @@ local function StyleButton(button)
         ClickCastFrames[button] = true
     end
 
-    -- Buff manager indicators
-    if ns.BM_CreateIndicators then
+    -- Buff manager indicators. 12.1: containers own ALL live BM rendering
+    -- (custom slots/chains + simple grid); the legacy pools (8 icons +
+    -- 4 bars + overlay/border + 10 simple-grid icons per button, with two
+    -- font applies per icon) were ~160 dead frames/regions per button
+    -- built inside the login screen -- the dominant raid-frame login
+    -- spike. Options previews are unaffected: they build their OWN pools
+    -- on dedicated preview frames (f._bm*), not these. Every d.bm* reader
+    -- is nil-guarded.
+    if ns.BM_CreateIndicators and not ns.RFC_OwnsBM then
         ns.BM_CreateIndicators(button, health, d, PP)
         if ns.BM_AnchorIndicators then
             ns.BM_AnchorIndicators(d, health, s)
         end
+    end
+
+    -- 12.1 aura containers (buttons are always created out of combat, so
+    -- container creation here is safe by construction)
+    if ns.RFC_SetupButton then
+        ns.RFC_SetupButton(button, health, d)
     end
 end
 
@@ -4150,11 +4204,10 @@ local function UpdateButton(button)
         local stc = s.statusTextColor or { r = 1, g = 1, b = 1 }
         if s.statusTextPosition == "none" then
             d.statusText:Hide()
-        -- HELD (PR #610 incoming rez, disabled for this build):
-        -- elseif db.profile.showIncomingRez and UnitHasIncomingResurrection(unit) then
-        --     -- Being resurrected: hide DEAD so the incoming-rez icon (shown in the same
-        --     -- spot by UpdateReadyCheck) isn't covered by the status text.
-        --     d.statusText:Hide()
+        elseif db.profile.showIncomingRez and UnitHasIncomingResurrection(unit) then
+            -- Being resurrected: hide DEAD so the incoming-rez icon (shown in the same
+            -- spot by UpdateReadyCheck) isn't covered by the status text.
+            d.statusText:Hide()
         elseif UnitIsDeadOrGhost(unit) then
             d.statusText:SetText(EllesmereUI.L("DEAD"))
             d.statusText:SetTextColor(stc.r, stc.g, stc.b)
@@ -4579,6 +4632,12 @@ function ns.ApplyDebuffCCGlow(icon, auraData, unit, s)
             if cc then cr, cg, cb = cc.r, cc.g, cc.b end
         end
         local sz = s.debuffSize or 18
+        -- Dispellable icons routed to their own anchor may carry their own
+        -- size; the glow geometry must match (icon._isDispellable is set by
+        -- ApplyDebuffIcon just before this runs in the render pass).
+        if icon._isDispellable and (s.dispellableDebuffLocation or "same") ~= "same" then
+            sz = ns.DispellableDebuffSize(s)
+        end
         local oN, oTh, oPer, oBgR, oBgG, oBgB
         if gType == 1 then  -- Pixel Glow uses the Lines/Thickness/Speed params
             oN, oTh, oPer = s.debuffCCGlowLines or 8, s.debuffCCGlowThickness or 2, s.debuffCCGlowSpeed or 4
@@ -4682,6 +4741,10 @@ local function FullScanDebuffs(d, unit, s)
 end
 
 local function UpdateDebuffs(button, unit, updateInfo)
+    -- 12.1: debuff rendering is container-owned (EUI_RaidFrames_AuraContainers).
+    -- Single gate covering every call site (dispatch, drain, full-update
+    -- loops, party, extra-frame tracker).
+    if ns.RFC_OwnsDebuffs then return end
     local d = GetFFD(button)
     if not d.debuffIcons then return end
     local s = d._isParty and ns._scaledPartyProxy or (d._isExtra and ns._scaledExtraProxy) or ns._scaledProfile
@@ -4774,6 +4837,9 @@ end
 local C_UnitAuras_GetAuraDuration = C_UnitAuras and C_UnitAuras.GetAuraDuration
 
 local function UpdateDefensives(button, unit, updateInfo)
+    -- 12.1: defensive/external rendering is container-owned
+    -- (EUI_RaidFrames_AuraContainers). Single gate for every call site.
+    if ns.RFC_OwnsDefensives then return end
     local d = GetFFD(button)
     if not d.defIcons then return end
     local s = d._isParty and ns._scaledPartyProxy or (d._isExtra and ns._scaledExtraProxy) or ns._scaledProfile
@@ -4990,16 +5056,19 @@ local function ApplyDispelOverlay(d, dc, s)
             olTex:SetAllPoints(health)
         end
         olTex:SetColorTexture(dc.r, dc.g, dc.b, alpha)
-    elseif mode == "gradient" then
+    elseif mode == "gradient" or mode == "gradient_sharp" then
         -- Pre-baked vertical gradient texture (solid at the top, fading to
-        -- transparent at the bottom) tinted with the dispel color. SetVertexColor
-        -- passes the (secret) dispel-type color through natively; the texture's own
-        -- alpha supplies the fade. WHITE8X8 + SetGradient + CreateColor errors here
-        -- because CreateColor cannot wrap a secret color value.
+        -- transparent at the bottom; the sharp variant falls off faster) tinted
+        -- with the dispel color. SetVertexColor passes the (secret) dispel-type
+        -- color through natively; the texture's own alpha supplies the fade.
+        -- WHITE8X8 + SetGradient + CreateColor errors here because CreateColor
+        -- cannot wrap a secret color value.
         if health then
             olTex:SetAllPoints(health)
         end
-        olTex:SetTexture("Interface\\AddOns\\EllesmereUI\\media\\textures\\gradient-tb.tga")
+        olTex:SetTexture(mode == "gradient_sharp"
+            and "Interface\\AddOns\\EllesmereUI\\media\\textures\\gradient-sharp.tga"
+            or "Interface\\AddOns\\EllesmereUI\\media\\textures\\gradient-tb.tga")
         olTex:SetVertexColor(dc.r, dc.g, dc.b, alpha)
     end
     olTex:Show()
@@ -5080,7 +5149,8 @@ local function RegisterDispelContainer(button, unit)
             parent        = wrapper,
             isContainer   = true,
             auraIndex     = 1,
-            showCountdownFrame   = false,
+            -- 12.1 renamed this anchor key; retail keeps the old spelling.
+            [EllesmereUI.IS_121 and "showCooldownFrame" or "showCountdownFrame"] = false,
             showCountdownNumbers = false,
         })
     end)
@@ -5300,7 +5370,8 @@ local function RegisterPrivateAuraSlots(button, unit)
                 auraIndex     = i,
                 parent        = paFrame,
                 isContainer   = false,
-                showCountdownFrame   = true,
+                -- 12.1 renamed this anchor key; retail keeps the old spelling.
+                [EllesmereUI.IS_121 and "showCooldownFrame" or "showCountdownFrame"] = true,
                 showCountdownNumbers = showCD,
                 iconInfo = iconInfoTbl,
             })
@@ -5422,6 +5493,9 @@ function ns._GetDispelIconCurve(targetIdx)
 end
 
 local function UpdateDispelBorder(button, unit, updateInfo)
+    -- 12.1: dispel display is container-slot-owned
+    -- (EUI_RaidFrames_AuraContainers). Single gate for every call site.
+    if ns.RFC_OwnsDispel then return end
     local d = GetFFD(button)
     local s = d._isParty and ns._scaledPartyProxy or (d._isExtra and ns._scaledExtraProxy) or ns._scaledProfile
     local borderSize  = s.dispelBorderSize or 2
@@ -5589,13 +5663,12 @@ local function UpdateReadyCheck(button, unit)
     -- Incoming resurrection ("someone is casting a rez / rez waiting to be
     -- accepted"). Lowest priority; only meaningful on a dead unit. Lets healers
     -- see a body is already being picked up so they don't all rez the same one.
-    -- HELD (PR #610 incoming rez, disabled for this build):
-    -- if db.profile.showIncomingRez and unit and UnitHasIncomingResurrection(unit) then
-    --     tex:SetTexCoord(0, 1, 0, 1)
-    --     tex:SetTexture("Interface\\RaidFrame\\Raid-Icon-Rez")
-    --     tex:Show()
-    --     return
-    -- end
+    if db.profile.showIncomingRez and unit and UnitHasIncomingResurrection(unit) then
+        tex:SetTexCoord(0, 1, 0, 1)
+        tex:SetTexture("Interface\\RaidFrame\\Raid-Icon-Rez")
+        tex:Show()
+        return
+    end
 
     tex:Hide()
 end
@@ -5863,10 +5936,9 @@ ns._UpdateButtonHealth = function(button)
         local stc = s.statusTextColor or { r = 1, g = 1, b = 1 }
         if s.statusTextPosition == "none" then
             d.statusText:Hide()
-        -- HELD (PR #610 incoming rez, disabled for this build):
-        -- elseif db.profile.showIncomingRez and UnitHasIncomingResurrection(unit) then
-        --     -- Being resurrected: hide DEAD so the incoming-rez icon isn't covered.
-        --     d.statusText:Hide()
+        elseif db.profile.showIncomingRez and UnitHasIncomingResurrection(unit) then
+            -- Being resurrected: hide DEAD so the incoming-rez icon isn't covered.
+            d.statusText:Hide()
         elseif UnitIsDeadOrGhost(unit) then
             d.statusText:SetText(EllesmereUI.L("DEAD"))
             d.statusText:SetTextColor(stc.r, stc.g, stc.b)
@@ -6861,6 +6933,7 @@ XF.Layout = function()
         if d.debuffIcons then
             for _, icon in ipairs(d.debuffIcons) do
                 icon:SetSize(xs.debuffSize or 18, xs.debuffSize or 18)
+                icon._euiSz = xs.debuffSize or 18
             end
             if d.AnchorDebuffs then d.AnchorDebuffs() end
         end
@@ -6923,14 +6996,20 @@ XF.EnsureBuilt = function()
             if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" then
                 ns._UpdateButtonHealth(b)
             elseif event == "UNIT_AURA" then
-                -- Mirror of the hub's UNIT_AURA branch without the budget
-                -- spill: at most five duplicated units, work stays bounded.
-                UpdateDispelBorder(b, unit, updateInfo)
-                UpdateDebuffs(b, unit, updateInfo)
-                UpdateDefensives(b, unit, updateInfo)
-                UpdateAbsorb(b, unit)
-                if ns.BM_UpdateIndicators then
-                    ns.BM_UpdateIndicators(b, unit, db, updateInfo)
+                if EllesmereUI.IS_121 then
+                    -- 12.1: aura displays are engine containers; only the
+                    -- absorb overlay remains event-driven here.
+                    UpdateAbsorb(b, unit)
+                else
+                    -- Mirror of the hub's UNIT_AURA branch without the budget
+                    -- spill: at most five duplicated units, work stays bounded.
+                    UpdateDispelBorder(b, unit, updateInfo)
+                    UpdateDebuffs(b, unit, updateInfo)
+                    UpdateDefensives(b, unit, updateInfo)
+                    UpdateAbsorb(b, unit)
+                    if ns.BM_UpdateIndicators then
+                        ns.BM_UpdateIndicators(b, unit, db, updateInfo)
+                    end
                 end
             elseif event == "UNIT_POWER_UPDATE" then
                 local d = GetFFD(b)
@@ -7439,6 +7518,13 @@ local function CreateHeaders()
     -----------------------------------------------------------
     for group = 1, 8 do
         local hdr = CreateFrame("Frame", "ERFGroupHeader" .. group, containerFrame, "SecureGroupHeaderTemplate")
+        -- 12.1: the header births an AuraContainer per child SECURE-SIDE --
+        -- the only combat-legal container source (covers in-combat /reload
+        -- and mid-combat roster growth). The containers file adopts it as
+        -- the debuff shell.
+        if EllesmereUI.IS_121 then
+            hdr:SetAttribute("auraContainerTemplate", "CustomAuraContainerTemplate")
+        end
         hdr:SetAttribute("template", "SecureUnitButtonTemplate")
         hdr:SetAttribute("templateType", "Button")
         hdr:SetAttribute("initialConfigFunction", initConfig)
@@ -7496,6 +7582,9 @@ local function CreateHeaders()
     --  Flat header for merge-groups mode (all members in one grid)
     -----------------------------------------------------------
     ns._flatHeader = CreateFrame("Frame", "ERFFlatHeader", containerFrame, "SecureGroupHeaderTemplate")
+    if EllesmereUI.IS_121 then
+        ns._flatHeader:SetAttribute("auraContainerTemplate", "CustomAuraContainerTemplate")
+    end
     ns._flatHeader:SetAttribute("template", "SecureUnitButtonTemplate")
     ns._flatHeader:SetAttribute("templateType", "Button")
     ns._flatHeader:SetAttribute("initialConfigFunction", initConfig)
@@ -8057,6 +8146,7 @@ local function ReloadFrames()
         if d.debuffIcons then
             for _, icon in ipairs(d.debuffIcons) do
                 icon:SetSize(s.debuffSize or 18, s.debuffSize or 18)
+                icon._euiSz = s.debuffSize or 18
             end
             if d.AnchorDebuffs then d.AnchorDebuffs() end
         end
@@ -8104,6 +8194,11 @@ local function ReloadFrames()
     -- (growth changes move the anchor points, not just the anchored-to header).
     if ns.FB_Apply then ns.FB_Apply() end
     if ns.XF_Apply then ns.XF_Apply() end
+
+    -- 12.1 aura containers reload with every real pass (direct call inside
+    -- the body -- immune to the Options file's setup-time capture of
+    -- ns.ReloadFrames).
+    if ns.RFC_ReloadAll then ns.RFC_ReloadAll() end
 end
 
 ns.ReloadFrames = ReloadFrames
@@ -8238,6 +8333,7 @@ ns._ResizePartyButtons = function(w, h)
                 if d.debuffIcons then
                     for _, icon in ipairs(d.debuffIcons) do
                         icon:SetSize(pp.debuffSize or 18, pp.debuffSize or 18)
+                        icon._euiSz = pp.debuffSize or 18
                     end
                 end
                 if d.defIcons then
@@ -9061,6 +9157,11 @@ local function OnEvent(self, event, arg1, ...)
     elseif event == "UNIT_AURA" then
         local btn = unitToButton[arg1] or ns._partyUnitToButton[arg1]
         if btn then
+            if EllesmereUI.IS_121 then
+                -- 12.1: aura displays are engine-driven containers; the absorb
+                -- overlay (aura-granted shields) is the only consumer left here.
+                local t0 = ns.ProfBegin("UpdateAbsorb:AURA"); UpdateAbsorb(btn, arg1); ns.ProfEnd("UpdateAbsorb:AURA", t0)
+            else
             local updateInfo = ...
             -- Dispel border is the dispel signal: never throttled, always now.
             local t0 = ns.ProfBegin("UpdateDispelBorder"); UpdateDispelBorder(btn, arg1, updateInfo); ns.ProfEnd("UpdateDispelBorder", t0)
@@ -9082,6 +9183,7 @@ local function OnEvent(self, event, arg1, ...)
                 ns._auraDirty[arg1] = true
                 ns._auraDirtyN = ns._auraDirtyN + 1
                 ns._auraDrainFrame:Show()
+            end
             end
         end
     elseif event == "UNIT_ABSORB_AMOUNT_CHANGED" or event == "UNIT_HEAL_ABSORB_AMOUNT_CHANGED"
@@ -9213,16 +9315,15 @@ local function OnEvent(self, event, arg1, ...)
             local u = btn:GetAttribute("unit")
             if u and btn:IsVisible() then UpdateReadyCheck(btn, u) end
         end
-    -- HELD (PR #610 incoming rez, disabled for this build):
-    -- elseif event == "INCOMING_RESURRECT_CHANGED" then
-    --     -- Fires with a unit payload when a rez starts/stops on that unit. Refresh the
-    --     -- status text (so DEAD hides while rezzing / reappears after) as well as the
-    --     -- shared rez icon.
-    --     local btn = unitToButton[arg1] or ns._partyUnitToButton[arg1]
-    --     if btn and btn:IsVisible() then
-    --         if ns._UpdateButtonHealth then ns._UpdateButtonHealth(btn) end
-    --         UpdateReadyCheck(btn, arg1)
-    --     end
+    elseif event == "INCOMING_RESURRECT_CHANGED" then
+        -- Fires with a unit payload when a rez starts/stops on that unit. Refresh the
+        -- status text (so DEAD hides while rezzing / reappears after) as well as the
+        -- shared rez icon.
+        local btn = unitToButton[arg1] or ns._partyUnitToButton[arg1]
+        if btn and btn:IsVisible() then
+            if ns._UpdateButtonHealth then ns._UpdateButtonHealth(btn) end
+            UpdateReadyCheck(btn, arg1)
+        end
     elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
         if ns.BM_RebuildLookup then ns.BM_RebuildLookup(db) end
         -- BM_RebuildLookup only rebuilds the global spell-lookup tables for the
@@ -9374,7 +9475,7 @@ do
             "roleIconStyle", "roleIconSize", "roleIconPosition", "roleIconOffsetX", "roleIconOffsetY", "roleIconHideInCombat",
             "showRoleForTank", "showRoleForHealer", "showRoleForDPS",
             "showRaidMarker", "raidMarkerSize", "raidMarkerPosition", "raidMarkerOffsetX", "raidMarkerOffsetY",
-            "showReadyCheck", "showSummonPending", --[[ HELD (PR #610): "showIncomingRez", ]]
+            "showReadyCheck", "showSummonPending", "showIncomingRez",
             "readyCheckSize", "readyCheckPosition", "readyCheckOffsetX", "readyCheckOffsetY",
             "statusTextPosition", "statusTextOffsetX", "statusTextOffsetY", "statusTextSize", "statusTextColor",
             "showLeaderIcon", "showLeaderIconInCombat", "leaderIconPosition", "leaderIconSize", "leaderIconOffsetX", "leaderIconOffsetY",
@@ -9415,7 +9516,7 @@ do
             "debuffGrowDirection", "debuffPerRow", "debuffWrapDirection",
             "debuffCap", "debuffHideTooltips",
             "dispellableDebuffLocation", "dispellableDebuffGrowDirection",
-            "dispellableDebuffOffsetX", "dispellableDebuffOffsetY",
+            "dispellableDebuffOffsetX", "dispellableDebuffOffsetY", "dispellableDebuffSize",
         },
         debuffStyle = {
             "debuffSize", "debuffIconZoom", "debuffBorderSize", "debuffBorderColor", "debuffSpacing",
@@ -9490,7 +9591,7 @@ for _, k in ipairs({
     "debuffStacksTextSize", "debuffDurTextSize", "defDurTextSize",
     -- Icon sizes
     "roleIconSize", "leaderIconSize", "raidMarkerSize",
-    "debuffSize", "defSize", "paSize",
+    "debuffSize", "defSize", "paSize", "dispellableDebuffSize",
     -- Offsets
     "nameOffsetX", "nameOffsetY",
     "healthTextOffsetX", "healthTextOffsetY",
@@ -9592,6 +9693,9 @@ ns._CreatePartyHeader = function()
     ]]):format(bw, bh)
 
     local hdr = CreateFrame("Frame", "ERFPartyHeader", ns._partyContainerFrame, "SecureGroupHeaderTemplate")
+    if EllesmereUI.IS_121 then
+        hdr:SetAttribute("auraContainerTemplate", "CustomAuraContainerTemplate")
+    end
     hdr:SetAttribute("template", "SecureUnitButtonTemplate")
     hdr:SetAttribute("templateType", "Button")
     hdr:SetAttribute("initialConfigFunction", initConfig)
@@ -10125,6 +10229,7 @@ ns.ReloadPartyFrames = function()
         if d.debuffIcons then
             for _, icon in ipairs(d.debuffIcons) do
                 icon:SetSize(pp.debuffSize or 18, pp.debuffSize or 18)
+                icon._euiSz = pp.debuffSize or 18
             end
             if d.AnchorDebuffs then d.AnchorDebuffs() end
         end
@@ -10172,6 +10277,10 @@ ns.ReloadPartyFrames = function()
     -- Targeted Spells icons scale through the party Auto Resize factor
     -- recomputed above; restyle them with everything else.
     if ns.TS_ApplySettings then ns.TS_ApplySettings() end
+
+    -- Aura containers read the party class through its scaled proxy; the
+    -- fingerprint guards make this near-free when nothing party-side changed.
+    if ns.RFC_ReloadAll then ns.RFC_ReloadAll() end
 end
 
 local function RegisterWithUnlockMode()
@@ -11976,20 +12085,18 @@ local function BuildPreviewRoles()
         end
         previewRoles._deadSlot    = statePool[1]  -- plain corpse
         previewRoles._offlineSlot = statePool[2]
-        -- HELD (PR #610 incoming rez, disabled for this build):
-        -- previewRoles._rezSlot     = statePool[3]  -- corpse with an incoming-rez icon
+        previewRoles._rezSlot     = statePool[3]  -- corpse with an incoming-rez icon
         -- Plain dead + offline bodies carry no readycheck/summon icon (looks wrong there).
         if rcStatuses[statePool[1]] then rcStatuses[statePool[1]] = nil end
         if rcStatuses[statePool[2]] then rcStatuses[statePool[2]] = nil end
         -- The rez corpse gets the incoming-rez icon. But markers win the shared icon
         -- slot (same as the readycheck de-confliction above): if the rez slot landed
         -- on a marker slot, skip the icon (the frame is still shown as a dead body).
-        -- HELD (PR #610 incoming rez, disabled for this build):
-        -- if statePool[3] ~= ms1 and statePool[3] ~= ms2 then
-        --     rcStatuses[statePool[3]] = "rez"
-        -- else
-        --     rcStatuses[statePool[3]] = nil
-        -- end
+        if statePool[3] ~= ms1 and statePool[3] ~= ms2 then
+            rcStatuses[statePool[3]] = "rez"
+        else
+            rcStatuses[statePool[3]] = nil
+        end
     end
 end
 
@@ -12579,10 +12686,12 @@ local function ApplyPreviewData(f, index)
             elseif olMode == "full" then
                 olTex:SetAllPoints(f._health)
                 olTex:SetColorTexture(dispelDC.r, dispelDC.g, dispelDC.b, olAlpha)
-            elseif olMode == "gradient" then
-                -- Same pre-baked gradient texture as the live frames so the preview matches.
+            elseif olMode == "gradient" or olMode == "gradient_sharp" then
+                -- Same pre-baked gradient textures as the live frames so the preview matches.
                 olTex:SetAllPoints(f._health)
-                olTex:SetTexture("Interface\\AddOns\\EllesmereUI\\media\\textures\\gradient-tb.tga")
+                olTex:SetTexture(olMode == "gradient_sharp"
+                    and "Interface\\AddOns\\EllesmereUI\\media\\textures\\gradient-sharp.tga"
+                    or "Interface\\AddOns\\EllesmereUI\\media\\textures\\gradient-tb.tga")
                 olTex:SetVertexColor(dispelDC.r, dispelDC.g, dispelDC.b, olAlpha)
             end
             olTex:Show()
@@ -12634,7 +12743,11 @@ local function ApplyPreviewData(f, index)
     if f._pvDispelDebuff then
         if dispVis and dispelType and ns._PV_DISPEL_DB_ICONS[dispelType] then
             local ddi = f._pvDispelDebuff
-            local dbSz = s.debuffSize or 18
+            -- When dispellable debuffs are routed to their own anchor, the
+            -- preview icon follows that location, its offsets and its size.
+            local dispSplit = (s.dispellableDebuffLocation or "same") ~= "same"
+            local dbSz
+            if dispSplit then dbSz = ns.DispellableDebuffSize(s) else dbSz = s.debuffSize or 18 end
             ddi:SetSize(dbSz, dbSz)
             ddi._tex:SetTexture(ns._PV_DISPEL_DB_ICONS[dispelType])
             local _z = s.debuffIconZoom or 0.08
@@ -12642,9 +12755,16 @@ local function ApplyPreviewData(f, index)
 
             -- Position using debuff settings
             ddi:ClearAllPoints()
-            local dbPos = s.debuffPosition or "bottomright"
-            local dbOX = s.debuffOffsetX or 0
-            local dbOY = s.debuffOffsetY or 0
+            local dbPos, dbOX, dbOY
+            if dispSplit then
+                dbPos = s.dispellableDebuffLocation
+                dbOX = s.dispellableDebuffOffsetX or 0
+                dbOY = s.dispellableDebuffOffsetY or 0
+            else
+                dbPos = s.debuffPosition or "bottomright"
+                dbOX = s.debuffOffsetX or 0
+                dbOY = s.debuffOffsetY or 0
+            end
             if dbPos == "topleft" then
                 ddi:SetPoint("TOPLEFT", f._health, "TOPLEFT", dbOX, dbOY)
             elseif dbPos == "top" then
@@ -12742,16 +12862,11 @@ local function ApplyPreviewData(f, index)
         local rcStatuses = previewRoles._readyCheck
         local rcStatus = rcStatuses and rcStatuses[index]
         local isSummon = rcStatus and rcStatus:sub(1, 6) == "summon"
-        -- HELD (PR #610 incoming rez, disabled for this build):
-        -- local isRez    = rcStatus == "rez"
-        -- local showRC = indVis and rcStatus and (
-        --     (isRez and s.showIncomingRez) or
-        --     (isSummon and s.showSummonPending) or
-        --     (not isSummon and not isRez and s.showReadyCheck)
-        -- )
+        local isRez    = rcStatus == "rez"
         local showRC = indVis and rcStatus and (
-            (not isSummon and s.showReadyCheck) or
-            (isSummon and s.showSummonPending)
+            (isRez and s.showIncomingRez) or
+            (isSummon and s.showSummonPending) or
+            (not isSummon and not isRez and s.showReadyCheck)
         )
         if showRC then
             local rcSz = PixelSnap(s.readyCheckSize or 20)
@@ -12795,10 +12910,9 @@ local function ApplyPreviewData(f, index)
                 f._readyCheck:SetAtlas("RaidFrame-Icon-SummonAccepted")
             elseif rcStatus == "summon_declined" then
                 f._readyCheck:SetAtlas("RaidFrame-Icon-SummonDeclined")
-            -- HELD (PR #610 incoming rez, disabled for this build):
-            -- elseif rcStatus == "rez" then
-            --     f._readyCheck:SetTexture("Interface\\RaidFrame\\Raid-Icon-Rez")
-            --     f._readyCheck:SetTexCoord(0, 1, 0, 1)
+            elseif rcStatus == "rez" then
+                f._readyCheck:SetTexture("Interface\\RaidFrame\\Raid-Icon-Rez")
+                f._readyCheck:SetTexCoord(0, 1, 0, 1)
             end
             f._readyCheck:Show()
         else
@@ -12869,10 +12983,8 @@ local function ApplyPreviewData(f, index)
     -- Dead/offline/AFK states (only when indicators eyeball is on). The rez slot is
     -- a second corpse (dimmed, no "DEAD" text) that shows an incoming-rez icon in
     -- place of the status text -- mirrors the live "hide DEAD while rezzing" behavior.
-    -- HELD (PR #610 incoming rez, disabled for this build):
-    -- local isRezCorpse = indVis and index == previewRoles._rezSlot
-    -- local isDead      = indVis and (index == previewRoles._deadSlot or isRezCorpse)
-    local isDead      = indVis and index == previewRoles._deadSlot
+    local isRezCorpse = indVis and index == previewRoles._rezSlot
+    local isDead      = indVis and (index == previewRoles._deadSlot or isRezCorpse)
     local isOffline   = indVis and index == previewRoles._offlineSlot
     -- Mark dead/offline preview frames so the animated-preview ticker skips them
     -- (their health bar is emptied and health text hidden -- never animated).
@@ -13019,12 +13131,10 @@ local function ApplyPreviewData(f, index)
         else
             f._statusText:SetPoint("CENTER", f._health, "CENTER", stOX, stOY)
         end
-        -- HELD (PR #610 incoming rez, disabled for this build):
-        -- if isRezCorpse then
-        --     -- Being resurrected: the rez icon takes this spot, so no DEAD text.
-        --     f._statusText:Hide()
-        -- elseif isDead then
-        if isDead then
+        if isRezCorpse then
+            -- Being resurrected: the rez icon takes this spot, so no DEAD text.
+            f._statusText:Hide()
+        elseif isDead then
             f._statusText:SetText(EllesmereUI.L("DEAD"))
             f._statusText:Show()
         elseif isOffline then
@@ -14703,7 +14813,7 @@ function ERF:OnEnable()
     eventFrame:RegisterEvent("READY_CHECK_CONFIRM")
     eventFrame:RegisterEvent("READY_CHECK_FINISHED")
     eventFrame:RegisterEvent("INCOMING_SUMMON_CHANGED")
-    -- eventFrame:RegisterEvent("INCOMING_RESURRECT_CHANGED")  -- HELD (PR #610 incoming rez, disabled for this build)
+    eventFrame:RegisterEvent("INCOMING_RESURRECT_CHANGED")
     eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
     eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")

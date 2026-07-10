@@ -750,77 +750,28 @@ _G._ERB_BAR_TYPE_SPECS = BAR_TYPE_SPECS
 _G._ERB_BuildBarTypeSpecMap = BuildBarTypeSpecMap
 _G._ERB_ResolveThresholdSpecEntry = ResolveThresholdSpecEntry
 
--- Resolve the effective health config table for the player's current spec:
--- an Advanced per-spec override (copy-on-unsync, stored as advancedSpecs[i].health)
--- when one exists for the current spec, otherwise the global health config.
+-- Advanced per-spec mode was retired: per-spec values now live in the shared
+-- Spec Overrides system (see EllesmereUI_SpecOverrides.lua), which writes them
+-- into these same Simple config tables on spec change. The resolvers stay as
+-- functions so call sites are untouched; they resolve the Simple config only.
 _G._ERB_ResolveHealthCfg = function(profile)
     local p = profile or (ERB and ERB.db and ERB.db.profile)
-    if not p then return nil end
-    local specs = p.advancedSpecs
-    if specs and #specs > 0 then
-        local cur = _G._ERB_ResolveSpecIDCached()
-        if cur then
-            for i = 1, #specs do
-                local e = specs[i]
-                -- e.enabled == false => spec's Advanced config is toggled off,
-                -- fall back to the global Simple config (overrides preserved).
-                if e.specID == cur and e.enabled ~= false and e.health then return e.health end
-            end
-        end
-    end
-    return p.health
+    return p and p.health
 end
 
--- power equivalent of _ERB_ResolveHealthCfg
 _G._ERB_ResolvePowerCfg = function(profile)
     local p = profile or (ERB and ERB.db and ERB.db.profile)
-    if not p then return nil end
-    local specs = p.advancedSpecs
-    if specs and #specs > 0 then
-        local cur = _G._ERB_ResolveSpecIDCached()
-        if cur then
-            for i = 1, #specs do
-                local e = specs[i]
-                if e.specID == cur and e.enabled ~= false and e.primary then return e.primary end
-            end
-        end
-    end
-    return p.primary
+    return p and p.primary
 end
 
--- class resource equivalent of _ERB_ResolveHealthCfg
 _G._ERB_ResolveSecondaryCfg = function(profile)
     local p = profile or (ERB and ERB.db and ERB.db.profile)
-    if not p then return nil end
-    local specs = p.advancedSpecs
-    if specs and #specs > 0 then
-        local cur = _G._ERB_ResolveSpecIDCached()
-        if cur then
-            for i = 1, #specs do
-                local e = specs[i]
-                if e.specID == cur and e.enabled ~= false and e.secondary then return e.secondary end
-            end
-        end
-    end
-    return p.secondary
+    return p and p.secondary
 end
 
--- True when the player's current spec has an active Advanced override for the
--- given section ("health" | "primary" | "secondary") - the Simple config
--- for that section is being ignored right now. The options page uses this to
--- overlay the overridden Simple sections, so editing them doesn't silently do
--- nothing. Same match rule as the resolvers above.
-_G._ERB_CurSpecOverridesSection = function(sectionKey, profile)
-    local p = profile or (ERB and ERB.db and ERB.db.profile)
-    if not p then return false end
-    local specs = p.advancedSpecs
-    if not specs or #specs == 0 then return false end
-    local cur = _G._ERB_ResolveSpecIDCached()
-    if not cur then return false end
-    for i = 1, #specs do
-        local e = specs[i]
-        if e.specID == cur and e.enabled ~= false and e[sectionKey] then return true end
-    end
+-- Always false since the Advanced retirement (the options page overlays that
+-- keyed off this are permanently dormant).
+_G._ERB_CurSpecOverridesSection = function()
     return false
 end
 
@@ -1453,6 +1404,12 @@ local function CalcPipGeometry(totalW, numPips, pipSp, frame, esOverride)
     -- 1 physical pixel in this frame's coordinate space
     local onePixel = PP.perfect / es
 
+    -- Zero pips happens transiently while zoning (max class-resource count
+    -- reads 0 mid-load); the pip division would hard-error. Empty geometry.
+    if not numPips or numPips < 1 then
+        return {}, 0, onePixel, 0
+    end
+
     -- Snap spacing to nearest whole physical pixel (minimum 1px)
     local spPx = math.max(1, math.floor(pipSp / onePixel + 0.5))
 
@@ -1747,15 +1704,12 @@ end
 
 
 -------------------------------------------------------------------------------
---  Per-spec bar enable check
+--  Per-spec bar enable check -- retired. Per-spec enables migrated into Spec
+--  Overrides (they now flip cfg.enabled per spec), so the disabledSpecs
+--  filter is permanently inert. Kept as a function so call sites stand.
 -------------------------------------------------------------------------------
-local function IsSpecDisabled(barCfg)
-    local disabledSpecs = barCfg and barCfg.disabledSpecs
-    if not disabledSpecs then return false end
-    local specIdx = GetSpecialization()
-    if not specIdx then return false end
-    local specID = specIdx and C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo(specIdx)
-    return specID and disabledSpecs[specID] or false
+local function IsSpecDisabled()
+    return false
 end
 
 -------------------------------------------------------------------------------
@@ -7568,7 +7522,21 @@ end
 --  Initialization
 -------------------------------------------------------------------------------
 function ERB:OnInitialize()
+    -- Spec Overrides migration basis: stored profile tables are sparse (Lite
+    -- merges defaults at NewDB, they are not persisted), so the RB Advanced
+    -- migration compares against these defaults. Export, then migrate every
+    -- stored profile (idempotent; flagged per RB profile table).
+    EllesmereUI._RBSectionDefaults = {
+        health    = DEFAULTS.profile.health,
+        primary   = DEFAULTS.profile.primary,
+        secondary = DEFAULTS.profile.secondary,
+    }
     self.db = EllesmereUI.Lite.NewDB("EllesmereUIResourceBarsDB", DEFAULTS, true)
+    if EllesmereUI.MigrateRBAdvancedProfile and EllesmereUIDB and EllesmereUIDB.profiles then
+        for _, prof in pairs(EllesmereUIDB.profiles) do
+            EllesmereUI.MigrateRBAdvancedProfile(prof)
+        end
+    end
 
     _G._ERB_AceDB = self.db
     _G._ERB_Apply = function() ERB:ApplyAll() end

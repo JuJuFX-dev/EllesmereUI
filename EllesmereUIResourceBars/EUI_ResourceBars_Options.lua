@@ -2890,76 +2890,8 @@ initFrame:SetScript("OnEvent", function(self)
               end }
         );  y = y - h
 
-        -- Per-spec enable picker -- Simple page only (redundant on Advanced).
-        if not ctx.advanced then
-            local rgn = healthEnableRow._leftRegion
-            local specBtn = CreateFrame("Button", nil, rgn)
-            specBtn:SetSize(26, 26)
-            specBtn:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
-            rgn._lastInline = specBtn
-            specBtn:SetFrameLevel(rgn:GetFrameLevel() + 5)
-            specBtn:SetAlpha(healthOff() and 0.15 or 0.4)
-            local specTex = specBtn:CreateTexture(nil, "OVERLAY")
-            specTex:SetAllPoints()
-            specTex:SetDesaturated(true)
-            do
-                local _, classFile = UnitClass("player")
-                local SPRITE = "Interface\\AddOns\\EllesmereUI\\media\\icons\\class-full\\glyph.tga"
-                local COORDS = {
-                    WARRIOR={0,0.125,0,0.125}, MAGE={0.125,0.25,0,0.125}, ROGUE={0.25,0.375,0,0.125},
-                    DRUID={0.375,0.5,0,0.125}, EVOKER={0.5,0.625,0,0.125}, HUNTER={0,0.125,0.125,0.25},
-                    SHAMAN={0.125,0.25,0.125,0.25}, PRIEST={0.25,0.375,0.125,0.25}, WARLOCK={0.375,0.5,0.125,0.25},
-                    PALADIN={0,0.125,0.25,0.375}, DEATHKNIGHT={0.125,0.25,0.25,0.375},
-                    MONK={0.25,0.375,0.25,0.375}, DEMONHUNTER={0.375,0.5,0.25,0.375},
-                }
-                specTex:SetTexture(SPRITE)
-                local c = classFile and COORDS[classFile]
-                if c then specTex:SetTexCoord(c[1], c[2], c[3], c[4]) end
-            end
-            specBtn:SetScript("OnEnter", function(self)
-                if healthOff() then return end
-                self:SetAlpha(0.7)
-                EllesmereUI.ShowWidgetTooltip(self, EllesmereUI.L("Enable/Disable per Spec"))
-            end)
-            specBtn:SetScript("OnLeave", function(self) self:SetAlpha(healthOff() and 0.15 or 0.4); EllesmereUI.HideWidgetTooltip() end)
-            specBtn:SetScript("OnClick", function()
-                if healthOff() then return end
-                local c = cfg(); if not c then return end
-                if not c.disabledSpecs then c.disabledSpecs = {} end
-                local SPEC_DATA = EllesmereUI._SPEC_DATA
-                local preChecked = {}
-                local allSpecIDs = {}
-                if SPEC_DATA then
-                    for _, cls in ipairs(SPEC_DATA) do
-                        for _, spec in ipairs(cls.specs) do
-                            allSpecIDs[#allSpecIDs + 1] = spec.id
-                            if not c.disabledSpecs[spec.id] then
-                                preChecked[spec.id] = true
-                            end
-                        end
-                    end
-                end
-                local dummyDB = { _erbHealth = { _specs = {} } }
-                EllesmereUI:ShowSpecAssignPopup({
-                    db              = dummyDB,
-                    dbKey           = "_erbHealth",
-                    presetKey       = "_specs",
-                    title           = EllesmereUI.L("Health Bar"),
-                    subtitle        = EllesmereUI.L("Enable for these specs:"),
-                    buttonText      = EllesmereUI.L("Apply"),
-                    preCheckedSpecs = preChecked,
-                    onConfirm       = function(assignments)
-                        c.disabledSpecs = {}
-                        for _, specID in ipairs(allSpecIDs) do
-                            if not assignments[specID] then
-                                c.disabledSpecs[specID] = true
-                            end
-                        end
-                        RebuildHealth(); EllesmereUI:RefreshPage()
-                    end,
-                })
-            end)
-        end
+        -- (Per-spec enable picker removed: per-spec enables now live in Spec
+        -- Overrides -- capture "Show Health Bar" while editing as a group.)
 
         -- Row 2: Height | Width. MatchGuard (dimension matched to ANOTHER element
         -- via Unlock Mode) is a global relationship that greys the slider in BOTH
@@ -3571,6 +3503,12 @@ initFrame:SetScript("OnEvent", function(self)
             popupTitle = "Health Bar Threshold",
             defaultR = 1.0, defaultG = 0.2, defaultB = 0.2, defaultA = 1,
         })
+        -- Thresholds have their own per-spec system: lock the slot whenever a
+        -- Spec Overrides editing session is active.
+        if EllesmereUI.SpecOverrides_AttachEditLock then
+            EllesmereUI.SpecOverrides_AttachEditLock(healthColorRow._rightRegion,
+                "Thresholds have their own per-spec system and can't be edited while editing a spec group")
+        end
 
         -- Synced overlay: cover the fully-built content (near-opaque, controls
         -- barely visible) so the section is the same height synced or not.
@@ -3664,76 +3602,8 @@ initFrame:SetScript("OnEvent", function(self)
               end }
         );  y = y - h
 
-        -- Per-spec enable picker -- Simple page only (redundant on Advanced).
-        if not ctx.advanced then
-            local rgn = powerEnableRow._leftRegion
-            local specBtn = CreateFrame("Button", nil, rgn)
-            specBtn:SetSize(26, 26)
-            specBtn:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
-            rgn._lastInline = specBtn
-            specBtn:SetFrameLevel(rgn:GetFrameLevel() + 5)
-            specBtn:SetAlpha(powerOff() and 0.15 or 0.4)
-            local specTex = specBtn:CreateTexture(nil, "OVERLAY")
-            specTex:SetAllPoints()
-            specTex:SetDesaturated(true)
-            do
-                local _, classFile = UnitClass("player")
-                local SPRITE = "Interface\\AddOns\\EllesmereUI\\media\\icons\\class-full\\glyph.tga"
-                local COORDS = {
-                    WARRIOR={0,0.125,0,0.125}, MAGE={0.125,0.25,0,0.125}, ROGUE={0.25,0.375,0,0.125},
-                    DRUID={0.375,0.5,0,0.125}, EVOKER={0.5,0.625,0,0.125}, HUNTER={0,0.125,0.125,0.25},
-                    SHAMAN={0.125,0.25,0.125,0.25}, PRIEST={0.25,0.375,0.125,0.25}, WARLOCK={0.375,0.5,0.125,0.25},
-                    PALADIN={0,0.125,0.25,0.375}, DEATHKNIGHT={0.125,0.25,0.25,0.375},
-                    MONK={0.25,0.375,0.25,0.375}, DEMONHUNTER={0.375,0.5,0.25,0.375},
-                }
-                specTex:SetTexture(SPRITE)
-                local c = classFile and COORDS[classFile]
-                if c then specTex:SetTexCoord(c[1], c[2], c[3], c[4]) end
-            end
-            specBtn:SetScript("OnEnter", function(self)
-                if powerOff() then return end
-                self:SetAlpha(0.7)
-                EllesmereUI.ShowWidgetTooltip(self, EllesmereUI.L("Enable/Disable per Spec"))
-            end)
-            specBtn:SetScript("OnLeave", function(self) self:SetAlpha(powerOff() and 0.15 or 0.4); EllesmereUI.HideWidgetTooltip() end)
-            specBtn:SetScript("OnClick", function()
-                if powerOff() then return end
-                local c = cfg(); if not c then return end
-                if not c.disabledSpecs then c.disabledSpecs = {} end
-                local SPEC_DATA = EllesmereUI._SPEC_DATA
-                local preChecked = {}
-                local allSpecIDs = {}
-                if SPEC_DATA then
-                    for _, cls in ipairs(SPEC_DATA) do
-                        for _, spec in ipairs(cls.specs) do
-                            allSpecIDs[#allSpecIDs + 1] = spec.id
-                            if not c.disabledSpecs[spec.id] then
-                                preChecked[spec.id] = true
-                            end
-                        end
-                    end
-                end
-                local dummyDB = { _erbPower = { _specs = {} } }
-                EllesmereUI:ShowSpecAssignPopup({
-                    db              = dummyDB,
-                    dbKey           = "_erbPower",
-                    presetKey       = "_specs",
-                    title           = EllesmereUI.L("Power Bar"),
-                    subtitle        = EllesmereUI.L("Enable for these specs:"),
-                    buttonText      = EllesmereUI.L("Apply"),
-                    preCheckedSpecs = preChecked,
-                    onConfirm       = function(assignments)
-                        c.disabledSpecs = {}
-                        for _, specID in ipairs(allSpecIDs) do
-                            if not assignments[specID] then
-                                c.disabledSpecs[specID] = true
-                            end
-                        end
-                        Refresh(); EllesmereUI:RefreshPage()
-                    end,
-                })
-            end)
-        end
+        -- (Per-spec enable picker removed: per-spec enables now live in Spec
+        -- Overrides -- capture "Show Power Bar" while editing as a group.)
 
         -- Row 2: Height | Width (MatchGuard both modes; sync icons Simple-only).
         local function guard(propKey)
@@ -4339,6 +4209,12 @@ initFrame:SetScript("OnEvent", function(self)
             defaultR = 1.0, defaultG = 0.2, defaultB = 0.2, defaultA = 1,
             formCapable = true,
         })
+        -- Thresholds have their own per-spec system: lock the slot whenever a
+        -- Spec Overrides editing session is active.
+        if EllesmereUI.SpecOverrides_AttachEditLock then
+            EllesmereUI.SpecOverrides_AttachEditLock(powerColorRow._rightRegion,
+                "Thresholds have their own per-spec system and can't be edited while editing a spec group")
+        end
 
         -- Synced overlay: cover the fully-built content so size is constant.
         if ctx.advanced and ctx.synced and _advTop then
@@ -4565,75 +4441,9 @@ initFrame:SetScript("OnEvent", function(self)
                 EllesmereUI.RegisterWidgetRefresh(UpdateClassCogDis)
                 UpdateClassCogDis()
             end
-            do
-                local rgn = classEnableRow._leftRegion
-                local specBtn = CreateFrame("Button", nil, rgn)
-                specBtn:SetSize(26, 26)
-                specBtn:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
-                rgn._lastInline = specBtn
-                specBtn:SetFrameLevel(rgn:GetFrameLevel() + 5)
-                specBtn:SetAlpha(classOff() and 0.15 or 0.4)
-                local specTex = specBtn:CreateTexture(nil, "OVERLAY")
-                specTex:SetAllPoints()
-                specTex:SetDesaturated(true)
-                do
-                    local _, classFile = UnitClass("player")
-                    local SPRITE = "Interface\\AddOns\\EllesmereUI\\media\\icons\\class-full\\glyph.tga"
-                    local COORDS = {
-                        WARRIOR={0,0.125,0,0.125}, MAGE={0.125,0.25,0,0.125}, ROGUE={0.25,0.375,0,0.125},
-                        DRUID={0.375,0.5,0,0.125}, EVOKER={0.5,0.625,0,0.125}, HUNTER={0,0.125,0.125,0.25},
-                        SHAMAN={0.125,0.25,0.125,0.25}, PRIEST={0.25,0.375,0.125,0.25}, WARLOCK={0.375,0.5,0.125,0.25},
-                        PALADIN={0,0.125,0.25,0.375}, DEATHKNIGHT={0.125,0.25,0.25,0.375},
-                        MONK={0.25,0.375,0.25,0.375}, DEMONHUNTER={0.375,0.5,0.25,0.375},
-                    }
-                    specTex:SetTexture(SPRITE)
-                    local c = classFile and COORDS[classFile]
-                    if c then specTex:SetTexCoord(c[1], c[2], c[3], c[4]) end
-                end
-                specBtn:SetScript("OnEnter", function(self)
-                    if classOff() then return end
-                    self:SetAlpha(0.7)
-                    EllesmereUI.ShowWidgetTooltip(self, EllesmereUI.L("Enable/Disable per Spec"))
-                end)
-                specBtn:SetScript("OnLeave", function(self) self:SetAlpha(classOff() and 0.15 or 0.4); EllesmereUI.HideWidgetTooltip() end)
-                specBtn:SetScript("OnClick", function()
-                    if classOff() then return end
-                    local c = cfg(); if not c then return end
-                    if not c.disabledSpecs then c.disabledSpecs = {} end
-                    local SPEC_DATA = EllesmereUI._SPEC_DATA
-                    local preChecked = {}
-                    local allSpecIDs = {}
-                    if SPEC_DATA then
-                        for _, cls in ipairs(SPEC_DATA) do
-                            for _, spec in ipairs(cls.specs) do
-                                allSpecIDs[#allSpecIDs + 1] = spec.id
-                                if not c.disabledSpecs[spec.id] then
-                                    preChecked[spec.id] = true
-                                end
-                            end
-                        end
-                    end
-                    local dummyDB = { _erbSecondary = { _specs = {} } }
-                    EllesmereUI:ShowSpecAssignPopup({
-                        db              = dummyDB,
-                        dbKey           = "_erbSecondary",
-                        presetKey       = "_specs",
-                        title           = EllesmereUI.L("Class Resource Bar"),
-                        subtitle        = EllesmereUI.L("Enable for these specs:"),
-                        buttonText      = EllesmereUI.L("Apply"),
-                        preCheckedSpecs = preChecked,
-                        onConfirm       = function(assignments)
-                            c.disabledSpecs = {}
-                            for _, specID in ipairs(allSpecIDs) do
-                                if not assignments[specID] then
-                                    c.disabledSpecs[specID] = true
-                                end
-                            end
-                            RebuildClass(); EllesmereUI:RefreshPage()
-                        end,
-                    })
-                end)
-            end
+            -- (Per-spec enable picker removed: per-spec enables now live in
+            -- Spec Overrides -- capture "Show Class Resource" while editing
+            -- as a group.)
         end
 
         -- Row 2: Height | Width (MatchGuard both modes; sync icons Simple-only).
@@ -5297,6 +5107,12 @@ initFrame:SetScript("OnEvent", function(self)
         -- Settings button + popup on Threshold & Hash Lines (row 5 slot 2)
         do
             local settingsRgn = classColorRow._rightRegion
+            -- Thresholds have their own per-spec system: lock the slot
+            -- whenever a Spec Overrides editing session is active.
+            if EllesmereUI.SpecOverrides_AttachEditLock then
+                EllesmereUI.SpecOverrides_AttachEditLock(settingsRgn,
+                    "Thresholds have their own per-spec system and can't be edited while editing a spec group")
+            end
 
             -- Advanced: this popup edits the per-spec override (cfg()), which only
             -- applies while playing ctx.specID. Drop the spec-assignment chrome
@@ -7169,60 +6985,9 @@ initFrame:SetScript("OnEvent", function(self)
         -- Populate click mappings for preview hit overlays
         wipe(_clickMappings)
 
-        -----------------------------------------------------------------------
-        --  SUB-MENU: Simple | Advanced  (sits between the preview and the page
-        --  content). Mirrors the Raid Frames buff-manager Simple/Custom header:
-        --  the choice is stored per-profile and switching rebuilds the page.
-        --  Advanced content lives in EUI_ResourceBars_Advanced.lua.
-        -----------------------------------------------------------------------
-        local barMode = (DB() and DB().barDisplayMode == "advanced") and "advanced" or "simple"
-        do
-            -- Two square buttons in a bordered bar (active = green), exactly like
-            -- the buff-manager Simple/Custom header -- not a rounded pill.
-            local EG = EllesmereUI.ELLESMERE_GREEN or { r = 0.05, g = 0.82, b = 0.62 }
-            local BTN_W, BTN_H = 130, 28
-            local MODES = { { key = "simple", label = "Simple" }, { key = "advanced", label = "Advanced" } }
-
-            local toggleWrap = CreateFrame("Frame", nil, parent)
-            toggleWrap:SetSize(BTN_W * #MODES, BTN_H)
-            PP.Point(toggleWrap, "TOP", parent, "TOP", 0, y - 4)
-            toggleWrap:SetFrameLevel(parent:GetFrameLevel() + 1)
-            if PP and PP.CreateBorder then PP.CreateBorder(toggleWrap, 1, 1, 1, 0.10, 1) end
-
-            for i, m in ipairs(MODES) do
-                local btn = CreateFrame("Button", nil, toggleWrap)
-                btn:SetSize(BTN_W, BTN_H)
-                btn:SetPoint("LEFT", toggleWrap, "LEFT", (i - 1) * BTN_W, 0)
-                local active = (barMode == m.key)
-                local bg = btn:CreateTexture(nil, "BACKGROUND")
-                bg:SetAllPoints()
-                local lbl = EllesmereUI.MakeFont(btn, 13, nil, 1, 1, 1)
-                lbl:SetPoint("CENTER")
-                lbl:SetText(EllesmereUI.L(m.label))
-                if active then
-                    bg:SetColorTexture(EG.r, EG.g, EG.b, 0.85)
-                    lbl:SetTextColor(1, 1, 1, 1)
-                else
-                    bg:SetColorTexture(0.10, 0.10, 0.11, 0.85)
-                    lbl:SetTextColor(1, 1, 1, 0.55)
-                    btn:SetScript("OnEnter", function() bg:SetColorTexture(0.16, 0.16, 0.17, 0.9); lbl:SetTextColor(1, 1, 1, 0.85) end)
-                    btn:SetScript("OnLeave", function() bg:SetColorTexture(0.10, 0.10, 0.11, 0.85); lbl:SetTextColor(1, 1, 1, 0.55) end)
-                    btn:SetScript("OnClick", function()
-                        local p = DB(); if p then p.barDisplayMode = m.key end
-                        EllesmereUI:RefreshPage(true)
-                    end)
-                end
-            end
-
-            y = y - BTN_H - 16
-        end
-
-        if barMode == "advanced" then
-            if ns.ERB_BuildAdvancedPage then
-                return ns.ERB_BuildAdvancedPage(parent, y)
-            end
-            return math.abs(y)
-        end
+        -- The Simple | Advanced sub-menu was retired: per-spec editing now
+        -- lives in the shared Spec Overrides system (spec groups + editing-as).
+        -- Legacy Advanced data migrates via MigrateRBAdvancedProfile.
 
         -----------------------------------------------------------------------
         --  BAR DISPLAY

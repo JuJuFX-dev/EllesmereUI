@@ -134,6 +134,15 @@ end
 -------------------------------------------------------------------------------
 
 local function BuildToggleControl(parent, frameLevel, getValue, setValue, opts)
+    -- Spec Overrides auto-capture: report every write with its host frame so
+    -- an active Editing-as session captures it with exact slot attribution.
+    do
+        local _s = setValue
+        setValue = function(...)
+            _s(...)
+            if EllesmereUI._NotifySettingWrite then EllesmereUI._NotifySettingWrite(parent) end
+        end
+    end
     do local _r = setValue; setValue = function(...) _r(...); EllesmereUI._settingsChanged = true end end
     opts = opts or {}
     local RealPP = EllesmereUI.PP
@@ -536,7 +545,16 @@ end
 local DD_MAX_HEIGHT = 200
 
 local function BuildDropdownMenu(ddBtn, menuW, order, values, getValue, setValue, ddLbl, style, disabledValuesFn)
-    do local _r = setValue; setValue = function(...) _r(...); EllesmereUI._settingsChanged = true end end
+    do
+        local _r = setValue
+        setValue = function(...)
+            _r(...)
+            EllesmereUI._settingsChanged = true
+            -- Spec Overrides auto-capture: see BuildToggleControl. The
+            -- dropdown button sits inside the host slot's region.
+            if EllesmereUI._NotifySettingWrite then EllesmereUI._NotifySettingWrite(ddBtn) end
+        end
+    end
     local isWide = (style == "wide")
     -- Localize visible item captions only. Data dropdowns (profile/spell lists,
     -- etc.) opt out via values._noLoc so their entries are never translated.
@@ -573,6 +591,9 @@ local function BuildDropdownMenu(ddBtn, menuW, order, values, getValue, setValue
     -- (fixes the giant-font / behind-render nested dropdown).
     -- Otherwise UIParent (default) so page dropdowns escape the scroll-frame clip.
     local menu = CreateFrame("Frame", nil, (_menuOpts and _menuOpts.parent) or UIParent)
+    -- Spec Overrides auto-capture: edits made through this menu attribute to
+    -- the slot whose dropdown opened it (see the attribution walk).
+    menu._euiOptionsPopup = true
     menu:SetFrameStrata("FULLSCREEN_DIALOG")
     menu:SetFrameLevel(200)
     menu:SetClampedToScreen(true)
@@ -1313,6 +1334,14 @@ local RD_DD_COLOURS = {
 -- Build a complete slider core (track + fill + thumb + input + drag logic).
 -- Returns: frame (the container), currentVal (for external reads), UpdateSliderVisual
 local function BuildSliderCore(parent, trackW, trackH, thumbSz, inputW, inputH, inputFontSz, inputAlpha, minVal, maxVal, step, getValue, setValue, isMultiWidget, snapPoints)
+    -- Spec Overrides auto-capture: see BuildToggleControl.
+    do
+        local _s = setValue
+        setValue = function(...)
+            _s(...)
+            if EllesmereUI._NotifySettingWrite then EllesmereUI._NotifySettingWrite(parent) end
+        end
+    end
     do local _r = setValue; setValue = function(...) _r(...); EllesmereUI._settingsChanged = true end end
     -- Multi-widget overrides: boost track alpha (brighter), boost input alpha
     local trkR, trkG, trkB, trkA = SL.TRACK_R, SL.TRACK_G, SL.TRACK_B, SL.TRACK_A
@@ -2224,6 +2253,9 @@ function WidgetFactory:Toggle(parent, text, yOffset, getValue, setValue, tooltip
 
     RegisterWidgetRefresh(tgSnap)
 
+    -- Spec Overrides capture: see DualRow BuildHalf.
+    frame._captureCfg = { type = "toggle", text = text, getValue = getValue, setValue = setValue }
+
     return frame, ROW_H
 end
 
@@ -2242,6 +2274,8 @@ function WidgetFactory:Slider(parent, text, yOffset, minVal, maxVal, step, getVa
     PP.Point(valBox, "RIGHT", frame, "RIGHT", -20, 0)
     PP.Point(trackFrame, "RIGHT", valBox, "LEFT", -16, 0)
     AttachLabelHover(frame, label, (ClampRowLabel(label, trackFrame, "LEFT", 12, text, tooltip)))
+    -- Spec Overrides capture: see DualRow BuildHalf.
+    frame._captureCfg = { type = "slider", text = text, min = minVal, max = maxVal, step = step, getValue = getValue, setValue = setValue }
     return frame, ROW_H
 end
 
@@ -3039,6 +3073,9 @@ local function BuildColorPickerPopup()
         popup:Show(); UpdateAllControls()
     end
 
+    -- Spec Overrides auto-capture: edits made in the color picker attribute
+    -- to the slot whose swatch opened it (see the attribution walk).
+    popup._euiOptionsPopup = true
     EllesmereUI._colorPickerPopup = popup
     return popup
 end
@@ -3054,6 +3091,15 @@ end
 -- The rainbow border image + white border textures are deferred until the swatch
 -- is first shown, keeping initial page build lightweight.
 local function BuildColorSwatch(parentFrame, baseLevel, getValue, setValue, hasAlpha, overrideSize)
+    -- Spec Overrides auto-capture: see BuildToggleControl. Fires for direct
+    -- swatch writes and for every color-picker change routed through it.
+    do
+        local _s = setValue
+        setValue = function(...)
+            _s(...)
+            if EllesmereUI._NotifySettingWrite then EllesmereUI._NotifySettingWrite(parentFrame) end
+        end
+    end
     do local _r = setValue; setValue = function(...) _r(...); EllesmereUI._settingsChanged = true end end
     local SWATCH_SZ = overrideSize or 24
     local swatch = CreateFrame("Button", nil, parentFrame)
@@ -3129,6 +3175,18 @@ local function BuildColorSwatch(parentFrame, baseLevel, getValue, setValue, hasA
         EllesmereUI:ShowColorPicker(info, swatch)
     end)
 
+    -- Spec Overrides capture: an inline swatch belongs to the slot hosting it
+    -- (options files call this with the DualRow half-region as the parent),
+    -- so it joins that slot's capture group. AddCaptureAccessor dedupes by
+    -- getValue identity, so factory-built swatches (colorpicker halves,
+    -- multiSwatch rows) whose accessors are stashed separately never double.
+    if EllesmereUI.AddCaptureAccessor and not parentFrame._noCapture then
+        EllesmereUI.AddCaptureAccessor(parentFrame, {
+            type = "colorpicker", hasAlpha = hasAlpha,
+            getValue = getValue, setValue = setValue,
+        })
+    end
+
     return swatch, UpdateSwatch
 end
 
@@ -3189,6 +3247,34 @@ function WidgetFactory:WideButton(parent, text, yOffset, onClick, btnWidth)
     return frame, ROW_H
 end
 
+-- Spec Overrides capture: append an extra accessor to a region/row's capture
+-- config, so inline extras (swatches, cog fields, inline toggles) built
+-- outside the factory capture TOGETHER with the slot's main setting as one
+-- override. acc = { type, text, getValue, setValue, step/values/order/hasAlpha }.
+function EllesmereUI.AddCaptureAccessor(region, acc)
+    if not (region and acc and acc.getValue and acc.setValue) then return end
+    local cc = region._captureCfg
+    -- Dedupe by getValue identity: factory paths stash some controls
+    -- themselves (colorpicker halves, multiSwatch rows) and BuildColorSwatch
+    -- also self-registers -- the same accessor must never join twice.
+    if cc then
+        if cc.getValue == acc.getValue then return end
+        if cc.accessors then
+            for _, a in ipairs(cc.accessors) do
+                if a.getValue == acc.getValue then return end
+            end
+        end
+    end
+    if not cc then
+        region._captureCfg = { type = "multi", text = acc.text, accessors = { acc } }
+    elseif cc.accessors then
+        cc.accessors[#cc.accessors + 1] = acc
+    else
+        -- Promote a single-accessor widget cfg to a grouped slot cfg.
+        region._captureCfg = { type = "multi", text = cc.text, accessors = { cc, acc } }
+    end
+end
+
 -- DualRow  (two widgets side by side on a single full-width row with 1px center divider)
 -- Each side: { type = "slider"|"dropdown"|"toggle"|"colorpicker", ... }
 -- Slider:      { type="slider", text, min, max, step, getValue, setValue }
@@ -3224,6 +3310,29 @@ function WidgetFactory:DualRow(parent, yOffset, leftCfg, rightCfg)
     local function BuildHalf(region, cfg)
         if not cfg then return end
         local t = cfg.type
+        -- Spec Overrides capture: expose the widget config so the capture
+        -- overlay can identify settings. A slot is ONE setting: multiSwatch
+        -- slots capture all their swatches together, and inline extras join
+        -- via EllesmereUI.AddCaptureAccessor. cfg.noCapture opts a widget out
+        -- (used by the Spec Overrides page's own mirrored editors).
+        if cfg.noCapture then
+            region._captureCfg = nil
+            region._noCapture = true
+        elseif cfg.getValue and cfg.setValue then
+            region._captureCfg = cfg
+        elseif t == "multiSwatch" and cfg.swatches then
+            local accs = {}
+            for i = 1, #cfg.swatches do
+                local sc = cfg.swatches[i]
+                if sc.getValue and sc.setValue then
+                    accs[#accs + 1] = { type = "colorpicker", text = sc.tooltip or cfg.text,
+                        hasAlpha = sc.hasAlpha, getValue = sc.getValue, setValue = sc.setValue }
+                end
+            end
+            if #accs > 0 then
+                region._captureCfg = { type = "multi", text = cfg.text, accessors = accs }
+            end
+        end
         -- Empty half-space placeholder for dual/third rows.
         if t == "spacer" then
             region._control = nil
@@ -3650,6 +3759,12 @@ function WidgetFactory:TripleRow(parent, yOffset, leftCfg, midCfg, rightCfg, spl
     local function BuildThird(region, cfg)
         if not cfg then return end
         local t = cfg.type
+        -- Spec Overrides capture: see DualRow BuildHalf.
+        if cfg.noCapture then
+            region._noCapture = true
+        elseif cfg.getValue and cfg.setValue then
+            region._captureCfg = cfg
+        end
         local label = MakeFont(region, 14, nil, TEXT_WHITE_R, TEXT_WHITE_G, TEXT_WHITE_B)
         PP.Point(label, "LEFT", region, "LEFT", SIDE_PAD, 0)
         label:SetText(EllesmereUI.L(cfg.text or ""))
@@ -3952,6 +4067,7 @@ function WidgetFactory:MultiSwatchRow(parent, yOffset, cfg)
 
     -- Build swatches right-to-left from the right edge
     local swatches = cfg.swatches or {}
+    if cfg.noCapture then frame._noCapture = true end
     local anchorX = -SIDE_PAD
     for i = #swatches, 1, -1 do
         local sc = swatches[i]
@@ -3999,6 +4115,22 @@ function WidgetFactory:MultiSwatchRow(parent, yOffset, cfg)
                 end)
             end
             RegisterWidgetRefresh(function() updateSwatch() end)
+        end
+    end
+
+    -- Spec Overrides capture: the whole row is ONE setting; all swatches
+    -- capture together (see DualRow BuildHalf).
+    do
+        local accs = {}
+        for i = 1, #swatches do
+            local sc = swatches[i]
+            if sc.getValue and sc.setValue then
+                accs[#accs + 1] = { type = "colorpicker", text = sc.tooltip or cfg.text,
+                    hasAlpha = sc.hasAlpha, getValue = sc.getValue, setValue = sc.setValue }
+            end
+        end
+        if #accs > 0 and not cfg.noCapture then
+            frame._captureCfg = { type = "multi", text = cfg.text, accessors = accs }
         end
     end
 
@@ -4290,6 +4422,25 @@ end
 --  Returns: popupFrame, showFn(anchorBtn)
 -------------------------------------------------------------------------------
 local function BuildCogPopup(opts)
+    -- Spec Overrides capture: a cog's settings belong to the slot hosting the
+    -- cog -- one setting, captured whole. When the call site passes
+    -- captureRegion (the DualRow half-region the cog sits in), every row with
+    -- get/set joins that slot's capture group.
+    if opts.captureRegion and EllesmereUI.AddCaptureAccessor and opts.rows then
+        for _, row in ipairs(opts.rows) do
+            if row.get and row.set and row.type ~= "button" and row.type ~= "reorder" then
+                EllesmereUI.AddCaptureAccessor(opts.captureRegion, {
+                    type = row.type, text = row.label, getValue = row.get, setValue = row.set,
+                    min = row.min, max = row.max, step = row.step,
+                    values = row.values, order = row.order,
+                    -- Cog rows keep their grouping so the Spec Overrides page
+                    -- can mirror the slot 1:1 with a real inline cog.
+                    fromCog = true, cogTitle = opts.title,
+                })
+            end
+        end
+    end
+
     local SIDE_PAD         = 14
     local TOP_PAD          = 14
     local TITLE_H          = 11
@@ -4309,6 +4460,22 @@ local function BuildCogPopup(opts)
 
     local popupFrame, popupOwner
     local rowWidgets = {}  -- stores per-row refresh info
+
+    -- Spec Overrides auto-capture: report cog row writes attributed to the
+    -- cog's anchor button (it sits inside the host slot's region).
+    if opts.rows then
+        for _, row in ipairs(opts.rows) do
+            if row.set then
+                local _s = row.set
+                row.set = function(...)
+                    _s(...)
+                    if EllesmereUI._NotifySettingWrite then
+                        EllesmereUI._NotifySettingWrite(popupOwner or opts.captureRegion)
+                    end
+                end
+            end
+        end
+    end
 
     local function CreatePopup()
         -- Measure slider labels to find maxLblW
@@ -4377,6 +4544,9 @@ local function BuildCogPopup(opts)
         pf:SetSize(POPUP_W, totalH)
         pf:SetFrameStrata(opts.frameStrata or "DIALOG"); pf:SetFrameLevel(opts.frameLevel or 200)
         pf:EnableMouse(true); pf:Hide()
+        -- Spec Overrides auto-capture: edits made inside this popup attribute
+        -- to the slot whose cog opened it (see the attribution walk).
+        pf._euiOptionsPopup = true
 
         -- Match panel scale so cog popup looks identical to scrollable-area widgets
         local ppScale = EllesmereUI.GetPopupScale and EllesmereUI.GetPopupScale() or 1
