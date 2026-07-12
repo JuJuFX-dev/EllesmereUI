@@ -100,12 +100,17 @@ local DRAG_HEADERS = {
 
 -- Blizzard windows that normally dock beside CharacterFrame (Item Upgrade,
 -- Transmog, Item Socketing, Merchant -- covers vendors like the Crest
--- Exchange). See the docking hook in HookFrame for why and how.
+-- Exchange -- plus Friends, Guild/Communities, and Professions, which
+-- normally sit to CharacterFrame's left with CharacterFrame staying put).
+-- See the docking hook in HookFrame for why and how.
 local DOCKING_COMPANIONS = {
     ItemUpgradeFrame = true,
     TransmogFrame = true,
     ItemSocketingFrame = true,
     MerchantFrame = true,
+    FriendsFrame = true,
+    CommunitiesFrame = true,
+    ProfessionsFrame = true,
 }
 
 -------------------------------------------------------------------------------
