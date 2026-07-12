@@ -111,6 +111,10 @@ local DOCKING_COMPANIONS = {
     FriendsFrame = true,
     CommunitiesFrame = true,
     ProfessionsFrame = true,
+    ProfessionsBookFrame = true,
+    WorldMapFrame = true,
+    HousingDashboardFrame = true,
+    PVEFrame = true,
 }
 
 -------------------------------------------------------------------------------
@@ -558,14 +562,41 @@ local function HookFrame(frame, name)
             local w = frame:GetWidth() or 0
             local leftRoom = cf:GetLeft() or 0
             local rightRoom = (GetScreenWidth() or 0) - (cf:GetRight() or 0)
-            ffd._shIgnoreSP = true
-            frame:ClearAllPoints()
-            if leftRoom >= w + margin or leftRoom >= rightRoom then
-                frame:SetPoint("TOPRIGHT", cf, "TOPLEFT", -margin, 0)
+            local dockLeft = leftRoom >= w + margin or leftRoom >= rightRoom
+            if frame:IsProtected() then
+                -- Plain SetPoint on a protected frame (e.g. PVEFrame) taints
+                -- it -- same reason SecureSetPoint exists for saved/dragged
+                -- positions above. SecureSetPoint only anchors relative to
+                -- UIParent, so convert the target screen position into a
+                -- UIParent-CENTER-relative offset the same way CaptureCenter
+                -- does for scale-safe repositioning elsewhere in this file.
+                if InCombatLockdown() then return end
+                local h = frame:GetHeight() or 0
+                local targetCenterX
+                if dockLeft then
+                    targetCenterX = (cf:GetLeft() or 0) - margin - w / 2
+                else
+                    targetCenterX = (cf:GetRight() or 0) + margin + w / 2
+                end
+                local targetCenterY = (cf:GetTop() or 0) - h / 2
+                local ucx, ucy = UIParent:GetCenter()
+                local es = frame:GetEffectiveScale()
+                local ues = UIParent:GetEffectiveScale()
+                if ucx and es and es > 0 then
+                    local offsetX = (targetCenterX * es - ucx * ues) / es
+                    local offsetY = (targetCenterY * es - ucy * ues) / es
+                    SecureSetPoint(frame, "CENTER", "CENTER", offsetX, offsetY)
+                end
             else
-                frame:SetPoint("TOPLEFT", cf, "TOPRIGHT", margin, 0)
+                ffd._shIgnoreSP = true
+                frame:ClearAllPoints()
+                if dockLeft then
+                    frame:SetPoint("TOPRIGHT", cf, "TOPLEFT", -margin, 0)
+                else
+                    frame:SetPoint("TOPLEFT", cf, "TOPRIGHT", margin, 0)
+                end
+                ffd._shIgnoreSP = false
             end
-            ffd._shIgnoreSP = false
         end
         frame:HookScript("OnHide", function()
             frame:SetFrameStrata(defaultStrata)
@@ -575,6 +606,27 @@ local function HookFrame(frame, name)
             if ShouldDock() then
                 frame:SetFrameStrata("DIALOG")
                 DockToCharacterFrame()
+                frame:Raise()
+            end
+        end)
+    elseif name ~= "CharacterFrame" then
+        -- Any other Shifter-managed window can end up rendered underneath a
+        -- Shifter-pinned CharacterFrame purely because CharacterFrame's skin
+        -- forces it to "HIGH" strata -- not because it's meant to dock
+        -- beside CharacterFrame (unlike DOCKING_COMPANIONS, this never
+        -- touches position, just strata). Applies generically to every other
+        -- Shifter-hooked frame so newly discovered cases don't need a
+        -- hardcoded entry. Never calls SetPoint, so this is safe even for a
+        -- protected frame if one ever lands in this bucket.
+        local defaultStrata = frame:GetFrameStrata()
+        frame:HookScript("OnHide", function()
+            frame:SetFrameStrata(defaultStrata)
+        end)
+        frame:HookScript("OnShow", function()
+            if not IsEnabled() then return end
+            local cf = _G.CharacterFrame
+            if cf and cf:IsShown() and (tempPos[cf] or GetSavedPos("CharacterFrame")) then
+                frame:SetFrameStrata("DIALOG")
                 frame:Raise()
             end
         end)
