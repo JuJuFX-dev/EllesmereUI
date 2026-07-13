@@ -997,6 +997,9 @@ local function SkinCharacterSheet()
         INVTYPE_NECK = {slot = 2, name = "Neck"},
         INVTYPE_SHOULDER = {slot = 3, name = "Shoulder"},
         INVTYPE_CHEST = {slot = 5, name = "Chest"},
+        -- Cloth chest pieces ("robes") report this equipLoc instead of
+        -- INVTYPE_CHEST -- same slot either way.
+        INVTYPE_ROBE = {slot = 5, name = "Chest"},
         INVTYPE_WAIST = {slot = 6, name = "Waist"},
         INVTYPE_LEGS = {slot = 7, name = "Legs"},
         INVTYPE_FEET = {slot = 8, name = "Feet"},
@@ -1004,21 +1007,51 @@ local function SkinCharacterSheet()
         INVTYPE_HAND = {slot = 10, name = "Hands"},
         INVTYPE_FINGER = {slots = {11, 12}, name = "Ring"},
         INVTYPE_TRINKET = {slots = {13, 14}, name = "Trinket"},
-        INVTYPE_BACK = {slot = 15, name = "Back"},
-        INVTYPE_MAINHAND = {slot = 16, name = "Main Hand"},
-        INVTYPE_OFFHAND = {slot = 17, name = "Off Hand"},
+        -- Blizzard's real equip-location string for a cloak is
+        -- INVTYPE_CLOAK, not INVTYPE_BACK (IsItemUsableBySpec below already
+        -- checks for INVTYPE_CLOAK correctly). With the wrong key here this
+        -- lookup returned nil for every cloak and silently skipped it, so no
+        -- cloak could ever show up as a better item.
+        INVTYPE_CLOAK = {slot = 15, name = "Back"},
+        -- Blizzard's real equip-location strings for one-hand weapons are
+        -- INVTYPE_WEAPONMAINHAND / INVTYPE_WEAPONOFFHAND, not the
+        -- (nonexistent) INVTYPE_MAINHAND / INVTYPE_OFFHAND this had before --
+        -- those never matched a real item, so weapon upgrades never showed.
+        -- An ambiguous one-hander (INVTYPE_WEAPON) can go in either slot.
+        INVTYPE_WEAPON = {slots = {16, 17}, name = "Weapon"},
+        INVTYPE_WEAPONMAINHAND = {slot = 16, name = "Main Hand"},
+        INVTYPE_WEAPONOFFHAND = {slot = 17, name = "Off Hand"},
+        -- Caster off-hand items (tomes/orbs). IsItemUsableBySpec already
+        -- gates these via allow.offhand -- without a slot mapping here they
+        -- never reached that check at all.
+        INVTYPE_HOLDABLE = {slot = 17, name = "Off Hand"},
+        -- Bows/guns/crossbows/wands still report one of these equip
+        -- locations even though they physically equip into the main-hand
+        -- slot in modern retail.
+        INVTYPE_RANGEDRIGHT = {slot = 16, name = "Main Hand"},
+        INVTYPE_RANGED = {slot = 16, name = "Main Hand"},
         INVTYPE_RELIC = {slot = 18, name = "Relic"},
         INVTYPE_BODY = {slot = 4, name = "Body"},
         INVTYPE_SHIELD = {slot = 17, name = "Shield"},
         INVTYPE_2HWEAPON = {slot = 16, name = "Two-Hand"},
     }
 
-    -- Function to get itemlevel of equipped item in a specific slot
+    -- Function to get itemlevel of equipped item in a specific slot.
+    -- GetItemInfo's cached itemLevel can be wrong for a specific item
+    -- instance (e.g. an upgrade-track piece) -- prefer the ItemLocation API
+    -- (exact per-item level, no caching), falling back to
+    -- GetDetailedItemLevelInfo, same precedence EllesmereUIQoL.lua already
+    -- uses for item-level lookups.
     local function GetEquippedItemLevel(slot)
+        if ItemLocation then
+            local loc = ItemLocation:CreateFromEquipmentSlot(slot)
+            if loc and loc:IsValid() and C_Item.DoesItemExist(loc) then
+                return C_Item.GetCurrentItemLevel(loc) or 0
+            end
+        end
         local itemLink = GetInventoryItemLink("player", slot)
         if itemLink then
-            local _, _, _, itemLevel = GetItemInfo(itemLink)
-            return tonumber(itemLevel) or 0
+            return C_Item.GetDetailedItemLevelInfo(itemLink) or 0
         end
         return 0
     end
@@ -1176,14 +1209,27 @@ local function SkinCharacterSheet()
     _ComputeBetterInventoryItems = function()
         local betterItems = {}
 
-        -- Check all bag slots (0 = backpack, 1-4 = bag slots)
-        for bagSlot = 0, 4 do
+        -- Check all bag slots (0 = backpack, 1-4 = bag slots, 5 = reagent
+        -- bag -- included since it can hold any item, not just reagents).
+        for bagSlot = 0, 5 do
             local bagSize = C_Container.GetContainerNumSlots(bagSlot)
             for slotIndex = 1, bagSize do
                 local itemLink = C_Container.GetContainerItemLink(bagSlot, slotIndex)
                 if itemLink then
-                    local itemName, _, itemRarity, itemLevel, _, itemType, _, _, equipSlot, itemIcon = GetItemInfo(itemLink)
-                    itemLevel = tonumber(itemLevel)
+                    local itemName, _, itemRarity, _, _, itemType, _, _, equipSlot, itemIcon = GetItemInfo(itemLink)
+                    -- GetItemInfo's cached itemLevel can be wrong for a
+                    -- specific item instance (e.g. an upgrade-track piece) --
+                    -- prefer the ItemLocation API (exact per-item level, no
+                    -- caching), falling back to GetDetailedItemLevelInfo,
+                    -- same precedence EllesmereUIQoL.lua already uses.
+                    local itemLevel
+                    if ItemLocation then
+                        local loc = ItemLocation:CreateFromBagAndSlot(bagSlot, slotIndex)
+                        if loc and loc:IsValid() and C_Item.DoesItemExist(loc) then
+                            itemLevel = C_Item.GetCurrentItemLevel(loc)
+                        end
+                    end
+                    itemLevel = tonumber(itemLevel) or tonumber(C_Item.GetDetailedItemLevelInfo(itemLink))
 
                     -- Only show Weapon and Armor items
                     if itemLevel and itemName and (itemType == "Weapon" or itemType == "Armor") and equipSlot then
@@ -1425,8 +1471,30 @@ local function SkinCharacterSheet()
     iLvlUpdateFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     iLvlUpdateFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
     iLvlUpdateFrame:RegisterEvent("PLAYER_AVG_ITEM_LEVEL_UPDATE")
+    -- GetItemInfo can return nil for a bag item whose data isn't cached yet
+    -- (common for a tier-set piece on an uncommon upgrade track). Without this,
+    -- that item silently drops out of the "better items" scan for good, since
+    -- nothing else re-dirties the cache once the data finishes loading.
+    iLvlUpdateFrame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+    local _betterItemsRefreshTimer
+    local function QueueBetterItemsRefresh()
+        if _betterItemsRefreshTimer then
+            _betterItemsRefreshTimer:Cancel()
+            _betterItemsRefreshTimer = nil
+        end
+        _betterItemsRefreshTimer = C_Timer.NewTimer(0.12, function()
+            _betterItemsRefreshTimer = nil
+            if not (frame and frame:IsShown()) then return end
+            _betterDirty = true
+            UpdateItemLevelDisplay()
+        end)
+    end
     iLvlUpdateFrame:SetScript("OnEvent", function(_, event, unit)
         if event == "UNIT_INVENTORY_CHANGED" and unit ~= "player" then return end
+        if event == "GET_ITEM_INFO_RECEIVED" then
+            QueueBetterItemsRefresh()
+            return
+        end
         if not (frame and frame:IsShown()) then return end
         _betterDirty = true
         UpdateItemLevelDisplay()
