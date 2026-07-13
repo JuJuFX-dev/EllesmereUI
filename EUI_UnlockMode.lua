@@ -9814,14 +9814,25 @@ function EllesmereUI.ApplyPlayerAuraPosition(key)
     end
 end
 
--- Blizzard reapplies Edit Mode anchors when its aura layout refreshes. A
--- post-hook preserves the custom position without replacing secure code or
--- running our SetPoint call in Blizzard's secure call chain.
+function EllesmereUI.ShowPlayerAuraEditModeLockNotice()
+    if not EllesmereUI._playerAuraEditModeNoticeShown then
+        EllesmereUI.Print(EllesmereUI.L("|cff0cd29fEllesmereUI: |rPlayer Aura positions are managed by EllesmereUI. Edit Mode movement is disabled."))
+        EllesmereUI._playerAuraEditModeNoticeShown = true
+    end
+end
+
 function EllesmereUI.InstallPlayerAuraAnchorGuard(key)
     local frame = key == "PlayerBuffs" and _G.BuffFrame or _G.DebuffFrame
     if not frame or EllesmereUI._playerAuraAnchorGuards[frame] or not frame.ApplySystemAnchor then return end
     EllesmereUI._playerAuraAnchorGuards[frame] = true
-	frame.isLocked = true
+
+    frame:SetMovable(false)
+    local selection = frame.Selection
+    if selection then
+        selection:SetScript("OnDragStart", EllesmereUI.ShowPlayerAuraEditModeLockNotice)
+        selection:SetScript("OnDragStop", nil)
+    end
+
     hooksecurefunc(frame, "ApplySystemAnchor", function()
         if not EllesmereUI.GetPlayerAuraPosition(key) then return end
         C_Timer.After(0, function()
