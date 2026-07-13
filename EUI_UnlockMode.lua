@@ -5286,6 +5286,10 @@ local function NudgeMover(dx, dy, targetMover, skipCollapse)
         local ratio = s / uiS
         local cx = (bL + bR) * 0.5 * ratio
         local cy = (bT + bB) * 0.5 * ratio - UIParent:GetHeight()
+        local elemNudge = registeredElements[m._barKey]
+        if elemNudge and elemNudge.getRightInset then
+            cx = cx - (elemNudge.getRightInset(m._barKey) or 0) * ratio * 0.5
+        end
         if m._setCenterXY then m._setCenterXY(cx, cy) end
     end
 
@@ -5494,8 +5498,6 @@ local BLIZZ_OWNED_OVERLAY_DEFS = {
     { label = "Micro Menu",    frame = function() return _G.MicroMenuContainer end },
     { label = "Bags",          frame = function() return _G.BagsBar end },
     { label = "Encounter Bar", frame = function() return _G.PlayerPowerBarAlt end, showAlways = true, fallbackW = 240, fallbackH = 36, yOffset = 44 },
-    { label = "Buffs",         frame = function() return _G.BuffFrame end },
-    { label = "Debuffs",       frame = function() return _G.DebuffFrame end },
     -- Blizzard Edit Mode's default tooltip anchor. The container is small/idle
     -- when no tooltip is up, so use the showAlways fallback (read its saved
     -- Edit Mode position) like the Encounter Bar.
@@ -5961,7 +5963,8 @@ local function CreateMover(barKey)
             -- Update size from bar (+ any below-frame extra, e.g. boss castbar).
             local elem = registeredElements[bk]
             local extra = (elem and elem.getBottomExtra and (elem.getBottomExtra(bk) or 0) or 0) * elemScale
-            local w = (b:GetWidth() or 50) * elemScale
+            local rightInset = (elem and elem.getRightInset and (elem.getRightInset(bk) or 0) or 0) * elemScale
+            local w = max(1, (b:GetWidth() or 50) * elemScale - rightInset)
             local h = (b:GetHeight() or 50) * elemScale + extra
             if w > 10 then baseW = w end
             if h > 10 then baseH = h end
@@ -5971,7 +5974,10 @@ local function CreateMover(barKey)
             -- to the frame and grows downward over the extra region.
             local bcx, bcy = b:GetCenter()
             if bcx and bcy then
-                moverCX = bcx * elemScale
+                -- getRightInset keeps the box's left edge on the frame while
+                -- shortening its width, so its visual center sits left of the
+                -- frame center by half that inset.
+                moverCX = bcx * elemScale - rightInset * 0.5
                 moverCY = bcy * elemScale - UIParent:GetHeight() - extra * 0.5
             end
             -- Anchor mover to bar TOPLEFT for pixel-perfect overlay
@@ -6862,6 +6868,11 @@ local function CreateMover(barKey)
         -- center math below, keeping the top pinned and growing the box down.
         if elem and elem.getBottomExtra then
             h = h + (elem.getBottomExtra(bk) or 0) * elemScale
+        end
+        -- Some elements reserve horizontal frame space for an optional control
+        -- that is currently hidden. Keep the mover fitted to the visible area.
+        if elem and elem.getRightInset then
+            w = max(1, w - (elem.getRightInset(bk) or 0) * elemScale)
         end
         baseW, baseH = w, h
         self:SetSize(w, h)
@@ -9767,6 +9778,113 @@ do
         end
     end
 end
+
+-------------------------------------------------------------------------------
+--  Player aura frames
+--  BuffFrame and DebuffFrame are normally exposed only through Blizzard Edit
+--  Mode. Register them as ordinary unlock elements so their positions can use
+--  the same pending-save, revert, snapping, and anchor flow as the other
+--  unlock movers.
+-------------------------------------------------------------------------------
+EllesmereUI._playerAuraPositionKeys = {
+    PlayerBuffs = "buffs",
+    PlayerDebuffs = "debuffs",
+}
+EllesmereUI._playerAuraAnchorGuards = {}
+
+function EllesmereUI.GetPlayerAuraPositionDB()
+    if not EllesmereUIDB then return nil end
+    if not EllesmereUIDB.playerAuraPositions then
+        EllesmereUIDB.playerAuraPositions = {}
+    end
+    return EllesmereUIDB.playerAuraPositions
+end
+
+function EllesmereUI.GetPlayerAuraPosition(key)
+    local db = EllesmereUI.GetPlayerAuraPositionDB()
+    local positionKey = EllesmereUI._playerAuraPositionKeys[key]
+    return db and positionKey and db[positionKey] or nil
+end
+
+function EllesmereUI.ApplyPlayerAuraPosition(key)
+    local frame = key == "PlayerBuffs" and _G.BuffFrame or _G.DebuffFrame
+    local position = EllesmereUI.GetPlayerAuraPosition(key)
+    if frame and position and position.point then
+        MigrateAndApplyPosition(key, position, frame)
+    end
+end
+
+-- Blizzard reapplies Edit Mode anchors when its aura layout refreshes. A
+-- post-hook preserves the custom position without replacing secure code or
+-- running our SetPoint call in Blizzard's secure call chain.
+function EllesmereUI.InstallPlayerAuraAnchorGuard(key)
+    local frame = key == "PlayerBuffs" and _G.BuffFrame or _G.DebuffFrame
+    if not frame or EllesmereUI._playerAuraAnchorGuards[frame] or not frame.ApplySystemAnchor then return end
+    EllesmereUI._playerAuraAnchorGuards[frame] = true
+	frame.isLocked = true
+    hooksecurefunc(frame, "ApplySystemAnchor", function()
+        if not EllesmereUI.GetPlayerAuraPosition(key) then return end
+        C_Timer.After(0, function()
+            EllesmereUI.ApplyPlayerAuraPosition(key)
+        end)
+    end)
+end
+
+EllesmereUI:RegisterUnlockElements({
+    {
+        key = "PlayerBuffs",
+        label = "Buffs",
+        order = 950,
+        noResize = true,
+        getFrame = function() return _G.BuffFrame end,
+        getRightInset = function()
+            if not C_CVar or C_CVar.GetCVar("collapseExpandBuffs") ~= "0" then return 0 end
+            local button = _G.BuffFrame and _G.BuffFrame.CollapseAndExpandButton
+            return button and button:GetWidth() or 0
+        end,
+        loadPosition = function(key) return EllesmereUI.GetPlayerAuraPosition(key) end,
+        savePosition = function(key, point, relPoint, x, y)
+            local db = EllesmereUI.GetPlayerAuraPositionDB()
+            local positionKey = EllesmereUI._playerAuraPositionKeys[key]
+            if db and positionKey then
+                db[positionKey] = { point = point, relPoint = relPoint, x = x, y = y }
+            end
+        end,
+        clearPosition = function(key)
+            local db = EllesmereUI.GetPlayerAuraPositionDB()
+            local positionKey = EllesmereUI._playerAuraPositionKeys[key]
+            if db and positionKey then db[positionKey] = nil end
+        end,
+        applyPosition = function(key)
+            EllesmereUI.InstallPlayerAuraAnchorGuard(key)
+            EllesmereUI.ApplyPlayerAuraPosition(key)
+        end,
+    },
+    {
+        key = "PlayerDebuffs",
+        label = "Debuffs",
+        order = 951,
+        noResize = true,
+        getFrame = function() return _G.DebuffFrame end,
+        loadPosition = function(key) return EllesmereUI.GetPlayerAuraPosition(key) end,
+        savePosition = function(key, point, relPoint, x, y)
+            local db = EllesmereUI.GetPlayerAuraPositionDB()
+            local positionKey = EllesmereUI._playerAuraPositionKeys[key]
+            if db and positionKey then
+                db[positionKey] = { point = point, relPoint = relPoint, x = x, y = y }
+            end
+        end,
+        clearPosition = function(key)
+            local db = EllesmereUI.GetPlayerAuraPositionDB()
+            local positionKey = EllesmereUI._playerAuraPositionKeys[key]
+            if db and positionKey then db[positionKey] = nil end
+        end,
+        applyPosition = function(key)
+            EllesmereUI.InstallPlayerAuraAnchorGuard(key)
+            EllesmereUI.ApplyPlayerAuraPosition(key)
+        end,
+    },
+}, "EllesmereUI")
 
 -- Commit pending positions to SavedVariables
 local function CommitPositions()
