@@ -5286,6 +5286,10 @@ local function NudgeMover(dx, dy, targetMover, skipCollapse)
         local ratio = s / uiS
         local cx = (bL + bR) * 0.5 * ratio
         local cy = (bT + bB) * 0.5 * ratio - UIParent:GetHeight()
+        local elemNudge = registeredElements[m._barKey]
+        if elemNudge and elemNudge.getRightInset then
+            cx = cx - (elemNudge.getRightInset(m._barKey) or 0) * ratio * 0.5
+        end
         if m._setCenterXY then m._setCenterXY(cx, cy) end
     end
 
@@ -5494,8 +5498,6 @@ local BLIZZ_OWNED_OVERLAY_DEFS = {
     { label = "Micro Menu",    frame = function() return _G.MicroMenuContainer end },
     { label = "Bags",          frame = function() return _G.BagsBar end },
     { label = "Encounter Bar", frame = function() return _G.PlayerPowerBarAlt end, showAlways = true, fallbackW = 240, fallbackH = 36, yOffset = 44 },
-    { label = "Buffs",         frame = function() return _G.BuffFrame end },
-    { label = "Debuffs",       frame = function() return _G.DebuffFrame end },
     -- Blizzard Edit Mode's default tooltip anchor. The container is small/idle
     -- when no tooltip is up, so use the showAlways fallback (read its saved
     -- Edit Mode position) like the Encounter Bar.
@@ -5961,7 +5963,8 @@ local function CreateMover(barKey)
             -- Update size from bar (+ any below-frame extra, e.g. boss castbar).
             local elem = registeredElements[bk]
             local extra = (elem and elem.getBottomExtra and (elem.getBottomExtra(bk) or 0) or 0) * elemScale
-            local w = (b:GetWidth() or 50) * elemScale
+            local rightInset = (elem and elem.getRightInset and (elem.getRightInset(bk) or 0) or 0) * elemScale
+            local w = max(1, (b:GetWidth() or 50) * elemScale - rightInset)
             local h = (b:GetHeight() or 50) * elemScale + extra
             if w > 10 then baseW = w end
             if h > 10 then baseH = h end
@@ -5971,7 +5974,10 @@ local function CreateMover(barKey)
             -- to the frame and grows downward over the extra region.
             local bcx, bcy = b:GetCenter()
             if bcx and bcy then
-                moverCX = bcx * elemScale
+                -- getRightInset keeps the box's left edge on the frame while
+                -- shortening its width, so its visual center sits left of the
+                -- frame center by half that inset.
+                moverCX = bcx * elemScale - rightInset * 0.5
                 moverCY = bcy * elemScale - UIParent:GetHeight() - extra * 0.5
             end
             -- Anchor mover to bar TOPLEFT for pixel-perfect overlay
@@ -6862,6 +6868,11 @@ local function CreateMover(barKey)
         -- center math below, keeping the top pinned and growing the box down.
         if elem and elem.getBottomExtra then
             h = h + (elem.getBottomExtra(bk) or 0) * elemScale
+        end
+        -- Some elements reserve horizontal frame space for an optional control
+        -- that is currently hidden. Keep the mover fitted to the visible area.
+        if elem and elem.getRightInset then
+            w = max(1, w - (elem.getRightInset(bk) or 0) * elemScale)
         end
         baseW, baseH = w, h
         self:SetSize(w, h)

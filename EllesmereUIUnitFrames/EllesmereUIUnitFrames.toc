@@ -20,3 +20,6 @@ EUI_UnitFrames_AuraContainers.lua
 
 # Options
 EUI_UnitFrames_Options.lua
+
+# Hooks
+EllesmereUIUnitFrames_PlayerAurasHooks.lua
