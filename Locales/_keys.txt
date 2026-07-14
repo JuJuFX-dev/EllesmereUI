@@ -334,7 +334,6 @@ Per-Addon Export
 Percent
 Pinned Items
 Pixel Glow Settings
-Player Aura positions are managed by EllesmereUI. Edit Mode movement is disabled.
 Popular Presets
 Position and size settings are not synced and keep each profile's own values.
 Potions & Healthstone
@@ -512,6 +511,7 @@ no buff assigned
 |cff0cd29dLeft-click:|r |cffE0E0E0Toggle EllesmereUI|r
 |cff0cd29dMiddle-click:|r |cffE0E0E0Hide Minimap Button|r
 |cff0cd29dRight-click:|r |cffE0E0E0Enter Unlock Mode|r
+|cff0cd29fEllesmereUI: |rPlayer Aura positions are managed by EllesmereUI. Edit Mode movement is disabled.
 |cffff6060[EllesmereUI]|r A preset named \
 |cffff6060[EllesmereUI]|r A profile named \
 |cffff6060[EllesmereUI]|r Cannot rename to \
