@@ -8906,6 +8906,69 @@ function EllesmereUI._RF_DumpLayout()
     end
 end
 
+-- TEMP DEBUG: diagnose per-tier offset application.
+-- /run EllesmereUI._RF_DumpOffset()
+function EllesmereUI._RF_DumpOffset()
+    local s = db.profile
+    local r = function(v) if v then return floor(v + 0.5) else return "nil" end end
+    print("|cff66ccffEUI RF Offset Dump|r")
+    print(("  unlockPos: %s"):format(s.unlockPos and ("%s/%s x=%s y=%s"):format(
+        s.unlockPos.point, s.unlockPos.relPoint, r(s.unlockPos.x), r(s.unlockPos.y)) or "|cffff6666nil|r"))
+    local eff = ns._GetEffectiveRaidSize()
+    local tier, ov = ns._RFResolveTierOverride(eff)
+    print(("  effectiveSize=%s  resolvedTier=%s  hasOverride=%s"):format(
+        tostring(eff), tostring(tier), ov and "yes" or "no"))
+    if ov then
+        print(("  override: w=%s h=%s offsetX=%s offsetY=%s ug=%s gg=%s"):format(
+            tostring(ov.width), tostring(ov.height), tostring(ov.offsetX), tostring(ov.offsetY),
+            tostring(ov.unitGrowth), tostring(ov.groupGrowth)))
+    end
+    print(("  _activeSizeW=%s _activeSizeH=%s _activeTierOv=%s"):format(
+        tostring(ns._activeSizeW), tostring(ns._activeSizeH),
+        ns._activeTierOverride and "yes" or "no"))
+    local bl, bt, bw, bh = ns._RFBaseTopLeft()
+    print(("  baseTL: l=%s t=%s bw=%s bh=%s"):format(r(bl), r(bt), r(bw), r(bh)))
+    if ov then
+        local cs = PixelSnap(s.cellSpacing or 2)
+        local gs = PixelSnap(s.groupSpacing or 8)
+        local fw = ov.width or s.frameWidth or 72
+        local fh = ov.height or s.frameHeight or 46
+        local ug = ov.unitGrowth or s.unitGrowth or "DOWN"
+        local gg = ov.groupGrowth or s.groupGrowth or "RIGHT"
+        local tw, th = ns._RFFootprint(fw, fh, ug, gg, cs, gs)
+        local kx, ky = ns._RFCornerTerms(tw, th, bw or 0, bh or 0, ug, gg)
+        local x, y = ns._RFTierTopLeft(tw, th, ug, gg, ov.offsetX or 0, ov.offsetY or 0)
+        print(("  tierFootprint: tw=%s th=%s  corner=%s kx=%s ky=%s"):format(
+            r(tw), r(th), ns._RFGrowthCorner(ug, gg), r(kx), r(ky)))
+        print(("  computed TL: x=%s y=%s"):format(r(x), r(y)))
+    end
+    if containerFrame then
+        print(("  container actual: L=%s T=%s W=%s H=%s"):format(
+            r(containerFrame:GetLeft()), r(containerFrame:GetTop()),
+            r(containerFrame:GetWidth()), r(containerFrame:GetHeight())))
+        local anchored = EllesmereUI.IsUnlockAnchored
+            and EllesmereUI.IsUnlockAnchored("RF_RaidFrames")
+        print(("  isAnchored=%s"):format(anchored and "yes" or "no"))
+    end
+    local ovs = s.raidSizeOverrides
+    if ovs then
+        local tiers = {}
+        for k, v in pairs(ovs) do
+            if type(v) == "table" then tiers[#tiers + 1] = k end
+        end
+        table.sort(tiers)
+        for _, t in ipairs(tiers) do
+            local o = ovs[t]
+            print(("  tier[%d]: w=%s h=%s ox=%s oy=%s ug=%s gg=%s"):format(
+                t, tostring(o.width), tostring(o.height),
+                tostring(o.offsetX), tostring(o.offsetY),
+                tostring(o.unitGrowth), tostring(o.groupGrowth)))
+        end
+    else
+        print("  raidSizeOverrides: nil")
+    end
+end
+
 -------------------------------------------------------------------------------
 --  Range fading
 --  Event-driven via UNIT_IN_RANGE_UPDATE for the standard ~40yd interact range
@@ -9350,6 +9413,9 @@ local function OnEvent(self, event, arg1, ...)
                 else
                     t0 = ns.ProfBegin("LayoutGroups:REGEN"); LayoutGroups(); ns.ProfEnd("LayoutGroups:REGEN", t0)
                 end
+                -- Same-dimension tier changes take the LayoutGroups branch;
+                -- reapply offset so the container lands at the correct tier.
+                if ns._ApplyTierOffset then ns._ApplyTierOffset() end
             end
             if ns._partyFramesVisible then
                 ns._LayoutPartyFrames()
@@ -9384,6 +9450,10 @@ local function OnEvent(self, event, arg1, ...)
             if numMembers > 0 then
                 local newW, newH = ns._GetRaidSizeFrameDimensions(numMembers)
                 if newW ~= ns._activeSizeW or newH ~= ns._activeSizeH then
+                    ns._sizeTierDirtyInCombat = true
+                end
+                local newTier, newOv = ns._RFResolveTierOverride(numMembers)
+                if newOv ~= ns._activeTierOverride then
                     ns._sizeTierDirtyInCombat = true
                 end
             end
@@ -15011,7 +15081,10 @@ local function HidePartyPreview(skipRestore)
     -- is a combat-legal SetAlpha(1) plus dropping the mouse blockers. See
     -- HidePreview. No combat gate, no SetParent/SetPoint, no ns._restorePending.
     ns._SetRealFramesPreviewHidden(false)
-    if not InCombatLockdown() then LayoutGroups() end
+    if not InCombatLockdown() then
+        LayoutGroups()
+        if ns._ApplyTierOffset then ns._ApplyTierOffset() end
+    end
     UpdateVisibility()
     if ns._UpdatePartyVisibility then ns._UpdatePartyVisibility() end
 end
