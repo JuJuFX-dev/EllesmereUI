@@ -8425,27 +8425,27 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, updateInfo, arg3)
     end
     if event == "PLAYER_ENTERING_WORLD" then
         _inCombat = InCombatLockdown and InCombatLockdown() or false
-        -- Arena exit backstop: leaving an arena reverts PvP talents and
-        -- spell overrides, and Blizzard re-evaluates the viewer's tracked
-        -- cooldown set. If PLAYER_PVP_TALENT_UPDATE did not fire across the
-        -- zone-out, nothing re-claims the new pool frames and the
-        -- unclaimed-frame cleanup blanks them (arena-exit empty-CDM bug).
-        -- Schedule the same debounced rebuild a talent change gets; the
-        -- token debounce collapses this with the event-driven trigger when
-        -- both fire, so at most one rebuild runs.
+        -- PvP instance transition backstop: entering or leaving a PvP
+        -- instance rebuilds viewer pools (PvP talents activate/deactivate).
+        -- Rebuild + reanchor so the new pool frames are claimed.
         local _, instType = IsInInstance()
-        if ns._cdmWasInArena and instType ~= "arena" then
+        local wasPvP = ns._cdmWasInPvP
+        local isPvP = (instType == "arena" or instType == "pvp")
+        if wasPvP and not isPvP then
             ScheduleTalentRebuild()
         end
-        ns._cdmWasInArena = (instType == "arena") or nil
+        ns._cdmWasInPvP = isPvP or nil
+        if isPvP and not wasPvP then
+            if ns.QueueReanchor then ns.QueueReanchor() end
+        end
         -- Install rotation helper hook after CDM frames have been built
         C_Timer.After(1, function()
             InstallRotationHook()
         end)
-        -- Safety: re-apply visibility after rebuild settles. Blizzard may
-        -- hide/re-show CDM viewers during loading screens (PvP scoreboard,
-        -- barbershop) and the timing race can leave viewer alpha at 0.
+        -- Safety: re-apply visibility after loading screen settles.
+        -- Two passes to catch both fast and late viewer pool rebuilds.
         C_Timer.After(1.5, _CDMApplyVisibility)
+        C_Timer.After(3, _CDMApplyVisibility)
     end
     if event == "SPELLS_CHANGED" then
         CheckSpecChange()
