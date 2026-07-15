@@ -2821,11 +2821,13 @@ local function UpdateTrinketFrame(slotID)
     local _, spellID = C_Item.GetItemSpell(itemID)
     f._trinketSpellID = spellID
     local isRealOnUse = false
+    local scanConclusive = false
     if spellID and spellID > 0 then
         local locale = GetLocale()
         if locale == "enUS" or locale == "enGB" then
             local tipData = C_TooltipInfo and C_TooltipInfo.GetItemByID(itemID)
             if tipData and tipData.lines then
+                scanConclusive = true
                 for _, tipLine in ipairs(tipData.lines) do
                     local lt = tipLine.leftText
                     if lt and lt:find("Cooldown%)") then
@@ -2849,9 +2851,14 @@ local function UpdateTrinketFrame(slotID)
             end
         else
             isRealOnUse = true
+            scanConclusive = true
         end
+    else
+        scanConclusive = (spellID == nil or spellID == 0)
     end
-    f._trinketIsOnUse = isRealOnUse
+    if scanConclusive then
+        f._trinketIsOnUse = isRealOnUse
+    end
 end
 ns.UpdateTrinketFrame = UpdateTrinketFrame
 
