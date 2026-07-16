@@ -160,7 +160,17 @@ end
         end
     end
 
-    local function _ttOnShow(self) _ttSkin(self); _ttFonts(self) end
+    local _ttRelaying = {}
+    local function _ttOnShow(self)
+        _ttSkin(self)
+        _ttFonts(self)
+        -- Re-show so the frame recalculates size with the new fonts.
+        if not _ttRelaying[self] then
+            _ttRelaying[self] = true
+            self:Show()
+            _ttRelaying[self] = nil
+        end
+    end
 
     local function _ttHook(tt)
         if not tt or tt:IsForbidden() or _ttSkinned[tt] then return end
