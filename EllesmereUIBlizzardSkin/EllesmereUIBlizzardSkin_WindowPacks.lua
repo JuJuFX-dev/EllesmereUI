@@ -7639,6 +7639,7 @@ local function UpdateCustomMerchantList(sf, child)
     local rowHeight = 32
     local rowSpacing = 4
     local playerMoney = GetMoney()
+    local MAX_MONEY_DISPLAY_WIDTH = 120
 
     for i = 1, numItems do
         local row = sf.rows[i]
@@ -7744,14 +7745,21 @@ local function UpdateCustomMerchantList(sf, child)
                 local color = (canAfford == false) and 'gray' or nil
                 SetMoneyFrameColor(moneyFrame:GetName(), color)
 
-                altCurrencyFrame:SetPoint("RIGHT", row, "RIGHT", -10, 0)
-                moneyFrame:SetPoint("RIGHT", altCurrencyFrame, "LEFT", -5, 0)
-
-                altCurrencyFrame:Show()
+                -- Sometimes, altCurrencyWidth can be 0, indicating no alt currency cost even though hasExtendedCost is true
+                -- When this happen, fallback to the anchors we do in case 3
+                if altCurrencyWidth > 0 then
+                    -- Both exist: Anchor money to alt currency
+                    altCurrencyFrame:SetPoint("RIGHT", row, "RIGHT", -10, 0)
+                    moneyFrame:SetPoint("RIGHT", altCurrencyFrame, "LEFT", -5, 0)
+                    row.Name:SetPoint("RIGHT", altCurrencyFrame, "LEFT", -10, 0)
+                    altCurrencyFrame:Show()
+                else
+                    -- Only money exists: fallback to case 3
+                    moneyFrame:SetPoint("RIGHT", row, "RIGHT", 3, 0)
+                    row.Name:SetPoint("RIGHT", moneyFrame, "LEFT", -10, 0)
+                    altCurrencyFrame:Hide()
+                end
                 moneyFrame:Show()
-
-                row.Name:SetPoint("RIGHT", moneyFrame, "LEFT", -10, 0)
-
             else
                 -- Case 3: Money only
                 MoneyFrame_SetMaxDisplayWidth(moneyFrame, MAX_MONEY_DISPLAY_WIDTH)
