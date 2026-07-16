@@ -4417,7 +4417,11 @@ function ns.SetCdStateShiftHidden(fc, shiftHidden)
     shiftHidden = shiftHidden or false
     if (fc._cdStateShiftHidden or false) == shiftHidden then return end
     fc._cdStateShiftHidden = shiftHidden
-    local bk = fc.barKey
+    -- Overflow-diverted frames render on the target bar, so the gap-close
+    -- relayout must hit the bar the frame is actually laid out on. Normally
+    -- unreachable for diverted frames (Phase 3b's no-op rule), but there is
+    -- a one-reanchor window after a shift effect is first configured.
+    local bk = fc._overflowLayoutBar or fc.barKey
     if not bk or ns._cdShiftLayoutPending[bk] then return end
     ns._cdShiftLayoutPending[bk] = true
     C_Timer.After(0, function()
@@ -6860,8 +6864,17 @@ BuildAllCDMBars = function()
     -- Build each bar and populate fast lookup
     local hookActive = ns.IsViewerHooked and ns.IsViewerHooked()
     wipe(barDataByKey)
+    ns._cdmAnyOverflowCfg = nil
     for i, barData in ipairs(p.cdmBars.bars) do
         barDataByKey[barData.key] = barData
+        -- Max Icons overflow: cheap session gate. Validity of the target is
+        -- checked at reanchor time (Phase 3b); this only answers "is it
+        -- worth looking" so the feature is two nil-checks when unused.
+        if not ns._cdmAnyOverflowCfg and barData.enabled
+           and barData.maxIcons and barData.maxIcons > 0
+           and barData.overflowTarget then
+            ns._cdmAnyOverflowCfg = true
+        end
         BuildCDMBar(i)
         local frame = cdmBarFrames[barData.key]
         if frame then frame._prevVisibleCount = nil end
@@ -7280,6 +7293,12 @@ function ns.ReseedAssignedSpellsFromLiveIcons()
                     local fdRS = ns._hookFrameData and ns._hookFrameData[icon]
                     if (fc and fc.isHostedBuff) or icon._isPlaceholderFrame
                        or (fdRS and fdRS._isBuffViewerFrame) then
+                        sid = nil
+                    end
+                    -- Skip overflow-diverted icons: they render on this bar
+                    -- only for the session but belong to their source bar's
+                    -- assignedSpells (mirrors the EnsureAssignedSpells skip).
+                    if sid and fc and fc._overflowLayoutBar then
                         sid = nil
                     end
                     if type(sid) == "number" and sid ~= 0 then
@@ -8397,21 +8416,17 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, updateInfo, arg3)
         return
     end
     if event == "UPDATE_SHAPESHIFT_FORM" then
-        -- Bail fast if no bar uses mount/dragonriding visibility: druids
-        -- shift constantly in combat (Bear/Cat) and we don't want to
-        -- re-run the visibility pipeline for nothing.
+        -- Bail fast if no bar actually uses visHideMounted: druids shift
+        -- constantly in combat (Bear/Cat) and we don't want to re-run the
+        -- visibility pipeline for nothing.
         local p = ECME.db and ECME.db.profile
         local bars = p and p.cdmBars and p.cdmBars.bars
         if not bars then return end
-        local anyRelevant = false
+        local anyMountedOpt = false
         for _, bd in ipairs(bars) do
-            if bd.visHideMounted then anyRelevant = true; break end
-            local bv = bd.barVisibility
-            if bv == "show_dragonriding" or bv == "show_not_dragonriding" then anyRelevant = true; break end
-            local vm = bd.visibilityModes
-            if vm and (vm.show_dragonriding or vm.show_not_dragonriding) then anyRelevant = true; break end
+            if bd.visHideMounted then anyMountedOpt = true; break end
         end
-        if not anyRelevant then return end
+        if not anyMountedOpt then return end
         -- Defer one frame: the Travel Form aura is applied slightly after
         -- UPDATE_SHAPESHIFT_FORM fires, so IsPlayerMountedLike's aura check
         -- would miss it on the immediate pass.

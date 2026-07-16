@@ -3404,10 +3404,58 @@ function ns.RefreshAllSettings()
             plate:SetUnit(plate.unit, plate.nameplate)
         end
     end
+    if ns.NT_RefreshSetting then ns.NT_RefreshSetting() end
     if ns.ApplyClassPowerSetting then ns.ApplyClassPowerSetting() end
     -- 12.1 aura containers: fingerprint-guarded, near-free when no aura
     -- settings changed.
     if ns.NPC_ReloadAll then ns.NPC_ReloadAll() end
+end
+
+-------------------------------------------------------------------------------
+--  Non-Target Opacity: while the player has a target, every skinned plate
+--  that is not the target, the focus, or the player fades to the configured
+--  opacity (profile key nonTargetAlpha, 0-100). 100 = feature OFF: every
+--  hook below reduces to a single numeric compare, and no plate is ever
+--  touched. The alpha rides the plate ROOT (our own frame, parented to the
+--  Blizzard nameplate), so Blizzard's own occlusion fade still multiplies in.
+-------------------------------------------------------------------------------
+ns._ntAlpha = 1   -- cached 0..1 from the profile; 1 = inert
+
+-- Applies the correct root alpha to ONE plate. Value-guarded via
+-- _ntCurAlpha so redundant SetAlpha calls are skipped and pooled frames
+-- reset cheaply (nil = never faded).
+function ns.NT_Apply(plate)
+    local unit = plate.unit
+    if not unit then return end
+    local a = 1
+    local nt = ns._ntAlpha
+    if nt < 1 and UnitExists("target")
+       and not UnitIsUnit(unit, "target")
+       and not UnitIsUnit(unit, "focus")
+       and not UnitIsUnit(unit, "player") then
+        a = nt
+    end
+    if (plate._ntCurAlpha or 1) ~= a then
+        plate._ntCurAlpha = a
+        plate:SetAlpha(a)
+    end
+end
+
+function ns.NT_ApplyAll()
+    for _, plate in pairs(ns.plates) do
+        ns.NT_Apply(plate)
+    end
+end
+
+-- Re-derives the cached opacity from the profile and reapplies every plate
+-- (also un-fades everything when the slider returns to 100). Called from
+-- the options slider, OnInitialize, and RefreshAllSettings -- the latter
+-- covers profile swaps and Spec Overrides applies.
+function ns.NT_RefreshSetting()
+    local v = tonumber(p and p.nonTargetAlpha) or 100
+    if v < 0 then v = 0 elseif v > 100 then v = 100 end
+    ns._ntAlpha = v / 100
+    ns.NT_ApplyAll()
 end
 
 function ns.HideHoverEffect(plate)
@@ -5832,6 +5880,8 @@ function NameplateFrame:SetUnit(unit, nameplate)
     self:RegisterUnitEvent("UNIT_THREAT_LIST_UPDATE", unit)
     -- 12.1: attach a pooled aura-container bundle for this unit.
     if ns.NPC_AttachPlate then ns.NPC_AttachPlate(self, unit) end
+    -- Non-Target Opacity (zero cost while off: one numeric compare).
+    if ns._ntAlpha < 1 then ns.NT_Apply(self) end
     -- Critical: health bar must display immediately
     self:UpdateHealth()
     -- PERF: defer non-critical work 1 frame. Stacking bounds, name, cast bar,
@@ -5921,6 +5971,13 @@ function NameplateFrame:SetUnit(unit, nameplate)
 end
 function NameplateFrame:ClearUnit()
     self:UnregisterAllEvents()
+
+    -- Non-Target Opacity: released pool frames always go back at full
+    -- alpha (nil _ntCurAlpha = never faded, keeps this a no-op).
+    if self._ntCurAlpha and self._ntCurAlpha < 1 then
+        self:SetAlpha(1)
+    end
+    self._ntCurAlpha = nil
 
     if self.isCasting then
         self.isCasting = false
@@ -8841,6 +8898,10 @@ manager:SetScript("OnEvent", function(self, event, unit)
             ns._cachedTargetPlate:ApplyTarget()
             ns._cachedTargetPlate:UpdateHealthColor()
         end
+        -- Non-Target Opacity: gaining/losing a target flips every plate's
+        -- fade state, so this is the one full-iteration site. Zero cost
+        -- while off (single compare); value-guarded SetAlpha when on.
+        if ns._ntAlpha < 1 then ns.NT_ApplyAll() end
     elseif event == "PLAYER_FOCUS_CHANGED" then
         -- PERF: only update old + new focus plates instead of iterating all
         local oldFocus = ns._cachedFocusPlate
@@ -8870,6 +8931,14 @@ manager:SetScript("OnEvent", function(self, event, unit)
         UpdateFocusPlate(oldFocus)
         if ns._cachedFocusPlate and ns._cachedFocusPlate ~= oldFocus then
             UpdateFocusPlate(ns._cachedFocusPlate)
+        end
+        -- Non-Target Opacity: only the old and new focus plates change
+        -- fade state on a focus swap.
+        if ns._ntAlpha < 1 then
+            if oldFocus then ns.NT_Apply(oldFocus) end
+            if ns._cachedFocusPlate and ns._cachedFocusPlate ~= oldFocus then
+                ns.NT_Apply(ns._cachedFocusPlate)
+            end
         end
     elseif event == "UPDATE_MOUSEOVER_UNIT" then
         ns._UpdateMouseover()
@@ -9031,6 +9100,10 @@ function npAddon:OnInitialize()
     ENP.db = EllesmereUI.Lite.NewDB("EllesmereUINameplatesDB", { profile = defaults })
     p = ENP.db.profile
     ns.db = ENP.db
+    -- Non-Target Opacity: derive the cached value at login (no plates exist
+    -- yet, so the apply loop is a no-op; SetUnit fades new plates as they
+    -- spawn).
+    if ns.NT_RefreshSetting then ns.NT_RefreshSetting() end
     -- Append SharedMedia textures to runtime tables so SM texture keys resolve at runtime
     if EllesmereUI.AppendSharedMediaTextures then
         EllesmereUI.AppendSharedMediaTextures(

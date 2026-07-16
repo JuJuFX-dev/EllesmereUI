@@ -477,11 +477,16 @@ end
 -- ---------------------------------------------------------------------------
 -- Read an item's real (non-GCD) cooldown, container query first then C_Item,
 -- mirroring ProcessPresetCooldowns. Returns start,dur (dur nil / <=1.5 = ready).
+-- Secret Values are dropped HERE, before any truth-test or comparison: both
+-- this helper and the alt-walk in PresetOnCD compare dur ahead of PresetOnCD's
+-- tail guard, and comparing a secret raises a Lua error inside the poll ticker.
 local function ReadItemCD(itemID)
     local start, dur
     if C_Container and C_Container.GetItemCooldown then start, dur = C_Container.GetItemCooldown(itemID) end
+    if issecretvalue and (issecretvalue(start) or issecretvalue(dur)) then start, dur = nil, nil end
     if not (start and dur and dur > 1.5) and C_Item and C_Item.GetItemCooldown then
         start, dur = C_Item.GetItemCooldown(itemID)
+        if issecretvalue and (issecretvalue(start) or issecretvalue(dur)) then start, dur = nil, nil end
     end
     return start, dur
 end
@@ -548,8 +553,12 @@ end
 
 -- Normal (shown) alpha for a frame, from its bar's opacity (out-of-combat
 -- fade folded in via EffectiveBarAlpha so restores don't clobber the fade).
+-- Overflow-diverted frames render inside the target bar, so their restore
+-- alpha follows that bar's opacity (same source the visibility/layout
+-- passes use), not the identity bar's.
 local function FrameBaseAlpha(fc)
-    local bd = fc and fc.barKey and ns.barDataByKey and ns.barDataByKey[fc.barKey]
+    local bk = fc and (fc._overflowLayoutBar or fc.barKey)
+    local bd = bk and ns.barDataByKey and ns.barDataByKey[bk]
     return ns.EffectiveBarAlpha(bd)
 end
 

@@ -255,11 +255,13 @@ local VIS_COMBINABLE_KEYS = { mouseover = true }
 for _, k in ipairs(VIS_REPRESENTATIVE_ORDER) do VIS_COMBINABLE_KEYS[k] = true end
 EUI.VIS_COMBINABLE_KEYS = VIS_COMBINABLE_KEYS
 
--- Skyriding predicate shared by CheckVisibilityMode's dragonriding branches
--- and the multi-select engine. Returns true when mounted (or in a druid
--- mount-like form) with skyriding capability, even before takeoff.
+-- Airborne skyriding predicate shared by CheckVisibilityMode's dragonriding
+-- branches and the multi-select engine. Approximates the secure driver's
+-- [advflyable,flying]; the additional IsMounted() requirement is a
+-- deliberate, documented drift (Druid Flight Form matches the secure driver
+-- but not this predicate).
 function EUI.IsAirborneSkyriding()
-    if not (EUI.IsPlayerMountedLike and EUI.IsPlayerMountedLike()) then return false end
+    if not (IsMounted and IsMounted() and IsFlying and IsFlying()) then return false end
     if C_PlayerInfo and C_PlayerInfo.GetGlidingInfo then
         local _, canGlide = C_PlayerInfo.GetGlidingInfo()
         return canGlide == true

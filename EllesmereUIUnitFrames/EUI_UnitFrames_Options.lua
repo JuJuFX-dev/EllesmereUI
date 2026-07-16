@@ -1156,7 +1156,23 @@ initFrame:SetScript("OnEvent", function(self)
                 if cc then
                     tgt = string.format("|cff%02x%02x%02x%s|r", math.floor(cc.r * 255 + 0.5), math.floor(cc.g * 255 + 0.5), math.floor(cc.b * 255 + 0.5), tgt)
                 end
-                return " > " .. tgt
+                -- Mirror the live [eui-tgtsep(...)] tag: per-slot separator
+                -- string, space-padded, indicator colored class (the preview
+                -- target's class = the player's) or custom (default white).
+                local sep = prefix and s[prefix .. "TargetSep"]
+                if type(sep) ~= "string" or sep == "" then sep = ">" end
+                sep = " " .. sep .. " "
+                if prefix and s[prefix .. "TargetSepClassColor"] then
+                    if cc then
+                        sep = string.format("|cff%02x%02x%02x%s|r", math.floor(cc.r * 255 + 0.5), math.floor(cc.g * 255 + 0.5), math.floor(cc.b * 255 + 0.5), sep)
+                    end
+                else
+                    local c = prefix and s[prefix .. "TargetSepColor"]
+                    local r, g, b = 1, 1, 1
+                    if type(c) == "table" then r, g, b = c.r or 1, c.g or 1, c.b or 1 end
+                    sep = string.format("|cff%02x%02x%02x%s|r", math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5), sep)
+                end
+                return sep .. tgt
             end
             local function _pvShortName(raw)
                 if not prefix then return raw end
@@ -6095,6 +6111,41 @@ initFrame:SetScript("OnEvent", function(self)
                       set=function(v) SSet("leftTextShortNameEllipsis", v); UpdatePreview() end,
                       disabled=function() local c=SVal("leftTextContent","name") return c ~= "name" and c ~= "nametotarget" end,
                       disabledTooltip="Only applies when Name or Name > Target is selected." },
+                    { type="multiswatch", label="Indicator Color",
+                      disabled=function() return SVal("leftTextContent","name") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected.",
+                      swatches = {
+                        { tooltip = "Custom Colored", hasAlpha = false,
+                          getValue = function() local c = SVal("leftTextTargetSepColor", nil) if type(c) == "table" then return c.r or 1, c.g or 1, c.b or 1 end return 1, 1, 1 end,
+                          setValue = function(r, g, b) SSet("leftTextTargetSepColor", { r=r, g=g, b=b }); UpdatePreview() end,
+                          onClick = function(self)
+                              if SVal("leftTextTargetSepClassColor", false) then
+                                  SSet("leftTextTargetSepClassColor", false); UpdatePreview()
+                                  return
+                              end
+                              if self._eabOrigClick then self._eabOrigClick(self) end
+                          end,
+                          refreshAlpha = function() return SVal("leftTextTargetSepClassColor", false) and 0.3 or 1 end },
+                        { tooltip = "Class Colored", hasAlpha = false,
+                          getValue = function()
+                              local _, ct = UnitClass("player")
+                              local cc = ct and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[ct]
+                              if cc then return cc.r, cc.g, cc.b end
+                              return 1, 1, 1
+                          end,
+                          setValue = function() end,
+                          onClick = function() SSet("leftTextTargetSepClassColor", true); UpdatePreview() end,
+                          refreshAlpha = function() return SVal("leftTextTargetSepClassColor", false) and 1 or 0.3 end },
+                      } },
+                    { type="input", label="Separator", inputWidth=60,
+                      get=function() return SVal("leftTextTargetSep", ">") end,
+                      set=function(v)
+                          v = tostring(v or ""):gsub("|", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                          if v == "" then v = ">" end
+                          SSet("leftTextTargetSep", v); UpdatePreview()
+                      end,
+                      disabled=function() return SVal("leftTextContent","name") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected." },
                                     },
             })
             local leftCogShow = leftCogShowRaw
@@ -6242,6 +6293,41 @@ initFrame:SetScript("OnEvent", function(self)
                       set=function(v) SSet("rightTextShortNameEllipsis", v); UpdatePreview() end,
                       disabled=function() local c=SVal("rightTextContent","both") return c ~= "name" and c ~= "nametotarget" end,
                       disabledTooltip="Only applies when Name or Name > Target is selected." },
+                    { type="multiswatch", label="Indicator Color",
+                      disabled=function() return SVal("rightTextContent","both") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected.",
+                      swatches = {
+                        { tooltip = "Custom Colored", hasAlpha = false,
+                          getValue = function() local c = SVal("rightTextTargetSepColor", nil) if type(c) == "table" then return c.r or 1, c.g or 1, c.b or 1 end return 1, 1, 1 end,
+                          setValue = function(r, g, b) SSet("rightTextTargetSepColor", { r=r, g=g, b=b }); UpdatePreview() end,
+                          onClick = function(self)
+                              if SVal("rightTextTargetSepClassColor", false) then
+                                  SSet("rightTextTargetSepClassColor", false); UpdatePreview()
+                                  return
+                              end
+                              if self._eabOrigClick then self._eabOrigClick(self) end
+                          end,
+                          refreshAlpha = function() return SVal("rightTextTargetSepClassColor", false) and 0.3 or 1 end },
+                        { tooltip = "Class Colored", hasAlpha = false,
+                          getValue = function()
+                              local _, ct = UnitClass("player")
+                              local cc = ct and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[ct]
+                              if cc then return cc.r, cc.g, cc.b end
+                              return 1, 1, 1
+                          end,
+                          setValue = function() end,
+                          onClick = function() SSet("rightTextTargetSepClassColor", true); UpdatePreview() end,
+                          refreshAlpha = function() return SVal("rightTextTargetSepClassColor", false) and 1 or 0.3 end },
+                      } },
+                    { type="input", label="Separator", inputWidth=60,
+                      get=function() return SVal("rightTextTargetSep", ">") end,
+                      set=function(v)
+                          v = tostring(v or ""):gsub("|", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                          if v == "" then v = ">" end
+                          SSet("rightTextTargetSep", v); UpdatePreview()
+                      end,
+                      disabled=function() return SVal("rightTextContent","both") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected." },
                                     },
             })
             local rightCogShow = rightCogShowRaw
@@ -6405,6 +6491,41 @@ initFrame:SetScript("OnEvent", function(self)
                       set=function(v) SSet("centerTextShortNameEllipsis", v); UpdatePreview() end,
                       disabled=function() local c=SVal("centerTextContent","none") return c ~= "name" and c ~= "nametotarget" end,
                       disabledTooltip="Only applies when Name or Name > Target is selected." },
+                    { type="multiswatch", label="Indicator Color",
+                      disabled=function() return SVal("centerTextContent","none") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected.",
+                      swatches = {
+                        { tooltip = "Custom Colored", hasAlpha = false,
+                          getValue = function() local c = SVal("centerTextTargetSepColor", nil) if type(c) == "table" then return c.r or 1, c.g or 1, c.b or 1 end return 1, 1, 1 end,
+                          setValue = function(r, g, b) SSet("centerTextTargetSepColor", { r=r, g=g, b=b }); UpdatePreview() end,
+                          onClick = function(self)
+                              if SVal("centerTextTargetSepClassColor", false) then
+                                  SSet("centerTextTargetSepClassColor", false); UpdatePreview()
+                                  return
+                              end
+                              if self._eabOrigClick then self._eabOrigClick(self) end
+                          end,
+                          refreshAlpha = function() return SVal("centerTextTargetSepClassColor", false) and 0.3 or 1 end },
+                        { tooltip = "Class Colored", hasAlpha = false,
+                          getValue = function()
+                              local _, ct = UnitClass("player")
+                              local cc = ct and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[ct]
+                              if cc then return cc.r, cc.g, cc.b end
+                              return 1, 1, 1
+                          end,
+                          setValue = function() end,
+                          onClick = function() SSet("centerTextTargetSepClassColor", true); UpdatePreview() end,
+                          refreshAlpha = function() return SVal("centerTextTargetSepClassColor", false) and 1 or 0.3 end },
+                      } },
+                    { type="input", label="Separator", inputWidth=60,
+                      get=function() return SVal("centerTextTargetSep", ">") end,
+                      set=function(v)
+                          v = tostring(v or ""):gsub("|", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                          if v == "" then v = ">" end
+                          SSet("centerTextTargetSep", v); UpdatePreview()
+                      end,
+                      disabled=function() return SVal("centerTextContent","none") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected." },
                                     },
             })
             local centerCogShow = centerCogShowRaw
@@ -6560,6 +6681,41 @@ initFrame:SetScript("OnEvent", function(self)
                       set=function(v) SSet("extraTextShortNameEllipsis", v); UpdatePreview() end,
                       disabled=function() local c=SVal("extraTextContent","none") return c ~= "name" and c ~= "nametotarget" end,
                       disabledTooltip="Only applies when Name or Name > Target is selected." },
+                    { type="multiswatch", label="Indicator Color",
+                      disabled=function() return SVal("extraTextContent","none") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected.",
+                      swatches = {
+                        { tooltip = "Custom Colored", hasAlpha = false,
+                          getValue = function() local c = SVal("extraTextTargetSepColor", nil) if type(c) == "table" then return c.r or 1, c.g or 1, c.b or 1 end return 1, 1, 1 end,
+                          setValue = function(r, g, b) SSet("extraTextTargetSepColor", { r=r, g=g, b=b }); UpdatePreview() end,
+                          onClick = function(self)
+                              if SVal("extraTextTargetSepClassColor", false) then
+                                  SSet("extraTextTargetSepClassColor", false); UpdatePreview()
+                                  return
+                              end
+                              if self._eabOrigClick then self._eabOrigClick(self) end
+                          end,
+                          refreshAlpha = function() return SVal("extraTextTargetSepClassColor", false) and 0.3 or 1 end },
+                        { tooltip = "Class Colored", hasAlpha = false,
+                          getValue = function()
+                              local _, ct = UnitClass("player")
+                              local cc = ct and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[ct]
+                              if cc then return cc.r, cc.g, cc.b end
+                              return 1, 1, 1
+                          end,
+                          setValue = function() end,
+                          onClick = function() SSet("extraTextTargetSepClassColor", true); UpdatePreview() end,
+                          refreshAlpha = function() return SVal("extraTextTargetSepClassColor", false) and 1 or 0.3 end },
+                      } },
+                    { type="input", label="Separator", inputWidth=60,
+                      get=function() return SVal("extraTextTargetSep", ">") end,
+                      set=function(v)
+                          v = tostring(v or ""):gsub("|", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                          if v == "" then v = ">" end
+                          SSet("extraTextTargetSep", v); UpdatePreview()
+                      end,
+                      disabled=function() return SVal("extraTextContent","none") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected." },
                                     },
             })
             local extraCogShow = extraCogShowRaw
@@ -8633,6 +8789,41 @@ initFrame:SetScript("OnEvent", function(self)
                       set=function(v) SSet("btbLeftShortNameEllipsis", v); UpdatePreview() end,
                       disabled=function() local c=SVal("btbLeftContent","none") return c ~= "name" and c ~= "nametotarget" end,
                       disabledTooltip="Only applies when Name or Name > Target is selected." },
+                    { type="multiswatch", label="Indicator Color",
+                      disabled=function() return SVal("btbLeftContent","none") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected.",
+                      swatches = {
+                        { tooltip = "Custom Colored", hasAlpha = false,
+                          getValue = function() local c = SVal("btbLeftTargetSepColor", nil) if type(c) == "table" then return c.r or 1, c.g or 1, c.b or 1 end return 1, 1, 1 end,
+                          setValue = function(r, g, b) SSet("btbLeftTargetSepColor", { r=r, g=g, b=b }); UpdatePreview() end,
+                          onClick = function(self)
+                              if SVal("btbLeftTargetSepClassColor", false) then
+                                  SSet("btbLeftTargetSepClassColor", false); UpdatePreview()
+                                  return
+                              end
+                              if self._eabOrigClick then self._eabOrigClick(self) end
+                          end,
+                          refreshAlpha = function() return SVal("btbLeftTargetSepClassColor", false) and 0.3 or 1 end },
+                        { tooltip = "Class Colored", hasAlpha = false,
+                          getValue = function()
+                              local _, ct = UnitClass("player")
+                              local cc = ct and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[ct]
+                              if cc then return cc.r, cc.g, cc.b end
+                              return 1, 1, 1
+                          end,
+                          setValue = function() end,
+                          onClick = function() SSet("btbLeftTargetSepClassColor", true); UpdatePreview() end,
+                          refreshAlpha = function() return SVal("btbLeftTargetSepClassColor", false) and 1 or 0.3 end },
+                      } },
+                    { type="input", label="Separator", inputWidth=60,
+                      get=function() return SVal("btbLeftTargetSep", ">") end,
+                      set=function(v)
+                          v = tostring(v or ""):gsub("|", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                          if v == "" then v = ">" end
+                          SSet("btbLeftTargetSep", v); UpdatePreview()
+                      end,
+                      disabled=function() return SVal("btbLeftContent","none") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected." },
                                     },
             })
             local btbLeftCogShow = btbLeftCogShowRaw
@@ -8757,6 +8948,41 @@ initFrame:SetScript("OnEvent", function(self)
                       set=function(v) SSet("btbRightShortNameEllipsis", v); UpdatePreview() end,
                       disabled=function() local c=SVal("btbRightContent","none") return c ~= "name" and c ~= "nametotarget" end,
                       disabledTooltip="Only applies when Name or Name > Target is selected." },
+                    { type="multiswatch", label="Indicator Color",
+                      disabled=function() return SVal("btbRightContent","none") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected.",
+                      swatches = {
+                        { tooltip = "Custom Colored", hasAlpha = false,
+                          getValue = function() local c = SVal("btbRightTargetSepColor", nil) if type(c) == "table" then return c.r or 1, c.g or 1, c.b or 1 end return 1, 1, 1 end,
+                          setValue = function(r, g, b) SSet("btbRightTargetSepColor", { r=r, g=g, b=b }); UpdatePreview() end,
+                          onClick = function(self)
+                              if SVal("btbRightTargetSepClassColor", false) then
+                                  SSet("btbRightTargetSepClassColor", false); UpdatePreview()
+                                  return
+                              end
+                              if self._eabOrigClick then self._eabOrigClick(self) end
+                          end,
+                          refreshAlpha = function() return SVal("btbRightTargetSepClassColor", false) and 0.3 or 1 end },
+                        { tooltip = "Class Colored", hasAlpha = false,
+                          getValue = function()
+                              local _, ct = UnitClass("player")
+                              local cc = ct and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[ct]
+                              if cc then return cc.r, cc.g, cc.b end
+                              return 1, 1, 1
+                          end,
+                          setValue = function() end,
+                          onClick = function() SSet("btbRightTargetSepClassColor", true); UpdatePreview() end,
+                          refreshAlpha = function() return SVal("btbRightTargetSepClassColor", false) and 1 or 0.3 end },
+                      } },
+                    { type="input", label="Separator", inputWidth=60,
+                      get=function() return SVal("btbRightTargetSep", ">") end,
+                      set=function(v)
+                          v = tostring(v or ""):gsub("|", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                          if v == "" then v = ">" end
+                          SSet("btbRightTargetSep", v); UpdatePreview()
+                      end,
+                      disabled=function() return SVal("btbRightContent","none") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected." },
                                     },
             })
             local btbRightCogShow = btbRightCogShowRaw
@@ -8963,6 +9189,41 @@ initFrame:SetScript("OnEvent", function(self)
                       set=function(v) SSet("btbCenterShortNameEllipsis", v); UpdatePreview() end,
                       disabled=function() local c=SVal("btbCenterContent","none") return c ~= "name" and c ~= "nametotarget" end,
                       disabledTooltip="Only applies when Name or Name > Target is selected." },
+                    { type="multiswatch", label="Indicator Color",
+                      disabled=function() return SVal("btbCenterContent","none") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected.",
+                      swatches = {
+                        { tooltip = "Custom Colored", hasAlpha = false,
+                          getValue = function() local c = SVal("btbCenterTargetSepColor", nil) if type(c) == "table" then return c.r or 1, c.g or 1, c.b or 1 end return 1, 1, 1 end,
+                          setValue = function(r, g, b) SSet("btbCenterTargetSepColor", { r=r, g=g, b=b }); UpdatePreview() end,
+                          onClick = function(self)
+                              if SVal("btbCenterTargetSepClassColor", false) then
+                                  SSet("btbCenterTargetSepClassColor", false); UpdatePreview()
+                                  return
+                              end
+                              if self._eabOrigClick then self._eabOrigClick(self) end
+                          end,
+                          refreshAlpha = function() return SVal("btbCenterTargetSepClassColor", false) and 0.3 or 1 end },
+                        { tooltip = "Class Colored", hasAlpha = false,
+                          getValue = function()
+                              local _, ct = UnitClass("player")
+                              local cc = ct and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[ct]
+                              if cc then return cc.r, cc.g, cc.b end
+                              return 1, 1, 1
+                          end,
+                          setValue = function() end,
+                          onClick = function() SSet("btbCenterTargetSepClassColor", true); UpdatePreview() end,
+                          refreshAlpha = function() return SVal("btbCenterTargetSepClassColor", false) and 1 or 0.3 end },
+                      } },
+                    { type="input", label="Separator", inputWidth=60,
+                      get=function() return SVal("btbCenterTargetSep", ">") end,
+                      set=function(v)
+                          v = tostring(v or ""):gsub("|", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                          if v == "" then v = ">" end
+                          SSet("btbCenterTargetSep", v); UpdatePreview()
+                      end,
+                      disabled=function() return SVal("btbCenterContent","none") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected." },
                                     },
             })
             local btbCenterCogShow = btbCenterCogShowRaw
@@ -10035,6 +10296,10 @@ initFrame:SetScript("OnEvent", function(self)
                         { type="slider", label="Overlay Opacity", min=5, max=100, step=1,
                           get=function() return db.profile.dispelOverlayOpacity or 100 end,
                           set=function(v) db.profile.dispelOverlayOpacity = v; DispelRefresh() end },
+                        { type="toggle", label="Only Dispellable by You",
+                          tooltip="Shows the overlay only for debuffs you can currently dispel.",
+                          get=function() return db.profile.dispelOverlayByMe == true end,
+                          set=function(v) db.profile.dispelOverlayByMe = v and true or false; DispelRefresh() end },
                     },
                 })
                 local cogBtn = CreateFrame("Button", nil, rgn)
@@ -11949,6 +12214,41 @@ initFrame:SetScript("OnEvent", function(self)
                       set=function(v) MSet("leftTextShortNameEllipsis", v) end,
                       disabled=function() local c=MVal("leftTextContent","name") return c ~= "name" and c ~= "nametotarget" end,
                       disabledTooltip="Only applies when Name or Name > Target is selected." },
+                    { type="multiswatch", label="Indicator Color",
+                      disabled=function() return MVal("leftTextContent","name") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected.",
+                      swatches = {
+                        { tooltip = "Custom Colored", hasAlpha = false,
+                          getValue = function() local c = MVal("leftTextTargetSepColor", nil) if type(c) == "table" then return c.r or 1, c.g or 1, c.b or 1 end return 1, 1, 1 end,
+                          setValue = function(r, g, b) MSet("leftTextTargetSepColor", { r=r, g=g, b=b }) end,
+                          onClick = function(self)
+                              if MVal("leftTextTargetSepClassColor", false) then
+                                  MSet("leftTextTargetSepClassColor", false)
+                                  return
+                              end
+                              if self._eabOrigClick then self._eabOrigClick(self) end
+                          end,
+                          refreshAlpha = function() return MVal("leftTextTargetSepClassColor", false) and 0.3 or 1 end },
+                        { tooltip = "Class Colored", hasAlpha = false,
+                          getValue = function()
+                              local _, ct = UnitClass("player")
+                              local cc = ct and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[ct]
+                              if cc then return cc.r, cc.g, cc.b end
+                              return 1, 1, 1
+                          end,
+                          setValue = function() end,
+                          onClick = function() MSet("leftTextTargetSepClassColor", true) end,
+                          refreshAlpha = function() return MVal("leftTextTargetSepClassColor", false) and 1 or 0.3 end },
+                      } },
+                    { type="input", label="Separator", inputWidth=60,
+                      get=function() return MVal("leftTextTargetSep", ">") end,
+                      set=function(v)
+                          v = tostring(v or ""):gsub("|", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                          if v == "" then v = ">" end
+                          MSet("leftTextTargetSep", v)
+                      end,
+                      disabled=function() return MVal("leftTextContent","name") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected." },
                                     },
             })
             local cogBtn = MCogBtn(rgn, cogShowFn)
@@ -12035,6 +12335,41 @@ initFrame:SetScript("OnEvent", function(self)
                       set=function(v) MSet("rightTextShortNameEllipsis", v) end,
                       disabled=function() local c=MVal("rightTextContent","none") return c ~= "name" and c ~= "nametotarget" end,
                       disabledTooltip="Only applies when Name or Name > Target is selected." },
+                    { type="multiswatch", label="Indicator Color",
+                      disabled=function() return MVal("rightTextContent","none") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected.",
+                      swatches = {
+                        { tooltip = "Custom Colored", hasAlpha = false,
+                          getValue = function() local c = MVal("rightTextTargetSepColor", nil) if type(c) == "table" then return c.r or 1, c.g or 1, c.b or 1 end return 1, 1, 1 end,
+                          setValue = function(r, g, b) MSet("rightTextTargetSepColor", { r=r, g=g, b=b }) end,
+                          onClick = function(self)
+                              if MVal("rightTextTargetSepClassColor", false) then
+                                  MSet("rightTextTargetSepClassColor", false)
+                                  return
+                              end
+                              if self._eabOrigClick then self._eabOrigClick(self) end
+                          end,
+                          refreshAlpha = function() return MVal("rightTextTargetSepClassColor", false) and 0.3 or 1 end },
+                        { tooltip = "Class Colored", hasAlpha = false,
+                          getValue = function()
+                              local _, ct = UnitClass("player")
+                              local cc = ct and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[ct]
+                              if cc then return cc.r, cc.g, cc.b end
+                              return 1, 1, 1
+                          end,
+                          setValue = function() end,
+                          onClick = function() MSet("rightTextTargetSepClassColor", true) end,
+                          refreshAlpha = function() return MVal("rightTextTargetSepClassColor", false) and 1 or 0.3 end },
+                      } },
+                    { type="input", label="Separator", inputWidth=60,
+                      get=function() return MVal("rightTextTargetSep", ">") end,
+                      set=function(v)
+                          v = tostring(v or ""):gsub("|", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                          if v == "" then v = ">" end
+                          MSet("rightTextTargetSep", v)
+                      end,
+                      disabled=function() return MVal("rightTextContent","none") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected." },
                                     },
             })
             local cogBtn = MCogBtn(rgn, cogShowFn)
@@ -12133,6 +12468,41 @@ initFrame:SetScript("OnEvent", function(self)
                       set=function(v) MSet("centerTextShortNameEllipsis", v) end,
                       disabled=function() local c=MVal("centerTextContent","none") return c ~= "name" and c ~= "nametotarget" end,
                       disabledTooltip="Only applies when Name or Name > Target is selected." },
+                    { type="multiswatch", label="Indicator Color",
+                      disabled=function() return MVal("centerTextContent","none") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected.",
+                      swatches = {
+                        { tooltip = "Custom Colored", hasAlpha = false,
+                          getValue = function() local c = MVal("centerTextTargetSepColor", nil) if type(c) == "table" then return c.r or 1, c.g or 1, c.b or 1 end return 1, 1, 1 end,
+                          setValue = function(r, g, b) MSet("centerTextTargetSepColor", { r=r, g=g, b=b }) end,
+                          onClick = function(self)
+                              if MVal("centerTextTargetSepClassColor", false) then
+                                  MSet("centerTextTargetSepClassColor", false)
+                                  return
+                              end
+                              if self._eabOrigClick then self._eabOrigClick(self) end
+                          end,
+                          refreshAlpha = function() return MVal("centerTextTargetSepClassColor", false) and 0.3 or 1 end },
+                        { tooltip = "Class Colored", hasAlpha = false,
+                          getValue = function()
+                              local _, ct = UnitClass("player")
+                              local cc = ct and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[ct]
+                              if cc then return cc.r, cc.g, cc.b end
+                              return 1, 1, 1
+                          end,
+                          setValue = function() end,
+                          onClick = function() MSet("centerTextTargetSepClassColor", true) end,
+                          refreshAlpha = function() return MVal("centerTextTargetSepClassColor", false) and 1 or 0.3 end },
+                      } },
+                    { type="input", label="Separator", inputWidth=60,
+                      get=function() return MVal("centerTextTargetSep", ">") end,
+                      set=function(v)
+                          v = tostring(v or ""):gsub("|", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                          if v == "" then v = ">" end
+                          MSet("centerTextTargetSep", v)
+                      end,
+                      disabled=function() return MVal("centerTextContent","none") ~= "nametotarget" end,
+                      disabledTooltip="Only applies when Name > Target is selected." },
                                     },
             })
             local cogBtn = MCogBtn(rgn, cogShowFn)

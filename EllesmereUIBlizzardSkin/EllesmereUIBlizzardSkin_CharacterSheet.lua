@@ -1838,7 +1838,7 @@ local function SkinCharacterSheet()
                 settingKey = "SecondaryStats",
                 color = GetCategoryColor("Secondary Stats"),
                 stats = {
-                    { name = "Crit", func = function() return GetCritChance("player") or 0 end, format = "%.2f%%", rawFunc = function() return GetCombatRating(CR_CRIT_MELEE) or 0 end },
+                    { name = "Critical Strike", func = function() return GetCritChance("player") or 0 end, format = "%.2f%%", rawFunc = function() return GetCombatRating(CR_CRIT_MELEE) or 0 end },
                     { name = "Haste", func = function() return UnitSpellHaste("player") or 0 end, format = "%.2f%%", rawFunc = function() return GetCombatRating(CR_HASTE_MELEE) or 0 end },
                     { name = "Mastery", func = function() return GetMasteryEffect() or 0 end, format = "%.2f%%", rawFunc = function() return GetCombatRating(CR_MASTERY) or 0 end },
                     { name = "Versatility", func = function()
@@ -2330,7 +2330,7 @@ local function SkinCharacterSheet()
                         )
                         -- Description for secondary stats
                         local description = ""
-                        if stat.name == "Crit" then
+                        if stat.name == "Critical Strike" then
                             description = string.format(L("Increases your chance to critically hit by %.2f%%."), percentValue)
                         elseif stat.name == "Haste" then
                             description = string.format(L("Increases attack and casting speed by %.2f%%."), percentValue)
@@ -2364,7 +2364,7 @@ local function SkinCharacterSheet()
                         end
                         GameTooltip:AddLine(description, 1, 1, 1, true)
 
-                        if stat.name == "Crit" and GetCritChanceProvidesParryEffect() then
+                        if stat.name == "Critical Strike" and GetCritChanceProvidesParryEffect() then
                             local critToParry = GetCombatRatingBonusForCombatRatingValue(CR_PARRY, GetCombatRating(CR_CRIT_MELEE))
                             GameTooltip:AddLine(" ")
                             GameTooltip:AddLine(string.format(L("Increases parry chance by %.2f%%."), critToParry), 1, 1, 1, true)

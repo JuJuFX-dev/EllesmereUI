@@ -3794,7 +3794,14 @@ initFrame:SetScript("OnEvent", function(self)
                 UpdatePreview()
                 EllesmereUI:RefreshPage()
               end },
-            { type="label", text="" });  y = y - h
+            { type="slider", text="Non-Target Opacity",
+              tooltip="Fades enemy nameplates that are not your current target or focus while you have a target. 100 = no fading.",
+              min=0, max=100, step=1,
+              getValue=function() return DBVal("nonTargetAlpha") or 100 end,
+              setValue=function(v)
+                DB().nonTargetAlpha = v
+                if ns.NT_RefreshSetting then ns.NT_RefreshSetting() end
+              end });  y = y - h
 
         do
             local function nameRaidMarkerOff() return DBVal("nameRaidMarkerEnabled") ~= true end

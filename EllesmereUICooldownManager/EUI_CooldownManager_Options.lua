@@ -208,6 +208,12 @@ initFrame:SetScript("OnEvent", function(self)
     -- glow-assignable: the Bar Glows preview leaves their buttons inert.
     local function IsNonGlowableCDMIcon(frame)
         if not frame then return false end
+        -- Overflow-diverted icons render on this bar only for the session;
+        -- their glow identity (and any slot-index fallback key) belongs to
+        -- the source bar, so they are not listed/assignable while diverted.
+        -- Existing cdm_-keyed glows still RENDER on them (the render pass is
+        -- key-driven, not list-driven).
+        if ns.CdmFrameOverflowBar and ns.CdmFrameOverflowBar(frame) then return true end
         return (frame._isRacialFrame or frame._isTrinketFrame
             or frame._isPresetFrame or frame._isItemPresetFrame
             or frame._isCustomSpellFrame or frame._isCustomBuffFrame) and true or false
@@ -909,10 +915,18 @@ initFrame:SetScript("OnEvent", function(self)
                 barSettings = EAB_ADDON.db.profile.bars[barKeyStr]
             end
 
-            -- CDM bars: count icons dynamically; action bars: always 12
+            -- CDM bars: count icons dynamically; action bars: always 12.
+            -- Overflow-diverted icons are tail-appended to the target's array
+            -- and excluded here, so every native icon keeps its slot index
+            -- (stable glow-assignment fallback keys).
             local NUM_BUTTONS = 12
             if isCDMBar and ns.cdmBarIcons and ns.cdmBarIcons[cdmBarKey] then
-                NUM_BUTTONS = #ns.cdmBarIcons[cdmBarKey]
+                NUM_BUTTONS = 0
+                for _, ic in ipairs(ns.cdmBarIcons[cdmBarKey]) do
+                    if not (ns.CdmFrameOverflowBar and ns.CdmFrameOverflowBar(ic)) then
+                        NUM_BUTTONS = NUM_BUTTONS + 1
+                    end
+                end
                 if NUM_BUTTONS == 0 then NUM_BUTTONS = 1 end
             end
             local prefix = (not isCDMBar) and (BAR_BUTTON_PREFIXES[barIdx] or "ActionButton") or nil
@@ -5800,6 +5814,14 @@ initFrame:SetScript("OnEvent", function(self)
                 -- for the same spell (the buff frame's id resolves positive).
                 local _fdLI = ns._hookFrameData and ns._hookFrameData[icon]
                 if icon._isPlaceholderFrame or (_fdLI and _fdLI._isBuffViewerFrame) then
+                    _sid = nil
+                end
+                -- Skip overflow-diverted icons outright: they render on this
+                -- bar only for the session but BELONG to their source bar's
+                -- assignedSpells -- materializing (or advancing the insertion
+                -- cursor on) them would write the diversion into this bar's
+                -- saved list.
+                if _sid and ns.CdmFrameOverflowBar and ns.CdmFrameOverflowBar(icon) then
                     _sid = nil
                 end
                 if _sid and _sid ~= 0 then
@@ -15607,6 +15629,134 @@ initFrame:SetScript("OnEvent", function(self)
                 },
             })
             MakeCogBtn(rgn, oocCogShow, ctrl, EllesmereUI.COGS_ICON)
+        end
+
+        -- Max Icons + Overflow To: excess icons (beyond Max, the tail of this
+        -- bar's order) render on the target bar for the session. Identity,
+        -- per-spell settings and the options preview stay on this bar.
+        -- Legacy profiles carry nil barType on default bars -- resolve the
+        -- family via the shared helper, never the raw field.
+        local ofBarType = ns.GetBarType and ns.GetBarType(barData) or barData.barType
+        local isOverflowBar = (ofBarType == "cooldowns" or ofBarType == "utility")
+            and not barData.isGhostBar
+            and barData.key ~= (ns.FOCUSKICK_BAR_KEY or "focuskick")
+        if isOverflowBar then
+            local function OverflowShiftBlocked()
+                return (ns.CdmBarHasShiftCdState and ns.CdmBarHasShiftCdState(BD().key)) or false
+            end
+            -- A bar may not BOTH receive overflow and have its own overflow
+            -- config: incoming icons ignore the recipient's cap and never
+            -- chain onward, so a cap on a recipient would promise behavior
+            -- that does not exist. Recipient = ANY bar (enabled or not --
+            -- re-enabling must not create the forbidden state) with an
+            -- active cap+target pair pointing here.
+            local function BarIsOverflowRecipient(key)
+                local pp = DB()
+                if not (pp and pp.cdmBars) then return false end
+                for _, b in ipairs(pp.cdmBars.bars) do
+                    if b.key ~= key and b.maxIcons and b.maxIcons > 0
+                       and b.overflowTarget == key then
+                        return true
+                    end
+                end
+                return false
+            end
+            local ofVals, ofOrder = { [""] = "None" }, { "" }
+            do
+                local pp = DB()
+                if pp and pp.cdmBars then
+                    for _, b in ipairs(pp.cdmBars.bars) do
+                        local bt = ns.GetBarType and ns.GetBarType(b) or b.barType
+                        -- Bars with their own active overflow config are not
+                        -- offered as targets (the recipient rule, other door).
+                        local hasOwnOverflow = b.maxIcons and b.maxIcons > 0 and b.overflowTarget ~= nil
+                        if b.key ~= barData.key and not b.isGhostBar
+                           and b.key ~= (ns.FOCUSKICK_BAR_KEY or "focuskick")
+                           and b.key ~= "buffs"
+                           and bt ~= "buffs" and bt ~= "custom_buff"
+                           and not hasOwnOverflow then
+                            ofVals[b.key] = EllesmereUI.L(b.name or b.key)
+                            ofOrder[#ofOrder + 1] = b.key
+                        end
+                    end
+                    -- A stored target that the filter (or a bar delete) now
+                    -- excludes still displays -- and can be cleared -- rather
+                    -- than masquerading as "None" while active at runtime
+                    -- (pre-rule configs keep working under no-chaining).
+                    local cur = barData.overflowTarget
+                    if cur and not ofVals[cur] then
+                        local curName = cur
+                        for _, b in ipairs(pp.cdmBars.bars) do
+                            if b.key == cur then curName = b.name or cur; break end
+                        end
+                        ofVals[cur] = EllesmereUI.L(curName)
+                        ofOrder[#ofOrder + 1] = cur
+                    end
+                end
+            end
+            _, h = W:DualRow(parent, y,
+                { type="slider", text="Max Icons (0 = Off)",
+                  min=0, max=20, step=1,
+                  -- A blocked bar with a value already set can still lower/
+                  -- clear it -- a disabled control must never trap an
+                  -- existing value on.
+                  disabled=function()
+                      local b = BD()
+                      return (OverflowShiftBlocked() or BarIsOverflowRecipient(b.key))
+                          and not (b.maxIcons and b.maxIcons > 0)
+                  end,
+                  disabledTooltip=function()
+                      if BarIsOverflowRecipient(BD().key) then
+                          return "Not available while another bar overflows into this bar"
+                      end
+                      return "Not available while a spell on this bar uses a Cooldown State Shift Icons setting"
+                  end,
+                  rawTooltip=true,
+                  getValue=function() return BD().maxIcons or 0 end,
+                  setValue=function(v)
+                      if v == 0 then v = nil end
+                      BD().maxIcons = v
+                      ns.BuildAllCDMBars(); Refresh(); UpdateCDMPreviewAndResize()
+                      C_Timer.After(0, function() EllesmereUI:RefreshPage() end)
+                  end },
+                { type="dropdown", text="Overflow To",
+                  values=ofVals, order=ofOrder,
+                  -- Recipient bars cannot pick a fresh target (third door);
+                  -- one with a stale target set stays enabled so it can be
+                  -- cleared back to None.
+                  disabled=function()
+                      local b = BD()
+                      return OverflowShiftBlocked()
+                          or (BarIsOverflowRecipient(b.key) and not b.overflowTarget)
+                          or not (b.maxIcons and b.maxIcons > 0)
+                  end,
+                  -- Tooltip priority: recipient block, then the plain Max
+                  -- Icons requirement. The Shift Icons message only shows
+                  -- when it is the ACTUAL blocker (Max Icons already above 0
+                  -- but a spell carries a shift cooldown-state setting) --
+                  -- most users never touch that setting, so the default
+                  -- tooltip stays basic.
+                  disabledTooltip=function()
+                      local b = BD()
+                      if BarIsOverflowRecipient(b.key) then
+                          return "Not available while another bar overflows into this bar"
+                      end
+                      if not (b.maxIcons and b.maxIcons > 0) then
+                          return "Requires Max Icons to be above 0"
+                      end
+                      return "Not available while a spell on this bar uses a Cooldown State Shift Icons setting"
+                  end,
+                  rawTooltip=true,
+                  getValue=function()
+                      local t = BD().overflowTarget
+                      if t and ofVals[t] then return t end
+                      return ""
+                  end,
+                  setValue=function(v)
+                      if v == "" then v = nil end
+                      BD().overflowTarget = v
+                      ns.BuildAllCDMBars(); Refresh(); UpdateCDMPreviewAndResize()
+                  end });  y = y - h
         end
 
         -- Hide Buffs When Inactive (global setting, applies to all buff bars)

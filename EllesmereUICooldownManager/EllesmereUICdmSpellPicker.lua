@@ -1787,6 +1787,12 @@ function ns.RemoveCDMBar(key)
             cdmBarIcons[key] = nil
             p.cdmBarPositions[key] = nil
             table.remove(p.cdmBars.bars, i)
+            -- Max Icons overflow: clear targets that pointed at the removed
+            -- bar (runtime already fail-safes on a dangling key; this is
+            -- config hygiene on the explicit delete).
+            for _, b in ipairs(p.cdmBars.bars) do
+                if b.overflowTarget == key then b.overflowTarget = nil end
+            end
             -- Bar deletion shifts every later bar's array index: captured
             -- override paths into cdmBars.bars would now point at the WRONG
             -- bars. Drop them all (users re-capture) -- honest beats corrupt.

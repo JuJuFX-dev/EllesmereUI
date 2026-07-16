@@ -415,6 +415,52 @@ local function ResolveSpellSettings(frame, sid2, sd2, barKey)
 end
 ns.ResolveSpellSettings = ResolveSpellSettings
 
+-- Bar-scoped scan: true when any assigned entry on this CD/utility bar
+-- resolves to a Shift Icons cooldown-state effect. Frame-less and cheap
+-- (one pass over assignedSpells); called at reanchor time and from the
+-- options disabled-state, never per frame per update. Advisory only at
+-- runtime: Pass B additionally walks the live frame list (spillover frames
+-- and alias-keyed settings are invisible to a frame-less scan).
+function ns.CdmBarHasShiftCdState(barKey)
+    local sd = ns.GetBarSpellData(barKey)
+    local list = sd and sd.assignedSpells
+    if not list then return false end
+    for _, sid in ipairs(list) do
+        if sid and sid ~= 0 then
+            local eff
+            local hSid = ns.HostedBuffMarkerToSpell and ns.HostedBuffMarkerToSpell(sid)
+            if hSid then
+                -- Hosted buff: buff-family own entry only (hosted frames
+                -- never inherit this bar's tier).
+                local store = ns.GetSpellSettingsStore and ns.GetSpellSettingsStore("buffs")
+                local ssB = store and store[hSid]
+                eff = ssB and ssB.cdStateEffect
+            else
+                if sid > 0 then
+                    local ss = ResolveSpellSettings(nil, sid, sd, barKey)
+                    eff = ss and ss.cdStateEffect
+                end
+                if eff ~= "hiddenOnCDShift" and eff ~= "hiddenReadyShift"
+                   and ns.GetEffectiveCustomActiveState then
+                    local cas = ns.GetEffectiveCustomActiveState(sid)
+                    if cas and cas.cdStateEffect then eff = cas.cdStateEffect end
+                end
+            end
+            if eff == "hiddenOnCDShift" or eff == "hiddenReadyShift" then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- Options-side accessor: the overflow layout bar a frame is diverted to this
+-- session (nil when not diverted). The fc table is file-local.
+function ns.CdmFrameOverflowBar(frame)
+    local fc = frame and _ecmeFC[frame]
+    return fc and fc._overflowLayoutBar or nil
+end
+
 -- Apply the per-spell active-state OVERLAYS (glow + border) for a given active
 -- state. This is the context-independent slice of the SetSwipeColor active block:
 -- it touches only OUR own overlays (glowOverlay, borderFrame), never Blizzard's
@@ -4996,7 +5042,104 @@ local function CollectAndReanchor()
 
                 -- Sort by user-defined order
                 table.sort(frames, _sortByCDOrder)
+            end
+        end
+    end
 
+    ---------------------------------------------------------------------------
+    --  PHASE 3b: Max Icons overflow diversion (session-only). The tail of an
+    --  over-cap bar's sorted list moves to the target bar's render list for
+    --  this pass. Identity (fc.barKey) stays on the source bar, so per-spell
+    --  settings, menus and assignedSpells are untouched. Plan-then-apply from
+    --  a pre-move snapshot: diverted frames never re-divert and a bar's cap
+    --  counts only its native frames, independent of bar order.
+    ---------------------------------------------------------------------------
+    do
+        local tagged = ns._cdmOverflowTagged
+        if tagged then
+            for f in pairs(tagged) do
+                local fcT = _ecmeFC[f]
+                if fcT then fcT._overflowLayoutBar = nil end
+                tagged[f] = nil
+            end
+        end
+        if ns._cdmAnyOverflowCfg then
+            local moves  -- flat pairs: frame, targetKey, frame, targetKey, ...
+            for _, bd in ipairs(p.cdmBars.bars) do
+                local cap, tKey = bd.maxIcons, bd.overflowTarget
+                -- Legacy profiles carry nil barType on default bars; resolve
+                -- the family through the shared helper, never the raw field.
+                local bdType = ns.GetBarType and ns.GetBarType(bd) or bd.barType
+                if bd.enabled and cap and cap > 0 and tKey and tKey ~= bd.key
+                   and not bd.isGhostBar and bd.key ~= ns.FOCUSKICK_BAR_KEY
+                   and bdType ~= "buffs" and bdType ~= "custom_buff"
+                   and bd.key ~= "buffs" then
+                    local srcList = cdFrames[bd.key]
+                    if srcList and #srcList > cap and cdmBarFrames[bd.key] then
+                        local tbd = barDataByKey[tKey]
+                        local tType = tbd and (ns.GetBarType and ns.GetBarType(tbd) or tbd.barType)
+                        local tOK = tbd and tbd.enabled and not tbd.isGhostBar
+                            and tKey ~= ns.FOCUSKICK_BAR_KEY
+                            and tType ~= "buffs" and tType ~= "custom_buff"
+                            and tKey ~= "buffs" and cdmBarFrames[tKey]
+                        -- No-op rule: never divert while any member of this bar
+                        -- has a Shift Icons cooldown-state effect (the shift
+                        -- filter changes the effective count on a faster,
+                        -- independent cadence than this pass). Two stages: the
+                        -- frame-less assignedSpells scan, then a frame-scoped
+                        -- walk of the live list -- spillover frames (not in
+                        -- assignedSpells) and alias-keyed settings are only
+                        -- visible to the same resolution the live shift driver
+                        -- uses, so the check and the driver can never disagree.
+                        local blocked = ns.CdmBarHasShiftCdState(bd.key)
+                        if tOK and not blocked then
+                            local sdS = ns.GetBarSpellData(bd.key)
+                            for i = 1, #srcList do
+                                local fcS = _ecmeFC[srcList[i]]
+                                if fcS then
+                                    if fcS._cdStateShiftHidden then blocked = true; break end
+                                    local ssS = ResolveSpellSettings(srcList[i], fcS.spellID, sdS, bd.key)
+                                    local effS = ssS and ssS.cdStateEffect
+                                    if effS == "hiddenOnCDShift" or effS == "hiddenReadyShift" then
+                                        blocked = true; break
+                                    end
+                                end
+                            end
+                        end
+                        if tOK and not blocked then
+                            if not moves then moves = {} end
+                            for i = cap + 1, #srcList do
+                                moves[#moves + 1] = srcList[i]
+                                moves[#moves + 1] = tKey
+                            end
+                            for i = #srcList, cap + 1, -1 do srcList[i] = nil end
+                        end
+                    end
+                end
+            end
+            if moves then
+                if not ns._cdmOverflowTagged then
+                    ns._cdmOverflowTagged = setmetatable({}, { __mode = "k" })
+                end
+                tagged = ns._cdmOverflowTagged
+                for i = 1, #moves, 2 do
+                    local f, tKey = moves[i], moves[i + 1]
+                    local tl = cdFrames[tKey]
+                    if not tl then tl = {}; cdFrames[tKey] = tl end
+                    tl[#tl + 1] = f
+                    local fcM = _ecmeFC[f]
+                    if fcM then fcM._overflowLayoutBar = tKey end
+                    tagged[f] = true
+                end
+            end
+        end
+    end
+
+    for barKey, frames in pairs(cdFrames) do
+        local barData = barDataByKey[barKey]
+        if barData and barData.enabled then
+            local container = cdmBarFrames[barKey]
+            if container then
                 -- Assign to icon slots, decorate, show
                 local icons = cdmBarIcons[barKey]
                 if not icons then icons = {}; cdmBarIcons[barKey] = icons end

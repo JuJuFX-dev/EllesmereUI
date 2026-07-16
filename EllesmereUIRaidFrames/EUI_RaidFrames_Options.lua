@@ -1829,6 +1829,32 @@ initFrame:SetScript("OnEvent", function(self)
                   disabledTooltip="Show Power Bar For",
                   getValue=function() return SVal("powerHeight", 4) end,
                   setValue=function(v) SSet("powerHeight", v) end });  y = y - h
+            -- Cog: Uniform Icon Anchoring (power bar independence). Greyed +
+            -- blocked while no role shows a power bar (nothing to ignore then).
+            do
+                local rgn = row._rightRegion
+                local _, cogShow = EllesmereUI.BuildCogPopup({
+                    title = "Power Height",
+                    rows = {
+                        { type="toggle", label="Icons Ignore Power Bar",
+                          tooltip="Anchor icons and text as if no power bar existed, so frames with and without one line up identically.",
+                          get=function() return SVal("powerUniformAnchors", false) end,
+                          set=function(v) SSet("powerUniformAnchors", v) end },
+                    },
+                })
+                local cogBtn = CreateFrame("Button", nil, rgn)
+                cogBtn:SetSize(26, 26)
+                cogBtn:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
+                rgn._lastInline = cogBtn
+                cogBtn:SetFrameLevel(rgn:GetFrameLevel() + 5)
+                cogBtn:SetAlpha(IsPowerOff() and 0.15 or 0.4)
+                local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
+                cogTex:SetAllPoints(); cogTex:SetTexture(EllesmereUI.COGS_ICON)
+                cogBtn:SetScript("OnEnter", function(self) if not IsPowerOff() then self:SetAlpha(0.7) end end)
+                cogBtn:SetScript("OnLeave", function(self) self:SetAlpha(IsPowerOff() and 0.15 or 0.4) end)
+                cogBtn:SetScript("OnClick", function(self) if not IsPowerOff() then cogShow(self) end end)
+                EllesmereUI.RegisterWidgetRefresh(function() cogBtn:SetAlpha(IsPowerOff() and 0.15 or 0.4) end)
+            end
             do
                 local rgn = row._leftRegion
                 if rgn._control then rgn._control:Hide() end
@@ -3654,7 +3680,7 @@ initFrame:SetScript("OnEvent", function(self)
             -- Row 1: Show Tanks toggle | Add to Extra Group Hotkey (capture)
             row, h = W:DualRow(parent, y,
                 { type="toggle", text="Show Tanks in Extra Group",
-                  tooltip="Automatically duplicates the raid's tanks into the Extra Frames group. Shares the 5-frame cap with hotkey picks.",
+                  tooltip="Automatically duplicates the raid's tanks into the Extra Frames group. Shares the frame cap with hotkey picks.",
                   getValue = function() return XFSet().showTanks == true end,
                   setValue = function(v)
                       XFSet().showTanks = v
@@ -3784,7 +3810,7 @@ initFrame:SetScript("OnEvent", function(self)
                 end)
             end
 
-            -- Row 2: Position | Free Move Position (Move Frames + cog)
+            -- Row 2: Position | Free Move Position (Move Frames)
             row, h = W:DualRow(parent, y,
                 { type="dropdown", text="Position",
                   values = { left="Before First Group", right="After Last Group", free="Free Move" },
@@ -3796,7 +3822,9 @@ initFrame:SetScript("OnEvent", function(self)
                       XFSet().position = v
                       if v ~= "free" and ns.XF_SetMoverShown then ns.XF_SetMoverShown(false) end
                       if ns.XF_Apply then ns.XF_Apply() end
-                      EllesmereUI:RefreshPage()
+                      -- Full rebuild: the Grow/Wrap Direction row only exists
+                      -- while the position is Free Move.
+                      EllesmereUI:RefreshPage(true)
                   end },
                 { type="label", text="Free Move Position" }); y = y - h
             do
@@ -3817,37 +3845,6 @@ initFrame:SetScript("OnEvent", function(self)
                 lbl:SetPoint("CENTER", btn, "CENTER", 0, 0)
                 lbl:SetText(EllesmereUI.L("Move Frames"))
 
-                -- Inline cog: Free Move layout options (created before
-                -- UpdateMoveBtn so its closure captures the local)
-                local _, xfCogShow = EllesmereUI.BuildCogPopup({
-                    title = "Free Move Options",
-                    rows = {
-                        { type="toggle", label="Horizontal Frames",
-                          get=function() return XFSet().freeHorizontal == true end,
-                          set=function(v)
-                              XFSet().freeHorizontal = v
-                              if ns.XF_Apply then ns.XF_Apply() end
-                              -- Resize/reposition the drag overlay if it is up
-                              if ns.XF_IsMoverShown and ns.XF_IsMoverShown()
-                                 and ns.XF_SetMoverShown then
-                                  ns.XF_SetMoverShown(true)
-                              end
-                          end },
-                    },
-                })
-                local cogBtn = CreateFrame("Button", nil, row)
-                cogBtn:SetSize(26, 26)
-                cogBtn:SetPoint("RIGHT", btn, "LEFT", -8, 0)
-                cogBtn:SetFrameLevel(row:GetFrameLevel() + 5)
-                local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
-                cogTex:SetAllPoints()
-                cogTex:SetTexture(EllesmereUI.COGS_ICON)
-                cogBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.7) end)
-                cogBtn:SetScript("OnLeave", function(self)
-                    self:SetAlpha(XFSet().position == "free" and 0.4 or 0.15)
-                end)
-                cogBtn:SetScript("OnClick", function(self) xfCogShow(self) end)
-
                 local function MoveAllowed()
                     return XFConfigured() and (XFSet().position == "free")
                         and not InCombatLockdown()
@@ -3856,9 +3853,6 @@ initFrame:SetScript("OnEvent", function(self)
                     local active = ns.XF_IsMoverShown and ns.XF_IsMoverShown()
                     lbl:SetText(active and EllesmereUI.L("Stop Moving") or EllesmereUI.L("Move Frames"))
                     btn:SetAlpha(MoveAllowed() and 1 or 0.35)
-                    local freeOn = XFConfigured() and XFSet().position == "free"
-                    cogBtn:SetAlpha(freeOn and 0.4 or 0.15)
-                    cogBtn:EnableMouse(freeOn)
                     -- Plain-label slots have no native disabled handling; dim
                     -- the "Free Move Position" label with the rest of the row
                     if rgn._label then
@@ -3887,7 +3881,95 @@ initFrame:SetScript("OnEvent", function(self)
                 UpdateMoveBtn()
             end
 
-            -- Row 3: size offset on top of the shared raid frame size
+            -- Row 3 (Free Move only -- hidden otherwise, so Position's
+            -- setValue forces a page rebuild): growth axes of the
+            -- free-floating grid, with Wrap After tucked into an inline cog
+            -- on Wrap Direction. Attached positions need none of this: they
+            -- stack group-sized runs of 5 along the raid's own growth
+            -- settings, like additional raid groups. Grow Direction
+            -- supersedes the old Horizontal Frames cog toggle: its default
+            -- derives from the legacy freeHorizontal key, so existing
+            -- layouts read back unchanged.
+            if XFSet().position == "free" then
+            local function XFGrowDir()
+                local set = XFSet()
+                return set.growDirection or (set.freeHorizontal and "RIGHT" or "DOWN")
+            end
+            local function XFReapply()
+                if ns.XF_Apply then ns.XF_Apply() end
+                if ns.XF_IsMoverShown and ns.XF_IsMoverShown()
+                   and ns.XF_SetMoverShown then
+                    ns.XF_SetMoverShown(true)
+                end
+            end
+
+            -- The wrap dropdown only offers the two directions perpendicular
+            -- to the primary run, so a grow change forces a full page rebuild
+            -- to swap its value set.
+            local xfHoriz = (XFGrowDir() == "RIGHT" or XFGrowDir() == "LEFT")
+            row, h = W:DualRow(parent, y,
+                { type="dropdown", text="Grow Direction",
+                  tooltip="Direction the frames are laid out.",
+                  values = { DOWN="Down", UP="Up", RIGHT="Right", LEFT="Left" },
+                  order  = { "DOWN", "UP", "RIGHT", "LEFT" },
+                  disabled = function() return not XFConfigured() end,
+                  disabledTooltip = XF_DISABLED_TIP,
+                  getValue = XFGrowDir,
+                  setValue = function(v)
+                      local set = XFSet()
+                      set.growDirection = v
+                      -- Keep the legacy key coherent for exports/older reads
+                      set.freeHorizontal = (v == "RIGHT" or v == "LEFT")
+                      XFReapply()
+                      EllesmereUI:RefreshPage(true)
+                  end },
+                { type="dropdown", text="Wrap Direction",
+                  tooltip="Direction each new row or column stacks. Set Wrap After in the cog to enable wrapping.",
+                  values = xfHoriz and { DOWN="Down", UP="Up" } or { RIGHT="Right", LEFT="Left" },
+                  order  = xfHoriz and { "DOWN", "UP" } or { "RIGHT", "LEFT" },
+                  disabled = function() return not XFConfigured() end,
+                  disabledTooltip = XF_DISABLED_TIP,
+                  getValue = function()
+                      local wd = XFSet().wrapDirection
+                      if XFGrowDir() == "RIGHT" or XFGrowDir() == "LEFT" then
+                          return (wd == "UP" or wd == "DOWN") and wd or "DOWN"
+                      end
+                      return (wd == "LEFT" or wd == "RIGHT") and wd or "RIGHT"
+                  end,
+                  setValue = function(v)
+                      XFSet().wrapDirection = v
+                      XFReapply()
+                  end }); y = y - h
+            -- Inline cog on Wrap Direction: Wrap After slider
+            do
+                local rgn = row._rightRegion
+                local _, cogShow = EllesmereUI.BuildCogPopup({
+                    title = "Row Wrapping",
+                    rows = {
+                        { type="slider", label="Wrap After", min=0, max=20, step=1,
+                          get=function() return XFSet().wrapAfter or 0 end,
+                          set=function(v)
+                              XFSet().wrapAfter = v
+                              XFReapply()
+                          end },
+                    },
+                })
+                local cogBtn = CreateFrame("Button", nil, rgn)
+                cogBtn:SetSize(26, 26)
+                cogBtn:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
+                rgn._lastInline = cogBtn
+                cogBtn:SetFrameLevel(rgn:GetFrameLevel() + 5)
+                cogBtn:SetAlpha(0.4)
+                local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
+                cogTex:SetAllPoints()
+                cogTex:SetTexture(EllesmereUI.COGS_ICON)
+                cogBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.7) end)
+                cogBtn:SetScript("OnLeave", function(self) self:SetAlpha(0.4) end)
+                cogBtn:SetScript("OnClick", function(self) cogShow(self) end)
+            end
+            end -- Free Move only row
+
+            -- Row 4: size offset on top of the shared raid frame size
             row, h = W:DualRow(parent, y,
                 { type="slider", text="Extra Width", min=-50, max=100, step=1,
                   tooltip="Widens or narrows the extra frames relative to the raid frame size.",

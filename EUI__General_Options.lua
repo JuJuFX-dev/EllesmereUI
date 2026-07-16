@@ -406,6 +406,113 @@ end
 -------------------------------------------------------------------------------
 EllesmereUI._WHATSNEW_PATCHES = {
     {
+        version = "8.4.8",
+        heroes = {
+            {
+                module = "Cooldown Manager",
+                title  = "Bar Icon Overflow",
+                desc   = "Cap how many icons a Cooldown or Utility bar shows with the new Max Icons slider. Extra icons overflow onto another bar of your choice, keeping your main rotation row clean.",
+                nav    = { module = "EllesmereUICooldownManager", page = "CDM Bars", section = "BAR LAYOUT", highlight = "Max Icons (0 = Off)",
+                    preSelect = function()
+                        if EllesmereUI._setCDMBar then EllesmereUI._setCDMBar("cooldowns") end
+                    end },
+            },
+            {
+                module = "Spec Overrides",
+                title  = "Reliability Overhaul",
+                desc   = "A ground-up hardening of the override system: override values can no longer corrupt your shared defaults or bleed onto specs outside their group, and settings controlled by an applied Conditional Override now show a gold Override Active label telling you exactly where to edit them.",
+                nav    = { module = "_EUIProfiles", page = "Spec Overrides" },
+            },
+        },
+        features = {
+            {
+                module = "Nameplates",
+                title  = "Non-Target Opacity",
+                desc   = "Fade every enemy nameplate except your target and focus",
+                nav    = { module = "EllesmereUINameplates", page = "General", section = "EXTRAS", highlight = "Non-Target Opacity" },
+            },
+            {
+                module = "Profiles & Presets",
+                title  = "Import UI Scale Control",
+                desc   = "Choose whether an imported profile applies its UI scale",
+                nav    = { module = "_EUIProfiles", page = "Profiles" },
+            },
+            {
+                module = "Profiles & Presets",
+                title  = "Export Without Global Look",
+                desc   = "Per-addon exports can leave fonts and colors out",
+                nav    = { module = "_EUIProfiles", page = "Profiles" },
+            },
+            {
+                module = "Raid Frames",
+                title  = "Extra Frames, Up to 20",
+                desc   = "Up to 20 duplicate frames with grid wrap controls",
+                nav    = { module = "EllesmereUIRaidFrames", page = "Frames", section = "EXTRA FRAMES", highlight = "Position" },
+            },
+            {
+                module = "Raid Frames",
+                title  = "Icons Ignore Power Bar",
+                desc   = "Align icons and text as if no power bar existed",
+                nav    = { module = "EllesmereUIRaidFrames", page = "Frames", section = "POWER BAR", highlight = "Power Height" },
+            },
+            {
+                module = "Unit Frames",
+                title  = "Custom Name > Target Separator",
+                desc   = "Type your own separator and color it",
+                nav    = { module = "EllesmereUIUnitFrames", page = "Main Frames", section = "HEALTH BAR", highlight = "Left Text",
+                    preSelect = function()
+                        if EllesmereUI._setUnitFrameUnit then EllesmereUI._setUnitFrameUnit("player") end
+                    end },
+            },
+            {
+                module = "Unit Frames",
+                title  = "Only Dispellable by You",
+                desc   = "Show the dispel overlay only for debuffs you can dispel",
+                nav    = { module = "EllesmereUIUnitFrames", page = "Main Frames", section = "BUFFS AND DEBUFFS", highlight = "Dispel Overlay",
+                    preSelect = function()
+                        if EllesmereUI._setUnitFrameUnit then EllesmereUI._setUnitFrameUnit("player") end
+                    end },
+            },
+        },
+        fixes = {
+            { module = "Action Bars", text = "Fixed icons with Desaturate on Cooldown or Alpha when on CD returning to full color too early for charge spells and items, and staying dimmed after a charge regenerated." },
+            { module = "Action Bars", text = "Fixed the Show Item Rank icon not updating right away when a different rank item replaces the item in an action bar slot." },
+            { module = "Bags", text = "OneBag Sort now reorganizes items in the reagent bag along with your other bags." },
+            { module = "Bags", text = "Depositing into One or All Warband Bank views now stacks onto matching items in any warband tab instead of only the first tab with an empty slot." },
+            { module = "Bags", text = "Rapidly transferring items no longer causes clicks to fall through onto your action bars underneath." },
+            { module = "Bags", text = "Right-clicking the Miscellaneous category and choosing Rename now actually renames it." },
+            { module = "Character Sheet", text = "Secondary Stats now say Critical Strike instead of Crit, matching Blizzard's naming." },
+            { module = "Character Sheet", text = "The gem socket panel now reliably closes after socketing, instead of occasionally staying open and blocking clicks." },
+            { module = "Cooldown Manager", text = "The Pixel Glow and Button Glow CD Ready effects on trinkets, racials, potions, and custom spells now correctly turn off while the ability is on cooldown." },
+            { module = "Cooldown Manager", text = "Buff bar countdown timers now round seconds up to match Blizzard's own aura timers instead of reading one second low." },
+            { module = "Cooldown Manager", text = "Bars no longer disappear after entering or leaving an arena or battleground." },
+            { module = "Cooldown Manager", text = "Trinket icons no longer disappear while browsing a crafting order vendor." },
+            { module = "Cooldown Manager", text = "Buff icons shown for configuration no longer stay visible on screen after closing the options window." },
+            { module = "General", text = "The module on/off icon in the sidebar stays dimmed for disabled modules instead of brightening on mouseover." },
+            { module = "Global Search", text = "Typing a window's name (for example Mail or Achievements) into the sidebar search now finds that window's skin card." },
+            { module = "Global Search", text = "Search results keep mixed-case section labels like LFG Menu intact instead of re-capitalizing them." },
+            { module = "Mail", text = "Opened mail letters now render their text in the skin font." },
+            { module = "Profiles & Presets", text = "Importing a profile with custom colors now displays the imported palette right away." },
+            { module = "Profiles & Presets", text = "Importing a per-addon export without fonts no longer resets your global font to the default." },
+            { module = "Quality of Life", text = "Auto Open Containers no longer leaves a container stuck greyed out and unopenable when opens overlap." },
+            { module = "Quest Tracker", text = "The quest item hotkey now works for quest items from quests you are not tracking." },
+            { module = "Raid Frames", text = "Extra Frames in Free Move no longer shift position when the number of shown frames changes." },
+            { module = "Raid Frames", text = "Fixed the raid frame block not moving to its saved per-size position when the roster crossed a size tier in combat." },
+            { module = "Spec Overrides", text = "Fixed width and height matched bars randomly reverting to a stale size on spec changes and options roundtrips." },
+            { module = "Spec Overrides", text = "Adding your current spec to an existing override group no longer overwrites the group's stored values with your live settings." },
+            { module = "Spec Overrides", text = "Custom per-tier raid size settings can now be captured into an override group." },
+            { module = "Spec Overrides", text = "Creating a new override group now drops you straight into editing it." },
+            { module = "Spec Overrides", text = "When two groups share a spec, the Unlock button locks on every group except the one that owns that spec's layout, with a tooltip naming the owner." },
+            { module = "Tooltips", text = "Reskinned tooltips now size themselves correctly on their first show after changing the tooltip font scale." },
+            { module = "Unit Frames", text = "Boss frame names with Class Colored enabled now recolor correctly when a new boss engages or your target changes." },
+            { module = "Unit Frames", text = "Switching Power Bar Position to Detached now updates the bar's border and text immediately." },
+            { module = "Unlock Mode", text = "Entering Unlock Mode from the minimap button or slash command now returns you to the options panel when you exit." },
+            { module = "Unlock Mode", text = "Selected elements no longer keep their info label expanded after your cursor moves away." },
+            { module = "Unlock Mode", text = "Bars linked by a fallback anchor no longer drift off their pinned edge when the linked bar is a different size on another spec." },
+            { module = "Unlock Mode", text = "Size edits made from the inline cog inputs are no longer reverted the next time override values apply." },
+        },
+    },
+    {
         version = "8.4.7",
         heroes = {
             {
@@ -4286,6 +4393,12 @@ initFrame:SetScript("OnEvent", function(self)
                 and type(payload.data.assignedSpecs) == "table"
                 and #payload.data.assignedSpecs > 0
 
+            -- Does this string carry a UI scale? Only new-format full exports do
+            -- (old profiles have none). When present, the footer shows an
+            -- "Exclude UI Scale" toggle (default on = keep the user's own scale).
+            local hasUIScale = payload and payload.data
+                and type(payload.data.uiScale) == "number"
+
             local ADDON_DB_MAP_LOCAL = EllesmereUI._ADDON_DB_MAP
             local PAD        = EllesmereUI.CONTENT_PAD
             local totalW     = importPage:GetWidth() - PAD * 2
@@ -4295,7 +4408,10 @@ initFrame:SetScript("OnEvent", function(self)
             local STATUS_W   = 70
             local HDR_H      = 72
             local COL_HDR_H  = 28
-            local FOOTER_H   = hasSpecAssign and 74 or 50
+            -- Each optional secondary toggle (Auto Assign, Exclude UI Scale)
+            -- stacks below the count/Include-layout row and adds a row of height.
+            local nFooterStack = (hasSpecAssign and 1 or 0) + (hasUIScale and 1 or 0)
+            local FOOTER_H   = 50 + nFooterStack * 24
             local READY_R, READY_G, READY_B = 0.196, 0.737, 0.325
             local INCLUDE_CENTER_X = -(SIDE_PAD + STATUS_W + 30 + CHK_SZ / 2)
 
@@ -4432,6 +4548,7 @@ initFrame:SetScript("OnEvent", function(self)
             local selectedImports = {}
             local includeLayoutImport = true     -- "Include layout" toggle (default on)
             local autoAssignImport = false       -- "Auto Assign to Specs" toggle (default off)
+            local excludeUIScaleImport = true    -- "Exclude UI Scale" toggle (default on = excluded)
             local importVisuals = {}
             local importCountFs
             local importComponents   -- canon folder -> { component member set }, set below
@@ -4812,10 +4929,10 @@ initFrame:SetScript("OnEvent", function(self)
             if footerDiv.SetSnapToPixelGrid then footerDiv:SetSnapToPixelGrid(false); footerDiv:SetTexelSnappingBias(0) end
 
             importCountFs = EllesmereUI.MakeFont(footerFrame, 12, nil, 1, 1, 1, 0.40)
-            -- With the spec toggle present the footer carries two stacked rows, so
+            -- With any secondary toggle present the footer carries stacked rows, so
             -- the count + "Include layout" sit on the upper row; otherwise they stay
             -- vertically centered as before.
-            if hasSpecAssign then
+            if nFooterStack > 0 then
                 PP.Point(importCountFs, "TOPLEFT", footerFrame, "TOPLEFT", SIDE_PAD, -16)
             else
                 PP.Point(importCountFs, "LEFT", footerFrame, "LEFT", SIDE_PAD, 0)
@@ -4853,6 +4970,9 @@ initFrame:SetScript("OnEvent", function(self)
                 layoutChkBtn = ilBtn
             end
 
+            -- Secondary toggles stack downward from the Include-layout row.
+            local lastFooterStack = layoutChkBtn
+
             -- "Auto Assign to Specs" toggle: only shown when the string carries
             -- spec->profile assignments. Off (default) = the recipient's own spec
             -- assignments are left untouched. On = each spec the profile was
@@ -4860,7 +4980,7 @@ initFrame:SetScript("OnEvent", function(self)
             if hasSpecAssign and layoutChkBtn then
                 local aaBtn = CreateFrame("Button", nil, footerFrame)
                 aaBtn:SetSize(180, 24)
-                PP.Point(aaBtn, "TOPLEFT", layoutChkBtn, "BOTTOMLEFT", 0, -4)
+                PP.Point(aaBtn, "TOPLEFT", lastFooterStack, "BOTTOMLEFT", 0, -4)
                 local box = CreateFrame("Frame", nil, aaBtn)
                 box:SetSize(CHK_SZ, CHK_SZ)
                 box:SetPoint("LEFT", aaBtn, "LEFT", 0, 0)
@@ -4881,6 +5001,39 @@ initFrame:SetScript("OnEvent", function(self)
                     EllesmereUI.ShowWidgetTooltip(aaBtn, EllesmereUI.L("Assign this profile to the same specializations it was assigned to on export. Off = your current spec assignments stay as they are."))
                 end)
                 aaBtn:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+                lastFooterStack = aaBtn
+            end
+
+            -- "Exclude UI Scale" toggle: only shown when the string carries a UI
+            -- scale (new-format full exports). On (default) = your account's UI
+            -- scale is left untouched. Off = the profile's UI scale is applied
+            -- account-wide (it affects every character), matching the scale the
+            -- profile was designed at.
+            if hasUIScale and layoutChkBtn then
+                local usBtn = CreateFrame("Button", nil, footerFrame)
+                usBtn:SetSize(180, 24)
+                PP.Point(usBtn, "TOPLEFT", lastFooterStack, "BOTTOMLEFT", 0, -4)
+                local box = CreateFrame("Frame", nil, usBtn)
+                box:SetSize(CHK_SZ, CHK_SZ)
+                box:SetPoint("LEFT", usBtn, "LEFT", 0, 0)
+                local bg = box:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints()
+                bg:SetColorTexture(0.12, 0.12, 0.14, 1)
+                EllesmereUI.MakeBorder(box, 0.25, 0.25, 0.28, 0.6, PP)
+                local mark = box:CreateTexture(nil, "ARTWORK")
+                mark:SetPoint("TOPLEFT", box, "TOPLEFT", 3, -3)
+                mark:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -3, 3)
+                mark:SetColorTexture(EG.r, EG.g, EG.b, 1)
+                local lbl = EllesmereUI.MakeFont(usBtn, 12, nil, 1, 1, 1, 0.6)
+                lbl:SetPoint("LEFT", box, "RIGHT", 6, 0)
+                lbl:SetText(EllesmereUI.L("Exclude UI Scale"))
+                local function vis() mark:SetShown(excludeUIScaleImport) end
+                vis()
+                usBtn:SetScript("OnClick", function() excludeUIScaleImport = not excludeUIScaleImport; vis() end)
+                usBtn:SetScript("OnEnter", function()
+                    EllesmereUI.ShowWidgetTooltip(usBtn, EllesmereUI.L("Keep your own UI scale. Off = apply the UI scale this profile was made with (changes the scale for all your characters)."))
+                end)
+                usBtn:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+                lastFooterStack = usBtn
             end
 
             local IMP_BTN_W = 180
@@ -4969,6 +5122,12 @@ initFrame:SetScript("OnEvent", function(self)
                 -- left untouched).
                 if filteredPayload and filteredPayload.data and not autoAssignImport then
                     filteredPayload.data.assignedSpecs = nil
+                end
+                -- UI scale (account-wide): applied by ImportProfile ONLY when this
+                -- opt-in marker is set. The toggle defaults to excluded, so by
+                -- default nothing is set and the user's own scale is left untouched.
+                if filteredPayload and filteredPayload.data and hasUIScale and not excludeUIScaleImport then
+                    filteredPayload.data.applyUIScale = true
                 end
                 -- Layout relationships: keep only the anchor/size-match
                 -- relationships whose BOTH endpoints are in the selected modules
@@ -6396,7 +6555,9 @@ initFrame:SetScript("OnEvent", function(self)
             local SIDE_PAD   = 26
             local HDR_H      = 72
             local COL_HDR_H  = 28
-            local FOOTER_H   = 50
+            -- Two stacked footer rows: count + "Include layout" on top,
+            -- "Include Global Settings" below.
+            local FOOTER_H   = 74
             local READY_R, READY_G, READY_B = 0.196, 0.737, 0.325
             local SKIP_A     = 0.35
 
@@ -6465,6 +6626,7 @@ initFrame:SetScript("OnEvent", function(self)
             -- Build addon item list
             local selectedAddons = {}
             local includeLayoutExport = true     -- "Include layout" toggle (default on)
+            local includeGlobalsExport = true    -- "Include Global Settings" toggle (default on)
             local addonItems = {}
             local addonVisuals = {}
             local footerCountFs
@@ -6802,7 +6964,8 @@ initFrame:SetScript("OnEvent", function(self)
             if footerDiv.SetSnapToPixelGrid then footerDiv:SetSnapToPixelGrid(false); footerDiv:SetTexelSnappingBias(0) end
 
             footerCountFs = EllesmereUI.MakeFont(footerFrame, 12, nil, 1, 1, 1, 0.40)
-            PP.Point(footerCountFs, "LEFT", footerFrame, "LEFT", SIDE_PAD, 0)
+            -- Top row of the two stacked footer rows (count + Include layout).
+            PP.Point(footerCountFs, "TOPLEFT", footerFrame, "TOPLEFT", SIDE_PAD, -16)
             footerCountFs:SetJustifyH("LEFT")
             RefreshFooterCount()
 
@@ -6834,6 +6997,36 @@ initFrame:SetScript("OnEvent", function(self)
                 end)
                 ilBtn:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
                 layoutChkBtn = ilBtn
+            end
+
+            -- "Include Global Settings" toggle: on (default) = the profile-global
+            -- appearance (fonts, custom colours, dark mode, accent colour) rides
+            -- this per-addon export. Off = only the selected modules' own settings
+            -- export, leaving the recipient's global look untouched.
+            if layoutChkBtn then
+                local gsBtn = CreateFrame("Button", nil, footerFrame)
+                gsBtn:SetSize(200, 24)
+                PP.Point(gsBtn, "TOPLEFT", layoutChkBtn, "BOTTOMLEFT", 0, -4)
+                local box = CreateFrame("Frame", nil, gsBtn)
+                box:SetSize(CHK_SZ, CHK_SZ)
+                box:SetPoint("LEFT", gsBtn, "LEFT", 0, 0)
+                local bg = box:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints()
+                bg:SetColorTexture(0.12, 0.12, 0.14, 1)
+                EllesmereUI.MakeBorder(box, 0.25, 0.25, 0.28, 0.6, PP)
+                local mark = box:CreateTexture(nil, "ARTWORK")
+                mark:SetPoint("TOPLEFT", box, "TOPLEFT", 3, -3)
+                mark:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -3, 3)
+                mark:SetColorTexture(EG.r, EG.g, EG.b, 1)
+                local lbl = EllesmereUI.MakeFont(gsBtn, 12, nil, 1, 1, 1, 0.6)
+                lbl:SetPoint("LEFT", box, "RIGHT", 6, 0)
+                lbl:SetText(EllesmereUI.L("Include Global Settings"))
+                local function vis() mark:SetShown(includeGlobalsExport) end
+                vis()
+                gsBtn:SetScript("OnClick", function() includeGlobalsExport = not includeGlobalsExport; vis() end)
+                gsBtn:SetScript("OnEnter", function()
+                    EllesmereUI.ShowWidgetTooltip(gsBtn, EllesmereUI.L("Include fonts, custom colours, dark mode and accent colour with this export. Off = only the selected modules' own settings export, keeping the recipient's global look."))
+                end)
+                gsBtn:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
             end
 
 
@@ -6884,7 +7077,7 @@ initFrame:SetScript("OnEvent", function(self)
                 end
                 local activeName = EllesmereUI.GetActiveProfileName()
                 local function finishExport(includeCDM, cdmSpecs)
-                    local str = EllesmereUI.ExportProfile(activeName, folders, includeLayoutExport, includeCDM, cdmSpecs)
+                    local str = EllesmereUI.ExportProfile(activeName, folders, includeLayoutExport, includeCDM, cdmSpecs, includeGlobalsExport)
                     if str then EllesmereUI:ShowExportPopup(str) end
                 end
                 -- If the CDM module is selected, run the shared flow (ask -> spec

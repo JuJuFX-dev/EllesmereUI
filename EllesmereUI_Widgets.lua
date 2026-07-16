@@ -4873,6 +4873,84 @@ local function BuildCogPopup(opts)
                 end
 
                 curY = curY - ROW_H
+            elseif row.type == 'multiswatch' then
+                -- Label + N color swatches laid out right-to-left from the right
+                -- edge: the cog-row form of the main-page multiSwatch slot (click
+                -- one swatch or the other; the inactive one dims). Same swatch
+                -- spec: getValue/setValue/hasAlpha/tooltip/onClick (original
+                -- picker click stashed on _eabOrigClick)/refreshAlpha.
+                local lbl = MakeFont(pf, 11, nil, 1, 1, 1); lbl:SetAlpha(0.6)
+                lbl:SetText(EllesmereUI.L(row.label))
+                lbl:SetPoint('LEFT', pf, 'TOPLEFT', SIDE_PAD, curY - ROW_H / 2 - 1)
+
+                local MSW_GAP = 8
+                local mswX = -SIDE_PAD
+                local mswUpdates, mswAlphas = {}, {}
+                local mswSwatches = row.swatches or {}
+                for i = #mswSwatches, 1, -1 do
+                    local sc = mswSwatches[i]
+                    local swatch, updateSwatch = BuildColorSwatch(pf, pf:GetFrameLevel() + 2,
+                        sc.getValue,
+                        function(r, g, b, a)
+                            if sc.setValue then sc.setValue(r, g, b, a) end
+                            if EllesmereUI._NotifySettingWrite then
+                                EllesmereUI._NotifySettingWrite(popupOwner or opts.captureRegion)
+                            end
+                            if pf._refresh then pf._refresh() end
+                        end,
+                        sc.hasAlpha, 20)
+                    swatch:ClearAllPoints()
+                    swatch:SetPoint('RIGHT', pf, 'TOPRIGHT', mswX, curY - ROW_H / 2)
+                    mswX = mswX - 20 - MSW_GAP
+                    if sc.onClick then
+                        swatch._eabOrigClick = swatch:GetScript('OnClick')
+                        swatch:SetScript('OnClick', function(self, ...)
+                            sc.onClick(self, ...)
+                            if EllesmereUI._NotifySettingWrite then
+                                EllesmereUI._NotifySettingWrite(popupOwner or opts.captureRegion)
+                            end
+                            if pf._refresh then pf._refresh() end
+                        end)
+                    end
+                    if sc.tooltip then
+                        swatch:HookScript('OnEnter', function()
+                            if EllesmereUI.ShowWidgetTooltip then EllesmereUI.ShowWidgetTooltip(swatch, sc.tooltip) end
+                        end)
+                        swatch:HookScript('OnLeave', function()
+                            if EllesmereUI.HideWidgetTooltip then EllesmereUI.HideWidgetTooltip() end
+                        end)
+                    end
+                    mswUpdates[#mswUpdates + 1] = updateSwatch
+                    if sc.refreshAlpha then
+                        mswAlphas[#mswAlphas + 1] = { sw = swatch, fn = sc.refreshAlpha }
+                        swatch:SetAlpha(sc.refreshAlpha())
+                    end
+                end
+
+                -- Row-level disabled overlay (same as the slider/input rows).
+                local mswDis
+                if row.disabled then
+                    mswDis = CreateFrame("Frame", nil, pf)
+                    mswDis:SetPoint("TOPLEFT", pf, "TOPLEFT", 1, curY)
+                    mswDis:SetPoint("TOPRIGHT", pf, "TOPRIGHT", -1, curY)
+                    mswDis:SetHeight(ROW_H)
+                    mswDis:SetFrameLevel(pf:GetFrameLevel() + 10)
+                    mswDis:EnableMouse(true)
+                    local disTex = SolidTex(mswDis, "OVERLAY", 0.06, 0.08, 0.10, 0.70)
+                    disTex:SetAllPoints()
+                    mswDis:SetScript("OnEnter", function(self)
+                        local tip = ResolveDisabledTip(row)
+                        if tip and EllesmereUI.ShowWidgetTooltip then
+                            EllesmereUI.ShowWidgetTooltip(self, tip)
+                        end
+                    end)
+                    mswDis:SetScript("OnLeave", function() if EllesmereUI.HideWidgetTooltip then EllesmereUI.HideWidgetTooltip() end end)
+                    local initDis = type(row.disabled) == "function" and row.disabled() or row.disabled
+                    if initDis then mswDis:Show() else mswDis:Hide() end
+                end
+
+                rowWidgets[#rowWidgets + 1] = { type = 'multiswatch', updates = mswUpdates, alphaFns = mswAlphas, disOverlay = mswDis, disCheck = row.disabled }
+                curY = curY - ROW_H
             elseif row.type == 'input' then
                 local lbl = MakeFont(pf, 11, nil, 1, 1, 1); lbl:SetAlpha(0.6)
                 lbl:SetText(EllesmereUI.L(row.label))
@@ -5298,6 +5376,21 @@ local function BuildCogPopup(opts)
                         if dis then rw.disOverlay:Show() else rw.disOverlay:Hide() end
                     end
                     if rw.refresh then rw.refresh() end
+                elseif rw.type == 'multiswatch' then
+                    if rw.disOverlay and rw.disCheck then
+                        local dis
+                        if type(rw.disCheck) == "function" then dis = rw.disCheck() else dis = rw.disCheck end
+                        if dis then rw.disOverlay:Show() else rw.disOverlay:Hide() end
+                    end
+                    if rw.updates then
+                        for i = 1, #rw.updates do rw.updates[i]() end
+                    end
+                    if rw.alphaFns then
+                        for i = 1, #rw.alphaFns do
+                            local a = rw.alphaFns[i]
+                            a.sw:SetAlpha(a.fn())
+                        end
+                    end
                 elseif rw.type == 'reorder' then
                     if rw.disOverlay and rw.disCheck then
                         local dis

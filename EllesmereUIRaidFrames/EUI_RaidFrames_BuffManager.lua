@@ -1035,14 +1035,17 @@ end
 -------------------------------------------------------------------------------
 function ns.BM_AnchorIndicators(d, health, s)
     -- Re-anchor health color overlay to the current fill texture (may change
-    -- when user swaps health bar texture in settings)
-    if d.bmHCOverlay and health then
-        local ft = health:GetStatusBarTexture()
+    -- when user swaps health bar texture in settings). Always hugs the REAL
+    -- bar: `health` may be the Uniform Icon Anchoring reference (a plain
+    -- Frame with no fill texture), so resolve through its back-pointer.
+    local hcBar = health and (health._euiHealth or health)
+    if d.bmHCOverlay and hcBar then
+        local ft = hcBar.GetStatusBarTexture and hcBar:GetStatusBarTexture()
         d.bmHCOverlay:ClearAllPoints()
         if ft then
             d.bmHCOverlay:SetAllPoints(ft)
         else
-            d.bmHCOverlay:SetAllPoints(health)
+            d.bmHCOverlay:SetAllPoints(hcBar)
         end
     end
 
@@ -1176,9 +1179,13 @@ local function BM_PlaceBar(bar, health, ind, iscale)
     else
         fullW, fullH = ind.barFullWidth, ind.barFullHeight
     end
+    -- Full Width/Height pins span the health bar itself, so they keep the real
+    -- bar even when Uniform Icon Anchoring passed the full-height reference in
+    -- (the reference carries a back-pointer to the bar it was stamped on).
+    local hugBar = health._euiHealth or health
     if fullW and fullH then
         -- Exact overlay of the health bar.
-        bar:SetAllPoints(health)
+        bar:SetAllPoints(hugBar)
     elseif fullW then
         -- Span the health bar's full width; thickness from the cross-axis
         -- slider; vertical placement follows the indicator's vertical edge.
@@ -1196,8 +1203,8 @@ local function BM_PlaceBar(bar, health, ind, iscale)
         local hEdge = (pos:find("RIGHT", 1, true) and "RIGHT")
             or (pos:find("LEFT", 1, true) and "LEFT") or ""
         local ox = (ind.offsetX or 0) * iscale
-        bar:SetPoint("TOP" .. hEdge, health, "TOP" .. hEdge, ox, 0)
-        bar:SetPoint("BOTTOM" .. hEdge, health, "BOTTOM" .. hEdge, ox, 0)
+        bar:SetPoint("TOP" .. hEdge, hugBar, "TOP" .. hEdge, ox, 0)
+        bar:SetPoint("BOTTOM" .. hEdge, hugBar, "BOTTOM" .. hEdge, ox, 0)
         bar:SetWidth(isVert and h or w)
     else
         if isVert then bar:SetSize(h, w) else bar:SetSize(w, h) end
@@ -1700,7 +1707,7 @@ function ns.BM_UpdateSimpleGrid(button, unit, db, updateInfo)
     if not GetFFD then return end
     local d = GetFFD(button)
     if not d.bmSimpleIcons then return end
-    local health = d.health
+    local health = ns.RF_AnchorHostFor and ns.RF_AnchorHostFor(d) or d.health
     if not health then return end
 
     local bs = db and db.profile and db.profile.bmSimple
@@ -1978,7 +1985,7 @@ function ns.BM_UpdateIndicators(button, unit, db, updateInfo)
         return
     end
 
-    local health = d.health
+    local health = ns.RF_AnchorHostFor and ns.RF_AnchorHostFor(d) or d.health
     if not health then return end
     local PP = EllesmereUI.PanelPP or EllesmereUI.PP
 
@@ -2835,7 +2842,7 @@ function ns.BM_ApplyPreviewIndicators(f, index, s)
 
     local db = ns.db
     if not db or not db.profile or not db.profile.bmIndicators then return end
-    local health = f._health
+    local health = ns.RF_AnchorHost and ns.RF_AnchorHost(f._health, s) or f._health
     if not health then return end
     local PP = EllesmereUI.PanelPP or EllesmereUI.PP
     -- Base level for the Frame Level setting (mirrors the live render).
@@ -3126,6 +3133,15 @@ function ns.BM_BuildSimplePreview(parent, s, fontPath, PP, centerX, topY)
     health:GetStatusBarTexture():SetHorizTile(false)
     health:SetMinMaxValues(0, 100)
     health:SetValue(85)
+
+    -- Full-height anchor reference (mirrors the live buttons' d.uniformRef so
+    -- Uniform Icon Anchoring previews identically; see ns.RF_AnchorHost).
+    local pvUniformRef = CreateFrame("Frame", nil, pvFrame)
+    pvUniformRef:SetFrameLevel(health:GetFrameLevel())
+    pvUniformRef:SetPoint("TOPLEFT", health, "TOPLEFT", 0, 0)
+    pvUniformRef:SetPoint("BOTTOMRIGHT", pvFrame, "BOTTOMRIGHT", 0, 0)
+    health._euiUniformRef = pvUniformRef
+    pvUniformRef._euiHealth = health
 
     -- Preview class color from the player's active spec (falls back to class)
     local previewClass
@@ -3449,7 +3465,7 @@ function ns.BM_BuildSimplePreview(parent, s, fontPath, PP, centerX, topY)
             if previewIcons[i]._cooldown then previewIcons[i]._cooldown:Hide() end
             previewIcons[i]:Hide()
         end
-        ns.BM_AnchorSimpleGrid(fakeD, health, bs, 1, count)
+        ns.BM_AnchorSimpleGrid(fakeD, ns.RF_AnchorHost(health, s), bs, 1, count)
     end
     RefreshSimplePreview()
 

@@ -943,12 +943,18 @@ function MatchH.ClearWidthMatch(childKey)
     if not db then return end
     -- Persist current width so elements with "0 = match parent" defaults
     -- don't revert on reload. The element's setWidth saves to its own DB.
+    -- Pixel-snapped like every match apply: an off-grid raw GetWidth would
+    -- persist a value the setter/harvests then propagate everywhere.
     local elem = registeredElements[childKey]
     if elem and elem.setWidth then
         local frame = GetBarFrame(childKey)
         if frame then
             local curW = frame:GetWidth()
             if curW and curW > 0 then
+                local PPm = EllesmereUI and EllesmereUI.PP
+                if PPm and PPm.SnapForES then
+                    curW = PPm.SnapForES(curW, frame:GetEffectiveScale())
+                end
                 pcall(elem.setWidth, childKey, curW)
             end
         end
@@ -965,6 +971,10 @@ function MatchH.ClearHeightMatch(childKey)
         if frame then
             local curH = frame:GetHeight()
             if curH and curH > 0 then
+                local PPm = EllesmereUI and EllesmereUI.PP
+                if PPm and PPm.SnapForES then
+                    curH = PPm.SnapForES(curH, frame:GetEffectiveScale())
+                end
                 pcall(elem.setHeight, childKey, curH)
             end
         end
@@ -1281,6 +1291,19 @@ function MatchH.ApplyHeightMatch(sourceKey, targetKey)
             targetH = PPm.SnapForES(targetH, targetBar:GetEffectiveScale())
         else
             targetH = floor(targetH + 0.5)
+        end
+        -- Cross-scale conversion, mirroring ApplyWidthMatch: the matched
+        -- height is a coordinate in the TARGET's effective scale; a source
+        -- at a different scale would persist a physically WRONG height into
+        -- its module config (which harvests then bake into layers and spec
+        -- values).
+        local sourceBar = GetBarFrame(sourceKey)
+        if targetBar and sourceBar then
+            local tES = targetBar:GetEffectiveScale()
+            local sES = sourceBar:GetEffectiveScale()
+            if math.abs(tES - sES) > 0.001 then
+                targetH = targetH * tES / sES
+            end
         end
         local sourceElem = registeredElements[sourceKey]
         if sourceElem and sourceElem.setHeight then
@@ -2140,6 +2163,34 @@ do
         return (info and info.fallback) ~= nil
     end
 
+    -- Growth-fixed-edge pin for fallback placement. The flush side-snap centers
+    -- the child on the target's CROSS axis (e.g. horizontally, for a BOTTOM
+    -- side), which shifts a custom-growth bar's fixed edge when the bar is a
+    -- different size on another character/spec (extra tracked spell -> wider/
+    -- taller group). A standard anchor keeps the GROWTH edge pinned, not the
+    -- center; this returns the amount to add to the flush-snap center on the
+    -- cross axis so the fallback matches. The side's own snap axis already
+    -- holds its edge (cx = tL - cW/2 keeps the right edge at tL, etc.), so only
+    -- a growth direction lying on the CROSS axis needs correcting. Zero for
+    -- center-growth bars and every non-CDM/AB element (GetBarGrowDirActual
+    -- returns "CENTER"), so this is inert for anything but a growing bar.
+    -- cW/cH are the child's UIParent-space dimensions. Fallback code only.
+    EllesmereUI._FallbackGrowShift = function(childKey, side, cW, cH)
+        local gd = GetBarGrowDirActual(childKey)
+        if not gd or gd == "CENTER" then return 0, 0 end
+        local horiz = (gd == "LEFT" or gd == "RIGHT")
+        local crossX = (side == "TOP" or side == "BOTTOM" or side == "CENTER" or side == nil)
+        local crossY = (side == "LEFT" or side == "RIGHT" or side == "CENTER" or side == nil)
+        -- RIGHT/UP fix the near edge (left/bottom) -> center sits +half past it;
+        -- LEFT/DOWN fix the far edge (right/top) -> center sits -half before it.
+        if horiz and crossX then
+            return (gd == "RIGHT") and (cW / 2) or (-cW / 2), 0
+        elseif (not horiz) and crossY then
+            return 0, (gd == "UP") and (cH / 2) or (-cH / 2)
+        end
+        return 0, 0
+    end
+
     -- Returns true when it owned the positioning for this apply (fallback
     -- applied, already in place, held, or parked for regen). False = normal
     -- path. A fallback is a secondary anchor link {target, side}: when the
@@ -2152,6 +2203,7 @@ do
         local info = db and db[childKey]
         local fb = info and info.fallback
         if not fb or not fb.target then return false end
+        local side = fb.side
         local inactive
         if not targetBar then
             inactive = true
@@ -2190,7 +2242,6 @@ do
         end
         local cW = (childBar:GetWidth() or 50) * cS / uiS
         local cH = (childBar:GetHeight() or 50) * cS / uiS
-        local side = fb.side
         local cx, cy
         if side == "LEFT" then
             cx, cy = tL - cW / 2, tCY
@@ -2207,6 +2258,12 @@ do
         -- units; edited in physical pixels via the cog menu rows).
         cx = cx + (fb.offsetX or 0)
         cy = cy + (fb.offsetY or 0)
+        -- Keep the growth-fixed edge (not the center) pinned on the cross axis
+        -- so a differently-sized bar on another character still lines up, like
+        -- a standard anchor. Inert (0,0) for center-growth / non-bar children.
+        local gsx, gsy = EllesmereUI._FallbackGrowShift(childKey, side, cW, cH)
+        cx = cx + gsx
+        cy = cy + gsy
         -- Child-local scale space + pixel snap + idempotent guard, mirroring
         -- the standard CENTER path in ApplyAnchorPosition.
         local acRatio = uiS / cS
@@ -2407,6 +2464,11 @@ do
             h = (eb:GetHeight() or 50) * es
         end
         if w and h and w > 0 and h > 0 then g:SetSize(w, h) end
+        -- Mirror the runtime growth-fixed-edge pin (UIParent-space dims = w,h)
+        -- so the ghost previews exactly where the bar will land.
+        local gsx, gsy = EllesmereUI._FallbackGrowShift(childKey, fb.side, w or 0, h or 0)
+        cx = cx + gsx
+        cy = cy + gsy
         -- Run the exact runtime pipeline (child-local conversion + dim-aware
         -- pixel snap) so the ghost previews the landed position to the pixel.
         local childBar = GetBarFrame(childKey)
@@ -2510,8 +2572,14 @@ do
                 -- offset itself would double-snap and drift from the true
                 -- landed position.
                 local gs = self:GetEffectiveScale() / UIParent:GetEffectiveScale()
-                fb.offsetX = (gl + gr) * 0.5 * gs - cx
-                fb.offsetY = (gt + gb) * 0.5 * gs - cy
+                -- Store the offset against the growth-fixed edge (subtract the
+                -- same shift the apply/preview add) so a resized bar keeps this
+                -- edge; inert for center-growth children.
+                local dw = (gr - gl) * gs
+                local dh = (gt - gb) * gs
+                local gsx, gsy = EllesmereUI._FallbackGrowShift(self._childKey, fb.side, dw, dh)
+                fb.offsetX = (gl + gr) * 0.5 * gs - cx - gsx
+                fb.offsetY = (gt + gb) * 0.5 * gs - cy - gsy
                 hasChanges = true
             end
             SyncGhost(self)
@@ -9897,6 +9965,15 @@ local function CommitPositions()
         end
     end
 
+    -- Bank CAPTURED settings the session edited (cog size inputs) into
+    -- values.default -- a normal unlock session edits the shared baseline,
+    -- exactly like the panel's Default Editing Mode. Without this the next
+    -- value apply reverted the user's unlock-mode resize (the sticky harvest
+    -- deliberately never adopts foreign live diffs).
+    if EllesmereUI.SpecOverrides_UnlockValueSnapCommit then
+        pcall(EllesmereUI.SpecOverrides_UnlockValueSnapCommit)
+    end
+
     -- Bank the freshly-saved live layout into its owning spec-override
     -- layer (the active group layer, else the stored baseline). Wholesale
     -- harvest -- no per-aspect routing exists anymore.
@@ -9912,6 +9989,13 @@ end
 -- Revert bars to their snapshot positions (discard all pending changes)
 local function RevertPositions()
     if InCombatLockdown() then return end
+
+    -- Cancel: unlock-session value edits are discarded too (the module
+    -- store may keep the cog-edited size until the next value apply
+    -- restores the recorded default -- correct for a discard).
+    if EllesmereUI.SpecOverrides_UnlockValueSnapDiscard then
+        EllesmereUI.SpecOverrides_UnlockValueSnapDiscard()
+    end
 
     -- 1) Restore all DB state from snapshots (suppress rebuilds)
     EllesmereUI._propagatingSave = true
@@ -10319,6 +10403,11 @@ function EllesmereUI.ForceCloseUnlockDiscard()
     if not isUnlocked then return end
     print("|cffff6060[EllesmereUI]|r Spec changed: Unlock Mode closed, unsaved layout changes discarded.")
     pendingAfterClose = nil
+    -- Unconditional: RevertPositions only runs below when positions changed,
+    -- but the value-edit snapshot must never survive a discard-close.
+    if EllesmereUI.SpecOverrides_UnlockValueSnapDiscard then
+        EllesmereUI.SpecOverrides_UnlockValueSnapDiscard()
+    end
     if hasChanges then pcall(RevertPositions) end
     pcall(DoClose)
 end
@@ -10748,6 +10837,22 @@ function ns.OpenUnlockMode()
         print("|cffff6060[EllesmereUI]|r Cannot enter Unlock Mode during combat.")
         return
     end
+    -- Standardized options-panel roundtrip: entering unlock mode by ANY means
+    -- (minimap, /euiunlock, ...) while the options panel is open reopens it
+    -- on exit, exactly like the sidebar Unlock Mode tab. Options-side entries
+    -- capture their own return target BEFORE calling here (the sidebar tab
+    -- stores the page it navigated away from), so only fill when unset. The
+    -- game menu button never coexists with an open panel, so the IsShown
+    -- gate makes this a natural no-op there.
+    if not EllesmereUI._unlockReturnModule then
+        local panel = EllesmereUI._mainFrame
+        if panel and panel:IsShown() then
+            EllesmereUI._unlockReturnModule = EllesmereUI.GetActiveModule
+                and EllesmereUI:GetActiveModule() or nil
+            EllesmereUI._unlockReturnPage = EllesmereUI.GetActivePage
+                and EllesmereUI:GetActivePage() or nil
+        end
+    end
     -- Permanent gold variant: when the current spec's owning group has a
     -- custom unlock layout (the ACTIVE layer), every unlock session on this
     -- spec edits that layer -- so every session shows the special visuals
@@ -10768,6 +10873,14 @@ function ns.OpenUnlockMode()
                 and EllesmereUI.SpecOverrides_GroupById(activeGid) or nil
         end
         EllesmereUI._specialUnlockGroup = g
+    end
+    -- Value-edit banking baseline: captured settings edited from unlock mode
+    -- (cog size inputs) are Default-baseline edits; Save & Exit diffs against
+    -- this snapshot and banks them into values.default (special sessions are
+    -- skipped inside -- their size inputs are hidden). Must run AFTER the
+    -- special-group derivation above.
+    if EllesmereUI.SpecOverrides_UnlockValueSnapBegin then
+        EllesmereUI.SpecOverrides_UnlockValueSnapBegin()
     end
     -- Disable expandIfNoResource before _unlockActive is set so the
     -- Rebuild inside runs in normal gameplay state and the power bar
@@ -11026,12 +11139,12 @@ function ns.OpenUnlockMode()
             EllesmereUI._unlockCursorX = nx; EllesmereUI._unlockCursorY = ny
         end
 
-        -- Re-expand selected mover when no other mover is being hovered
-        if selectedMover and not selectedMover._hoverConfirmed and not hoveredMover then
-            if not selectedMover._dragging and selectedMover._showOverlayText then
-                selectedMover._showOverlayText()
-            end
-        end
+        -- Selected movers are NOT auto re-expanded: expansion is purely
+        -- hover-driven (user directive 2026-07-15). The old re-expand here
+        -- kept a selected element -- e.g. one being width/height matched or
+        -- anchored -- force-expanded after the cursor left it. Selection
+        -- still keeps its border/level highlight via OnLeave, and the nudge
+        -- block above re-expands only while the cursor is over the mover.
 
         elapsed = elapsed + dt
 

@@ -1696,6 +1696,27 @@ initFrame:SetScript("OnEvent", function(self)
         local searchNameLoc = L(win.title) .. " " .. L(win.desc or "")
         if searchNameLoc ~= searchName then hdr._sectionNameLoc = searchNameLoc end
 
+        -- Global (sidebar) search: the card header never goes through
+        -- SectionHeader, so the index would otherwise have no entry for it --
+        -- searching a window's title/description found it inline but not in
+        -- the sidebar results. Register it with the same title + description
+        -- keywords the inline pseudo-section matches (title as the display
+        -- label, description via the tooltip field, which the fuzzy scorer
+        -- also searches). section = the exact joined string stamped above, so
+        -- a jump scrolls to and glows this header; the page's
+        -- NavigateToElementSettings pre-hook expands the cards first.
+        if EllesmereUI._RegisterSearchEntry then
+            local titleLoc = L(win.title)
+            local descSearch = win.desc or ""
+            local descLoc = L(win.desc or "")
+            if descLoc ~= descSearch then descSearch = descSearch .. " " .. descLoc end
+            EllesmereUI._RegisterSearchEntry(win.title,
+                titleLoc ~= win.title and titleLoc or nil,
+                descSearch,
+                EllesmereUI._buildingModule, EllesmereUI._buildingPage,
+                searchName, nil, nil, true)
+        end
+
         -- Hover wash (transparent when idle; the card bg below provides the fill)
         local hbg = EllesmereUI.SolidTex(hdr, "BACKGROUND", 0, 0, 0, 0)
         hbg:SetAllPoints()
