@@ -779,54 +779,11 @@ do
     -- slot, so our own dispatch can't paint their cooldown; only Blizzard's
     -- native update, driven by this broadcaster, can).
     local _vehNeed, _extraNeed, _broadcasterActive = false, false, false
-    -- Our buttons' entries in ActionBarButtonEventsFrame.frames are stripped
-    -- only WHILE the broadcaster dispatches, and restored (same keys, never
-    -- tremove) when it goes quiet. The taint problem the strip solves -- the
-    -- dispatch loop reading our tainted entry and running the button's whole
-    -- mixin OnEvent tainted (see the note at button setup) -- only exists
-    -- while the broadcaster has events registered. Outside that window the
-    -- entries must stay: AssistedCombatManager builds its assisted-highlight
-    -- candidate list by walking .frames once at activation, so a permanent
-    -- strip left our buttons unable to show the assisted shine after a
-    -- reload (only a native OnEnter re-added the hovered button).
-    -- _abefOwned is filled at button setup; the stash remembers what we
-    -- removed so deactivation restores exactly that.
-    ns._abefOwned = {}
-    local _abefStripped = {}
-    local function StripOwnedFrames()
-        local frames = ActionBarButtonEventsFrame
-            and type(ActionBarButtonEventsFrame.frames) == "table"
-            and ActionBarButtonEventsFrame.frames
-        if not frames then return end
-        local owned = ns._abefOwned
-        for k, f in pairs(frames) do
-            if owned[f] then
-                _abefStripped[k] = f
-                frames[k] = nil
-            end
-        end
-    end
-    -- For buttons set up while the broadcaster is already live (bar enabled
-    -- mid-vehicle): strip immediately, stash for the eventual restore.
-    ns._abefStripIfActive = function(btn)
-        if not _broadcasterActive then return end
-        local frames = ActionBarButtonEventsFrame
-            and type(ActionBarButtonEventsFrame.frames) == "table"
-            and ActionBarButtonEventsFrame.frames
-        if not frames then return end
-        for k, f in pairs(frames) do
-            if f == btn then
-                _abefStripped[k] = f
-                frames[k] = nil
-            end
-        end
-    end
     local function ApplyBroadcaster()
         local want = _vehNeed or _extraNeed
         if want == _broadcasterActive then return end
         _broadcasterActive = want
         if want then
-            StripOwnedFrames()
             if ActionBarButtonEventsFrame then
                 for _, ev in ipairs(_abefEvents) do
                     ActionBarButtonEventsFrame:RegisterEvent(ev)
@@ -840,15 +797,6 @@ do
         else
             if ActionBarButtonEventsFrame then ActionBarButtonEventsFrame:UnregisterAllEvents() end
             if ActionBarActionEventsFrame then ActionBarActionEventsFrame:UnregisterAllEvents() end
-            local frames = ActionBarButtonEventsFrame
-                and type(ActionBarButtonEventsFrame.frames) == "table"
-                and ActionBarButtonEventsFrame.frames
-            if frames then
-                for k, f in pairs(_abefStripped) do
-                    if frames[k] == nil then frames[k] = f end
-                end
-            end
-            wipe(_abefStripped)
         end
     end
     -- Recompute both needs from ground truth -- the actual visibility of the
@@ -1752,16 +1700,16 @@ local function GetOrCreateButton(slot, parent, info, index, skipProtected)
         -- resolves the method at fire time -- a replacement function of ours
         -- is a tainted value and would taint EVERY per-button event dispatch
         -- (per-button cooldown updates only work because they start secure).
-        -- Instead the entry is removed from the broadcaster's list -- but only
-        -- WHILE the broadcaster is live (see ApplyBroadcaster): a permanent
-        -- removal here broke the assisted-combat shine, because
-        -- AssistedCombatManager builds its highlight-candidate list by walking
-        -- this table. Here we just mark the button as ours; ApplyBroadcaster
-        -- strips/restores around the vehicle/extra-button windows (nil-out in
-        -- place, never tremove -- shifting would rewrite later Blizzard-owned
-        -- entries as tainted values).
-        if ns._abefOwned then ns._abefOwned[btn] = true end
-        if ns._abefStripIfActive then ns._abefStripIfActive(btn) end
+        -- Instead, remove our entry from the broadcaster's list: nil it out
+        -- in place (never tremove -- shifting would rewrite later
+        -- Blizzard-owned entries as tainted values). The button loses
+        -- nothing: every event it needs is self-registered
+        -- (BUTTON_EVENT_LISTS) or handled by the central dispatcher.
+        if ActionBarButtonEventsFrame and type(ActionBarButtonEventsFrame.frames) == "table" then
+            for k, f in pairs(ActionBarButtonEventsFrame.frames) do
+                if f == btn then ActionBarButtonEventsFrame.frames[k] = nil end
+            end
+        end
         -- Desaturate-on-cooldown / on-CD alpha: re-evaluate the icon's visual
         -- state the moment the main cooldown display completes. The
         -- SetDesaturation/SetAlpha writes are static between events, so
