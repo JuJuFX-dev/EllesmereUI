@@ -7781,7 +7781,8 @@ local function UpdateCustomMerchantList(sf, child)
 
             -- Fade if not usable/affordable/already known heirloom
             row.SlotTexture:SetDesaturated(not isBuyback and isKnownHeirloom)
-            if row.SlotTexture:IsDesaturated() then
+            if not isBuyback and (numAvailable == 0 or isKnownHeirloom) then
+                -- If not available and not usable
                 if redTint then
                     row.SlotTexture:SetVertexColor(0.5, 0, 0)
                 else
