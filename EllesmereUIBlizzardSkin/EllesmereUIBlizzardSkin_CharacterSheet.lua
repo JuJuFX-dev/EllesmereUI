@@ -1638,6 +1638,15 @@ local function SkinCharacterSheet()
         scrollFrame:HookScript("OnSizeChanged",    UpdateThumb)
         scrollChild:HookScript("OnSizeChanged",    UpdateThumb)
 
+        local function refreshVerticalScroll()
+            local _, _, maxScroll = _info()
+            -- No check on maxScroll, this is intentionnal. It ensures that after a collapse and scroll
+            -- being disabled, it will still works.
+            local newScroll = math.max(0, math.min(maxScroll, scrollFrame:GetVerticalScroll() * SCROLL_STEP_PX))
+            scrollFrame:SetVerticalScroll(newScroll)
+        end
+        track._refreshVerticalScroll = refreshVerticalScroll
+
         scrollFrame:EnableMouseWheel(true)
         scrollFrame:SetScript("OnMouseWheel", function(_, delta)
             local _, _, maxScroll = _info()
@@ -1697,8 +1706,9 @@ local function SkinCharacterSheet()
         trackOwner = statsPanel,
         topInset   = -HEADER_H,
     })
-    GetFFD(frame).scrollBar         = scrollTrack
-    GetFFD(frame).updateScrollThumb = scrollTrack._update
+    GetFFD(frame).scrollBar              = scrollTrack
+    GetFFD(frame).updateScrollThumb      = scrollTrack._update
+    GetFFD(frame).refreshVerticalScroll  = scrollTrack._refreshVerticalScroll
 
     -- Re-anchor the scroll frame + track top edge based on whether the
     -- PvP iLvl and M+ Score lines are visible. Each hidden line collapses
@@ -2166,6 +2176,7 @@ local function SkinCharacterSheet()
             end
         end
         scrollChild:SetHeight(-yOffset)
+        if GetFFD(frame).refreshVerticalScroll then GetFFD(frame).refreshVerticalScroll() end
     end
     GetFFD(frame).recalculateSections = RecalculateSectionPositions
 
@@ -2683,6 +2694,10 @@ local function SkinCharacterSheet()
 
     -- Apply initial visibility settings
     UpdateStatCategoryVisibility()
+    -- Defer a call as some settings may not be fully initialized like section visibility
+    C_Timer.After(0, function()
+        UpdateStatCategoryVisibility()
+    end)
 
     -- Function to update all stats
     local function UpdateAllStats()
