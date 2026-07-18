@@ -7016,14 +7016,27 @@ initFrame:SetScript("OnEvent", function(self)
             end
         end
 
-        for _, sp in ipairs(knownSpells) do
-            local item = MakeSpellRow(sp)
-            item:SetScript("OnClick", function()
-                if onChanged then onChanged(sp.spellID) end
-                -- Keep the picker open so several buffs can be added in a row;
-                -- gray this row in place to reflect that it was added.
-                if item._grayOut then item._grayOut() end
-            end)
+        do
+            -- Pre-gray rows whose SLOT (cooldownID) is already tracked here: a
+            -- collided pair renders two identical rows, and only the cd-level
+            -- claim tells them apart.
+            local sdRows = ns.GetBarSpellData(targetBarKey)
+            local cdTracked = sdRows and sdRows.assignedBuffCdIDs
+            for _, sp in ipairs(knownSpells) do
+                local item = MakeSpellRow(sp)
+                if cdTracked and sp.cdID and cdTracked[sp.cdID] then
+                    if item._grayOut then item._grayOut() end
+                else
+                    item:SetScript("OnClick", function()
+                        -- cdID rides along so collided buffs can be claimed per
+                        -- viewer slot rather than per (shared) spellID.
+                        if onChanged then onChanged(sp.spellID, sp.cdID) end
+                        -- Keep the picker open so several buffs can be added in a
+                        -- row; gray this row in place to reflect that it was added.
+                        if item._grayOut then item._grayOut() end
+                    end)
+                end
+            end
         end
 
         -- "Missing Spells?" footer: centered, accent-colored prompt that opens
@@ -7840,6 +7853,11 @@ initFrame:SetScript("OnEvent", function(self)
                         if ns.RebuildSpellRouteMap then ns.RebuildSpellRouteMap() end
                         if ns.QueueReanchor then ns.QueueReanchor() end
                     end
+                elseif anchorFrame and anchorFrame._previewCdOnly and ns.RemoveTrackedBuffCdID then
+                    -- cooldownID-claimed slot (collided buff): remove by cdID.
+                    -- slotIndex points past assignedSpells for these slots, so
+                    -- the index path below would remove nothing (or worse).
+                    ns.RemoveTrackedBuffCdID(barKey, anchorFrame._previewCdOnly)
                 else
                     -- A legacy-duplicate buff slot covers >1 assignedSpells entry
                     -- (anchorFrame._dataGroup); remove them all, highest index
@@ -13533,6 +13551,13 @@ initFrame:SetScript("OnEvent", function(self)
                     if _spellPickerMenu and _spellPickerMenu:IsShown() then
                         _spellPickerMenu:Hide()
                     end
+                    -- cooldownID-claimed slot (collided buff): remove by cdID --
+                    -- it has no assignedSpells index to remove by.
+                    if self._previewCdOnly and ns.RemoveTrackedBuffCdID then
+                        ns.RemoveTrackedBuffCdID(bd.key, self._previewCdOnly)
+                        RefreshCDPreview()
+                        return
+                    end
                     if isDefaultBuffs then
                         -- Custom item slot (negative -itemID marker): remove it
                         -- directly. slotIndex maps to the mixed preview list, so
@@ -13909,6 +13934,9 @@ initFrame:SetScript("OnEvent", function(self)
                 -- icon order is driven by nameplate state, not user order.
                 local bdDrag = SelectedCDMBar()
                 if bdDrag and bdDrag.key == ns.FOCUSKICK_BAR_KEY then return end
+                -- cooldownID-claimed slots have no assignedSpells index, so the
+                -- index-based reorder cannot move them; don't start a drag.
+                if self._previewCdOnly then return end
                 local cx, cy = GetCursorPosition()
                 pendingDragSlot = self
                 pendingStartX = cx
@@ -14010,9 +14038,19 @@ initFrame:SetScript("OnEvent", function(self)
                 -- family sweep removes the spell from every other
                 -- buff-family bar (including the ghost hidden bar, which
                 -- is the "unhide" step) before claiming it for bd.key.
-                ShowBuffBarPicker(self, bd.key, function(newSpellID)
+                ShowBuffBarPicker(self, bd.key, function(newSpellID, newCdID)
                     if newSpellID then
-                        ns.AddTrackedSpell(bd.key, newSpellID)
+                        -- Collided pair (two viewer slots, one shared spellID):
+                        -- claim by cooldownID so each slot is addable on its
+                        -- own. Non-collided buffs keep the sid path -- spellID
+                        -- identity survives talent swaps, cooldownIDs drift.
+                        if newCdID and ns.IsCollidedBuffSid
+                           and ns.IsCollidedBuffSid(newSpellID)
+                           and ns.AddTrackedBuffByCdID then
+                            ns.AddTrackedBuffByCdID(bd.key, newCdID)
+                        else
+                            ns.AddTrackedSpell(bd.key, newSpellID)
+                        end
                     end
                     FinalizeAdd()
                 end)
@@ -14135,6 +14173,7 @@ initFrame:SetScript("OnEvent", function(self)
             local trackedCd
             pf._buffDispGroups = nil
             pf._buffSlotKeys = nil
+            pf._cdOnlySlots = nil  -- slot idx -> cooldownID (collided-buff claims)
             if bd.key == "buffs" then
                 if ns.ReconcileBuffDisplayOrder then ns.ReconcileBuffDisplayOrder() end
                 local entries = ns.CollectDefaultBuffTrackEntries
@@ -14174,6 +14213,47 @@ initFrame:SetScript("OnEvent", function(self)
                     -- Collapse legacy duplicate buff ids in the PREVIEW only (the
                     -- stored data is left intact so routing is untouched).
                     tracked, pf._buffDispGroups = BuildBuffDisplayDedup(raw)
+                    -- Append cooldownID-level claims (collided buffs tracked by
+                    -- slot, sd.assignedBuffCdIDs). Their sid comes from the clean
+                    -- cache (never a secret); slot idx is marked in _cdOnlySlots
+                    -- so click/remove/drag handlers don't treat it as an
+                    -- assignedSpells index.
+                    if sdUpd and sdUpd.assignedBuffCdIDs and next(sdUpd.assignedBuffCdIDs) then
+                        local cds = {}
+                        for cdID in pairs(sdUpd.assignedBuffCdIDs) do
+                            if type(cdID) == "number" then cds[#cds + 1] = cdID end
+                        end
+                        table.sort(cds)
+                        for _, cdID in ipairs(cds) do
+                            local csid = ns._cdmCleanSidByCDID and ns._cdmCleanSidByCDID[cdID]
+                            if not (type(csid) == "number" and csid > 0) then
+                                -- Clean cache not primed yet (fresh login, buff
+                                -- active since): fall back to cooldownInfo. Each
+                                -- field is vetted on its own -- never `or`-chain
+                                -- possibly-secret values (truthiness taints).
+                                local gci = C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCooldownInfo
+                                local info = gci and gci(cdID)
+                                local raw2 = info and info.overrideSpellID
+                                if not (type(raw2) == "number"
+                                        and not (issecretvalue and issecretvalue(raw2))
+                                        and raw2 > 0) then
+                                    raw2 = info and info.spellID
+                                end
+                                if type(raw2) == "number"
+                                   and not (issecretvalue and issecretvalue(raw2))
+                                   and raw2 > 0 then
+                                    csid = raw2
+                                end
+                            end
+                            if type(csid) == "number" and csid > 0 then
+                                tracked[#tracked + 1] = csid
+                                trackedCd = trackedCd or {}
+                                trackedCd[#tracked] = cdID
+                                pf._cdOnlySlots = pf._cdOnlySlots or {}
+                                pf._cdOnlySlots[#tracked] = cdID
+                            end
+                        end
+                    end
                 else
                     tracked = raw
                 end
@@ -14343,6 +14423,7 @@ initFrame:SetScript("OnEvent", function(self)
                     local id = tracked[i]
                     slot._previewSpellID = nil  -- reset each update
                     slot._previewCdID = trackedCd and trackedCd[i] or nil
+                    slot._previewCdOnly = pf._cdOnlySlots and pf._cdOnlySlots[i] or nil
                     slot._previewItemID = nil
                     slot._previewHostedBuff = nil
                     if id then
@@ -14389,6 +14470,7 @@ initFrame:SetScript("OnEvent", function(self)
                     slot._icon:SetTexture(nil)
                     slot._previewSpellID = nil
                     slot._previewCdID = nil
+                    slot._previewCdOnly = nil
                     slot._previewItemID = nil
                     slot._previewHostedBuff = nil
                 end
