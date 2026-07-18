@@ -1115,8 +1115,10 @@ end
 -- profile swap (which hands back a different store table) recomputes for free
 -- without any explicit invalidation hook.
 local _cdKeyGate
-function ns.BuffFamHasCdKey()
-    local store = ns.GetSpellSettingsStore and ns.GetSpellSettingsStore("buffs")
+function ns.BuffFamHasCdKey(store)
+    -- The runtime resolver already holds the buffs store; accept it to skip a
+    -- second spec/profile lookup per buff-frame resolve.
+    store = store or (ns.GetSpellSettingsStore and ns.GetSpellSettingsStore("buffs"))
     if not store then return false end
     if _cdKeyGate and _cdKeyGate.store == store then return _cdKeyGate.has end
     local hit = false

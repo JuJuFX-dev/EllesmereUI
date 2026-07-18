@@ -7532,8 +7532,15 @@ initFrame:SetScript("OnEvent", function(self)
             -- own cooldownID so each is configured independently. Non-collided
             -- buffs keep the stable spellID key (survives talent swaps).
             local cdID = af and (af._previewCdID or af.cooldownID)
-            if type(cdID) == "number" and ns.IsCollidedBuffSid and ns.IsCollidedBuffSid(sid) then
-                return "c" .. cdID
+            if type(cdID) == "number" then
+                local ckey = "c" .. cdID
+                -- Read-your-writes: once a per-cooldownID entry exists, keep
+                -- editing it even if the collision later ends (re-talent), so the
+                -- menu never splits from what the runtime resolver reads (which
+                -- prefers an existing c-entry whenever one is present).
+                local bstore = ns.GetSpellSettingsStore and ns.GetSpellSettingsStore("buffs")
+                if bstore and bstore[ckey] then return ckey end
+                if ns.IsCollidedBuffSid and ns.IsCollidedBuffSid(sid) then return ckey end
             end
             return sid
         end

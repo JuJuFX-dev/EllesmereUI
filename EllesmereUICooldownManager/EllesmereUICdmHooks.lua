@@ -346,9 +346,14 @@ local function ResolveSpellSettings(frame, sid2, sd2, barKey)
     -- no cooldown/utility icon ever pays the string build.
     if frame then
         local fdC = ns._hookFrameData and ns._hookFrameData[frame]
-        if fdC and fdC._isBuffViewerFrame then
+        -- Buff-viewer frames AND their inactive-buff placeholders (Always Show /
+        -- Keep in Same Place) both carry the viewer cooldownID and must resolve
+        -- the same per-slot entry, else a collided slot's styling would revert
+        -- whenever the placeholder shows. type(cdID) == "number" still excludes
+        -- preset placeholders, which nil the cooldownID.
+        if (fdC and fdC._isBuffViewerFrame) or frame._isPlaceholderFrame then
             local cdID = frame.cooldownID
-            if type(cdID) == "number" and ns.BuffFamHasCdKey and ns.BuffFamHasCdKey() then
+            if type(cdID) == "number" and ns.BuffFamHasCdKey and ns.BuffFamHasCdKey(settings) then
                 local cd = settings["c" .. cdID]
                 if cd then ChainSettings(cd, tier); return cd end
             end
