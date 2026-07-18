@@ -5114,7 +5114,8 @@ function EAB:ApplyBackgroundForBar(barKey)
     end
 
     local c = s.bgColor or { r=0, g=0, b=0, a=0.5 }
-    background.fill:SetColorTexture(c.r, c.g, c.b, c.a)
+    local alpha = s.bgOpacity ~= nil and s.bgOpacity / 100 or c.a
+    background.fill:SetColorTexture(c.r, c.g, c.b, alpha)
     -- bgPadX/bgPadY are retained as fallbacks for profiles made before the
     -- unified spacing control was introduced.
     local padding = s.bgPadding
