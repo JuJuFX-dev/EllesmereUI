@@ -4956,7 +4956,7 @@ initFrame:SetScript("OnEvent", function(self)
                           return bd and bd.chargeHashLineWidth or 2
                       end,
                       set = function(v)
-                  local bd = SelectedTBB(); if not bd then return end
+                          local bd = SelectedTBB(); if not bd then return end
                           bd.chargeHashLineWidth = v
                           RefreshTBB()
                       end },
@@ -5002,11 +5002,11 @@ initFrame:SetScript("OnEvent", function(self)
                     or bd.chargeHashLines ~= true
                 cogBtn:SetAlpha(disabled and 0.15 or 0.4)
                 if disabled then cogBlock:Show() else cogBlock:Hide() end
-                      end
+            end
             cogBtn:HookScript("OnShow", UpdateChargeHashCog)
             EllesmereUI.RegisterWidgetRefresh(UpdateChargeHashCog)
             UpdateChargeHashCog()
-                  end
+        end
 
         do
             local rgn = chargeHashRow._rightRegion
