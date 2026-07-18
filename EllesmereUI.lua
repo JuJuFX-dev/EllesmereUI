@@ -4535,45 +4535,23 @@ do
         end
     end
 
-    -- Aura probe for the drift check below, kept as a named function so the
-    -- pcall in the 0.1 s poll allocates nothing. Returns (absent, count):
-    -- absent=true only on a VERIFIED missing aura; count only when
-    -- applications is a readable positive number. Anything secret-shaped
-    -- returns neither (prediction stays in charge) or throws into the pcall.
-    local function ReadSweepAura()
-        local aura = C_UnitAuras.GetPlayerAuraBySpellID(SWEEP)
-        if not aura then return true end
-        local c = aura.applications
-        if c and not (issecretvalue and issecretvalue(c)) and c > 0 then
-            return false, c
-        end
-        return false
-    end
-
+    -- NO aura validation here, on purpose. v8.4.9 tried to correct
+    -- prediction drift against the real buff (first by name, then by
+    -- C_UnitAuras.GetPlayerAuraBySpellID), treating a missing aura as
+    -- "buff gone" and wiping the stacks. But on the live 12.x client the
+    -- player-aura read surface returns nothing for this buff even in the
+    -- open world -- verified in-game 2026-07-17: with Sweeping Strikes
+    -- visibly active, GetPlayerAuraBySpellID(260708) returned nil and a
+    -- full GetAuraDataByIndex("player", i, "HELPFUL") sweep enumerated
+    -- ZERO auras. Any validation built on that surface reads every live
+    -- buff as absent and zeroes the bar (the v8.4.9 bug: stacks wiped in
+    -- combat, pinned at 0 in M+). Until Blizzard exposes a readable
+    -- charge count, the cast-event prediction plus the duration timer IS
+    -- the tracker.
     function EllesmereUI.GetSweepingStrikes()
         if not sweepKnown then return 0, 0 end
         if expiresAt and GetTime() >= expiresAt then
             stacks, expiresAt = 0, nil
-        end
-        -- Validate prediction against the real aura to correct drift (the
-        -- reach probe is ~11 yd while the game sweeps within 8 yd of the
-        -- primary target). OPEN WORLD ONLY and fail-open: in instanced
-        -- content the 12.x aura surface is restricted -- the lookup can
-        -- return nil/secret (or throw) for a live buff -- and the v8.4.9
-        -- fail-closed version of this check wiped active stacks to 0 in
-        -- combat and pinned the bar at 0 for the whole run in M+. Only a
-        -- verified "buff gone" clears the prediction; an error or an
-        -- unreadable result changes nothing.
-        if stacks > 0 and not IsInInstance()
-           and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
-            local ok, absent, count = pcall(ReadSweepAura)
-            if ok then
-                if absent then
-                    stacks, expiresAt = 0, nil
-                elseif count then
-                    stacks = count
-                end
-            end
         end
         return stacks, MaxStacks()
     end
