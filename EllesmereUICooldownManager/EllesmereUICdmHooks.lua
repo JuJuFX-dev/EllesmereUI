@@ -590,6 +590,12 @@ local _cdidRouteMap = {}
 
 local _divertedSpellsBuff = {}
 local _divertedSpellsCD   = {}
+-- cooldownID-level buff diversions: a collided buff (two viewer slots sharing
+-- one canonical spellID, e.g. Diabolist Demonic Art vs Diabolic Ritual) is
+-- tracked on a custom bar by its cooldownID (sd.assignedBuffCdIDs), routing
+-- exactly one slot there. Checked by ResolveCDIDToBar BEFORE the sid-level
+-- map so the cd-level claim outranks a whole-pair sid claim.
+local _divertedBuffCdIDs  = {}
 ns._divertedSpellsBuff = _divertedSpellsBuff
 ns._divertedSpellsCD   = _divertedSpellsCD
 
@@ -632,6 +638,7 @@ function ns.RebuildSpellRouteMap()
     wipe(_cdidRouteMap)
     wipe(_divertedSpellsBuff)
     wipe(_divertedSpellsCD)
+    wipe(_divertedBuffCdIDs)
     _routeMapBuilt = false
 
     local p = ECME.db and ECME.db.profile
@@ -666,6 +673,14 @@ function ns.RebuildSpellRouteMap()
                 for _, sid in ipairs(sd.assignedSpells) do
                     if type(sid) == "number" and sid > 0 then
                         SVV(_divertedSpellsBuff, sid, bd.key, false)
+                    end
+                end
+            end
+            -- cooldownID-level claims (collided buffs tracked by slot)
+            if sd and sd.assignedBuffCdIDs then
+                for cdID in pairs(sd.assignedBuffCdIDs) do
+                    if type(cdID) == "number" then
+                        _divertedBuffCdIDs[cdID] = bd.key
                     end
                 end
             end
@@ -756,6 +771,16 @@ local function ResolveCDIDToBar(cdID, viewerDefaultBar)
     if not cdID then return viewerDefaultBar end
     local cached = _cdidRouteMap[cdID]
     if cached then return cached end
+
+    -- cooldownID-level claim first (collided buffs tracked by slot). Needs no
+    -- cooldownInfo read, so it also works while every sid field is secret.
+    if viewerDefaultBar == "buffs" then
+        local cdRoute = _divertedBuffCdIDs[cdID]
+        if cdRoute then
+            _cdidRouteMap[cdID] = cdRoute
+            return cdRoute
+        end
+    end
 
     local RVV = ns.ResolveVariantValue
     local gci = C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCooldownInfo
