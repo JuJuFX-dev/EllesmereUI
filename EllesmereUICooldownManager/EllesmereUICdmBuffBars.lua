@@ -282,9 +282,15 @@ local TBB_DEFAULT_BAR = {
     stackThresholdEnabled = false,
     stackThreshold = 5,
     stackThresholdR = 0.8, stackThresholdG = 0.1, stackThresholdB = 0.1, stackThresholdA = 1,
+    -- Multi-threshold opt-in. The list itself (cfg.stackThresholds) is created
+    -- lazily by the options editor: a table here would be shared by reference
+    -- across every bar, since AddTrackedBuffBarCore shallow-copies this table.
+    stackThresholdMulti = false,
     stackThresholdMaxEnabled = false,
     stackThresholdMax = 10,
     stackThresholdTicks = "",
+    stackThresholdTickR = 1, stackThresholdTickG = 1,
+    stackThresholdTickB = 1, stackThresholdTickA = 1,
     stackBasedBar = false,
     pandemicGlow = true,
     pandemicGlowStyle = -1,
@@ -1432,7 +1438,8 @@ end
 --  The "style" of a bar is every visual key -- everything except the tracked
 --  spell identity, enable state, group membership and the stack-threshold /
 --  stack-based-fill keys (those are spell-specific, matching
---  AddTrackedBuffBar's reset set).
+--  AddTrackedBuffBar's reset set). That exclusion covers stackThresholdMulti
+--  and stackThresholds too: a copied style must not carry threshold numbers.
 -------------------------------------------------------------------------------
 local TBB_STYLE_KEYS = {
     "height", "width", "verticalOrientation", "reverseFill",
@@ -1827,8 +1834,11 @@ local function CreateTrackedBuffBarFrame(parent, idx)
     bg:SetColorTexture(0, 0, 0, 0.4)
     wrapFrame._bg = bg
 
-    -- Spark on a dedicated overlay frame one level above the (gradient) fill so
-    -- it always draws OVER the fill, still clipped to the bar so it never spills
+    -- Spark on a dedicated overlay frame above the (gradient) fill and the
+    -- threshold overlays so it always draws OVER the fill and any threshold
+    -- recolor. ApplyTrackedBuffBarSettings owns the final level; the value set
+    -- here only holds until the first apply. Still clipped to the bar so it
+    -- never spills
     -- past the ends. SnapToPixelGrid off so it tracks the smoothly-interpolated
     -- fill edge at sub-pixel precision instead of jumping a pixel as the edge
     -- crosses a grid line.
@@ -1916,50 +1926,113 @@ local function CreateTrackedBuffBarFrame(parent, idx)
 end
 
 -------------------------------------------------------------------------------
---  Threshold Overlay (stacked StatusBar, secret-safe)
+--  Threshold Overlays (stacked StatusBars, secret-safe)
+--
+--  bar._stackCount may be a secret number, so it can never be compared or
+--  sorted in Lua. Each threshold gets its own StatusBar whose range is
+--  (value - 1, value): SetValue does the comparison inside the C layer and the
+--  overlay snaps 0 -> full as the count crosses the threshold.
+--
+--  With several thresholds every crossed overlay is full at once, so "highest
+--  crossed wins" has to be draw order rather than an if. Overlay i is parented
+--  to overlay i-1 (a child always renders above its parent) and the list is
+--  kept sorted ascending, so the highest crossed threshold paints last. Frame
+--  levels stay pinned at sb+2 for all of them, leaving the tick overlay
+--  (sb+3) and charge hash lines (sb+4) drawing on top as before.
 -------------------------------------------------------------------------------
-local function EnsureTBBThresholdOverlay(bar)
-    if bar._threshOverlay then return bar._threshOverlay end
+local function EnsureTBBThresholdOverlay(bar, i)
+    local pool = bar._threshOverlays
+    if not pool then pool = {}; bar._threshOverlays = pool end
+    if pool[i] then return pool[i] end
     local sb = bar._bar
     if not sb then return nil end
-    local overlay = CreateFrame("StatusBar", nil, sb)
+    local overlay = CreateFrame("StatusBar", nil, pool[i - 1] or sb)
     overlay:SetAllPoints(sb:GetStatusBarTexture())
     overlay:SetFrameLevel(sb:GetFrameLevel() + 2)
     overlay:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
     overlay:SetMinMaxValues(0, 1)
     overlay:SetValue(0)
     overlay:Hide()
-    bar._threshOverlay = overlay
+    pool[i] = overlay
     return overlay
+end
+
+local function HideTBBThresholdOverlaysFrom(bar, first)
+    local pool = bar._threshOverlays
+    if not pool then return end
+    for i = first, #pool do
+        if pool[i] then pool[i]:Hide() end
+    end
+end
+
+-- Returns the multi-threshold list only when the user opted in and it has
+-- entries; nil means the legacy single-threshold keys own the rendering.
+local function TBBMultiThresholdList(cfg)
+    if not cfg.stackThresholdMulti then return nil end
+    local list = cfg.stackThresholds
+    if not list or #list == 0 then return nil end
+    return list
+end
+
+local function ApplyTBBThresholdOverlay(overlay, sb, texPath, orient, reverse, i, r, g, b, a, value)
+    overlay:SetStatusBarTexture(texPath)
+    overlay:SetOrientation(orient)
+    overlay:SetReverseFill(reverse)
+    local tex = overlay:GetStatusBarTexture()
+    tex:SetVertexColor(r, g, b, a)
+    tex:SetDrawLayer("ARTWORK", i)
+    overlay:ClearAllPoints()
+    overlay:SetAllPoints(sb:GetStatusBarTexture())
+    overlay:SetMinMaxValues(value - 1, value)
+    overlay:SetValue(0)
+    overlay:Show()
 end
 
 local function SetupTBBThresholdOverlay(bar, cfg)
     if not cfg.stackThresholdEnabled
        or (cfg.trackType == "cooldown" and cfg.chargeHashLines == true) then
-        if bar._threshOverlay then bar._threshOverlay:Hide() end
+        HideTBBThresholdOverlaysFrom(bar, 1)
         return
     end
-    local overlay = EnsureTBBThresholdOverlay(bar)
-    if not overlay then return end
+    local sb = bar._bar
+    if not sb then return end
     local texPath = EllesmereUI.ResolveTexturePath(TBB_TEXTURES, cfg.texture or "none", "Interface\\Buttons\\WHITE8x8")
-    overlay:SetStatusBarTexture(texPath)
-    overlay:SetOrientation(cfg.verticalOrientation and "VERTICAL" or "HORIZONTAL")
-    overlay:SetReverseFill(cfg.reverseFill and true or false)
-    overlay:GetStatusBarTexture():SetVertexColor(
-        cfg.stackThresholdR or 0.8, cfg.stackThresholdG or 0.1,
-        cfg.stackThresholdB or 0.1, cfg.stackThresholdA or 1)
-    overlay:ClearAllPoints()
-    overlay:SetAllPoints(bar._bar:GetStatusBarTexture())
-    local threshold = cfg.stackThreshold or 5
-    overlay:SetMinMaxValues(threshold - 1, threshold)
-    overlay:SetValue(0)
-    overlay:Show()
+    local orient  = cfg.verticalOrientation and "VERTICAL" or "HORIZONTAL"
+    local reverse = cfg.reverseFill and true or false
+
+    local n = 0
+    local list = TBBMultiThresholdList(cfg)
+    if list then
+        -- Sorted ascending by the options editor, so index order is draw order.
+        for i = 1, #list do
+            local t = list[i]
+            local overlay = EnsureTBBThresholdOverlay(bar, i)
+            if not overlay then break end
+            ApplyTBBThresholdOverlay(overlay, sb, texPath, orient, reverse, i,
+                t.r or 0.8, t.g or 0.1, t.b or 0.1, t.a or 1, t.value or 5)
+            n = i
+        end
+    else
+        local overlay = EnsureTBBThresholdOverlay(bar, 1)
+        if overlay then
+            ApplyTBBThresholdOverlay(overlay, sb, texPath, orient, reverse, 1,
+                cfg.stackThresholdR or 0.8, cfg.stackThresholdG or 0.1,
+                cfg.stackThresholdB or 0.1, cfg.stackThresholdA or 1,
+                cfg.stackThreshold or 5)
+            n = 1
+        end
+    end
+    HideTBBThresholdOverlaysFrom(bar, n + 1)
 end
 
 local function FeedTBBThresholdOverlay(bar)
-    local overlay = bar._threshOverlay
-    if not overlay or not overlay:IsShown() then return end
-    overlay:SetValue(bar._stackCount or 0)
+    local pool = bar._threshOverlays
+    if not pool then return end
+    local v = bar._stackCount or 0
+    for i = 1, #pool do
+        local overlay = pool[i]
+        if overlay and overlay:IsShown() then overlay:SetValue(v) end
+    end
 end
 
 -------------------------------------------------------------------------------
@@ -2019,11 +2092,18 @@ local function ApplyTBBTickMarks(sb, cfg, tickCache, isVert, tickParent)
     local parent = tickParent or sb
     while #tickCache < #vals do
         local t = parent:CreateTexture(nil, "OVERLAY", nil, 7)
-        t:SetColorTexture(1, 1, 1, 1)
         t:SetSnapToPixelGrid(false)
         t:SetTexelSnappingBias(0)
         tickCache[#tickCache + 1] = t
     end
+
+    -- Bars saved before the tick color existed carry no fields; fall back to
+    -- the historical hardcoded white so their ticks render unchanged.
+    local tickR = cfg.stackThresholdTickR or 1
+    local tickG = cfg.stackThresholdTickG or 1
+    local tickB = cfg.stackThresholdTickB or 1
+    local tickA = cfg.stackThresholdTickA
+    if tickA == nil then tickA = 1 end
 
     local onePx = PP and PP.Scale(1) or 1
     local barW, barH = sb:GetWidth(), sb:GetHeight()
@@ -2034,6 +2114,7 @@ local function ApplyTBBTickMarks(sb, cfg, tickCache, isVert, tickParent)
         if v <= maxStacks then
             local t = tickCache[i]
             local frac = v / maxStacks
+            t:SetColorTexture(tickR, tickG, tickB, tickA)
             t:ClearAllPoints()
             if isVert then
                 local off = PP and PP.Scale(barH * frac) or (barH * frac)
@@ -2120,7 +2201,7 @@ local function ApplyTBBChargeHashLines(bar, cfg, maxCharges)
     if not bar._chargeHashOverlay then
         local overlay = CreateFrame("Frame", nil, sb)
         overlay:SetAllPoints(sb)
-        overlay:SetFrameLevel(sb:GetFrameLevel() + 4)
+        overlay:SetFrameLevel(sb:GetFrameLevel() + 5)
         bar._chargeHashOverlay = overlay
     end
     bar._chargeHashOverlay:Show()
@@ -2243,9 +2324,18 @@ local function ApplyTrackedBuffBarSettings(bar, cfg)
         sb:SetFrameLevel(base + 1)
         if bar._gradClip then bar._gradClip:SetFrameLevel(sb:GetFrameLevel() + 1) end
         if bar._chargeHashFillClip then bar._chargeHashFillClip:SetFrameLevel(sb:GetFrameLevel() + 1) end
-        if bar._threshOverlay then bar._threshOverlay:SetFrameLevel(sb:GetFrameLevel() + 2) end
-        if bar._sparkOverlay then bar._sparkOverlay:SetFrameLevel(sb:GetFrameLevel() + 2) end
-        if bar._chargeHashOverlay then bar._chargeHashOverlay:SetFrameLevel(sb:GetFrameLevel() + 4) end
+        if bar._threshOverlays then
+            for i = 1, #bar._threshOverlays do
+                local ov = bar._threshOverlays[i]
+                if ov then ov:SetFrameLevel(sb:GetFrameLevel() + 2) end
+            end
+        end
+        -- Spark sits one level ABOVE the threshold overlays: at the same level
+        -- it loses the tie to them (they are created lazily, so they win) and
+        -- vanishes the moment a threshold is crossed. Tick marks and charge
+        -- hash lines shift up in step to keep their existing order.
+        if bar._sparkOverlay then bar._sparkOverlay:SetFrameLevel(sb:GetFrameLevel() + 3) end
+        if bar._chargeHashOverlay then bar._chargeHashOverlay:SetFrameLevel(sb:GetFrameLevel() + 5) end
         if bar._barBorder then bar._barBorder:SetFrameLevel(base + 5) end
         if bar._pandemicGlowOverlay then bar._pandemicGlowOverlay:SetFrameLevel(base + 7) end
         if bar._textOverlay then bar._textOverlay:SetFrameLevel(sb:GetFrameLevel() + 7) end
@@ -2524,7 +2614,7 @@ local function ApplyTrackedBuffBarSettings(bar, cfg)
     if not bar._tickOverlay then
         local to = CreateFrame("Frame", nil, sb)
         to:SetAllPoints(sb)
-        to:SetFrameLevel(sb:GetFrameLevel() + 3)
+        to:SetFrameLevel(sb:GetFrameLevel() + 4)
         bar._tickOverlay = to
     end
     ApplyTBBTickMarks(sb, cfg, bar._threshTicks, isVert, bar._tickOverlay)

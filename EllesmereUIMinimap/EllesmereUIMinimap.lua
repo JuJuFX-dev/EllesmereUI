@@ -5069,6 +5069,9 @@ end
 local function UpdateMinimapVisibility()
     local p = EBS.db and EBS.db.profile and EBS.db.profile.minimap
     if not p or not p.enabled then return end
+    -- Minimap:Show()/Hide() are protected in combat lockdown. Bail and let
+    -- PLAYER_REGEN_ENABLED re-trigger the visibility dispatcher.
+    if InCombatLockdown() then return end
     local vis = EllesmereUI.EvalVisibility(p)
     local minimap = Minimap
     if not minimap then return end

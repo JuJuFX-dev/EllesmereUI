@@ -157,6 +157,7 @@ ns.BLOCK_TYPES = {
     { key = "travel",     label = "Travel Cooldowns" },
     { key = "micromenu",  label = "Micro Menu" },
     { key = "currency",   label = "Currency" },
+    { key = "greatvault", label = "Great Vault" },
     { key = "spacer",     label = "Spacer" },
 }
 
@@ -175,6 +176,7 @@ ns.BLOCK_DEFAULTS = {
                    menu = true, guild = true, social = true, char = true, spell = true, ach = true, quest = true, lfg = true,
                    pvp = true, housing = true, journal = true, pet = true, shop = true, help = true },
     currency   = { currencyId = nil, showIcon = true },
+    greatvault = {},
     spacer     = {},
 }
 
@@ -626,12 +628,14 @@ end
 do
     local tip
     local owner
-    local rows = {}       -- rows[i] = { left = fs, right = fs }
+    local rows = {}       -- rows[i] = { left = fs, right = fs, cols = { fs, ... } }
     local data = {}       -- data[i] = { l, r, lr, lg, lb, rr, rg, rb }
     local dataCount = 0
+    local colW = {}       -- per-Tip_Show widest token per sub-column
     local PAD = 10
     local ROW_GAP = 3
     local COL_GAP = 18
+    local TOKEN_GAP = 8
     local FONT_SIZE = 12
 
     -- Interactive rows: a pool of secure spell buttons overlaid on rows that
@@ -680,9 +684,25 @@ do
             row = {}
             row.left = tip:CreateFontString(nil, "OVERLAY")
             row.right = tip:CreateFontString(nil, "OVERLAY")
+            row.cols = {}
             rows[i] = row
         end
         return row
+    end
+
+    local function EnsureCol(row, c)
+        local fs = row.cols[c]
+        if not fs then
+            fs = tip:CreateFontString(nil, "OVERLAY")
+            row.cols[c] = fs
+        end
+        return fs
+    end
+
+    -- Rows are pooled across shows: a row reused with fewer (or no) sub-columns
+    -- must not leave the previous show's token FontStrings on screen.
+    local function HideCols(row, from)
+        for c = from, #row.cols do row.cols[c]:Hide() end
     end
 
     -- Hide/detach every overlay button. The buttons are PROTECTED
@@ -859,6 +879,7 @@ do
         d.wrap = nil
         d.action = nil
         d.onClick = nil
+        d.ncols = nil
         return true
     end
 
@@ -886,6 +907,41 @@ do
         d.wrap = nil
         d.action = nil
         d.onClick = nil
+        d.ncols = nil
+        return true
+    end
+
+    -- Like Tip_AddDouble, but the right side is a series of tokens laid out in
+    -- pixel-aligned sub-columns instead of one right-aligned string. A single
+    -- string cannot line up vertically across rows: the game font is
+    -- proportional, so "+10" and "0/4" are different widths and every token
+    -- left of the last one drifts. Tokens carry their own inline color codes.
+    -- The array is copied, so callers may reuse one buffer for every row.
+    function ns.Tip_AddColumns(left, tokens, lr, lg, lb)
+        if not tip then return end
+        if left ~= nil and issecretvalue(left) then return end
+        local n = (tokens and #tokens) or 0
+        for i = 1, n do
+            if issecretvalue(tokens[i]) then return end
+        end
+        dataCount = dataCount + 1
+        local d = data[dataCount]
+        if not d then d = {}; data[dataCount] = d end
+        d.l = left or " "
+        d.lr = lr; d.lg = lg; d.lb = lb
+        d.r = nil
+        d.wrap = nil
+        d.action = nil
+        d.onClick = nil
+        -- nil, never 0: Tip_Show tests `if d.ncols`, and 0 is true in Lua, so a
+        -- token-less row would reserve the right column and pad the tip by
+        -- COL_GAP for content that never renders.
+        d.ncols = n > 0 and n or nil
+        if n > 0 then
+            local c = d.cols
+            if not c then c = {}; d.cols = c end
+            for i = 1, n do c[i] = tokens[i] end
+        end
         return true
     end
 
@@ -915,6 +971,8 @@ do
         if not tip or not owner then return end
         local maxLeft, maxRight, totalH = 0, 0, 0
         local anyRight = false
+        local colCount = 0
+        wipe(colW)
         for i = 1, dataCount do
             local d = data[i]
             local row = EnsureRow(i)
@@ -949,18 +1007,48 @@ do
                 row.right:SetText("")
                 row.right:Hide()
             end
+            local colH = 0
+            if d.ncols then
+                anyRight = true
+                if d.ncols > colCount then colCount = d.ncols end
+                for c = 1, d.ncols do
+                    local fs = EnsureCol(row, c)
+                    ns.SetFont(fs, FONT_SIZE)
+                    fs:SetWordWrap(false)
+                    fs:SetWidth(0)
+                    fs:SetText(d.cols[c])
+                    fs:Show()
+                    local tw = fs:GetStringWidth() or 0
+                    if tw > (colW[c] or 0) then colW[c] = tw end
+                    local th = fs:GetStringHeight() or 0
+                    if th > colH then colH = th end
+                end
+            end
+            HideCols(row, (d.ncols or 0) + 1)
+            -- Row height covers whichever of the three shapes the row uses, so
+            -- a token taller than its label cannot bleed into the next row.
             local h = row.left:GetStringHeight() or FONT_SIZE
             if d.r then
                 local rh = row.right:GetStringHeight() or 0
                 if rh > h then h = rh end
             end
+            if colH > h then h = colH end
             totalH = totalH + h + (i > 1 and ROW_GAP or 0)
             d._h = h
         end
         for i = dataCount + 1, #rows do
             rows[i].left:Hide()
             rows[i].right:Hide()
+            HideCols(rows[i], 1)
         end
+
+        -- The sub-column block is as wide as its widest token per column plus
+        -- the gaps, and shares the right column with plain right strings.
+        local colsW = 0
+        for c = 1, colCount do
+            colsW = colsW + (colW[c] or 0) + (c > 1 and TOKEN_GAP or 0)
+        end
+        if colsW > maxRight then maxRight = colsW end
 
         local innerW = maxLeft
         if anyRight then innerW = maxLeft + COL_GAP + maxRight end
@@ -977,6 +1065,21 @@ do
             if d.r then
                 row.right:ClearAllPoints()
                 row.right:SetPoint("TOPRIGHT", tip, "TOPRIGHT", -PAD, y)
+            end
+            if d.ncols then
+                -- Walk the columns right to left so the block ends flush with
+                -- the tip's right edge, exactly where a plain right string
+                -- lands. Each token is anchored by its own right edge and keeps
+                -- its natural width, so nothing can clip.
+                local off = PAD
+                for c = colCount, 1, -1 do
+                    local fs = c <= d.ncols and row.cols[c]
+                    if fs then
+                        fs:ClearAllPoints()
+                        fs:SetPoint("TOPRIGHT", tip, "TOPRIGHT", -off, y)
+                    end
+                    off = off + (colW[c] or 0) + (c > 1 and TOKEN_GAP or 0)
+                end
             end
             d._y = y
             y = y - d._h - ROW_GAP

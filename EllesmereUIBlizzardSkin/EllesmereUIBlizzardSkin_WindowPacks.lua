@@ -2311,16 +2311,7 @@ local function Skin_Archaeology()
     WSkin.FadeArtIn(f)
     -- Direct fontstrings on the frame and its pages: white (color-only;
     -- this is a profession-specific window, not the font-exempt book).
-    local function WhitenIn(host)
-        if not host or not host.GetRegions then return end
-        for i = 1, select("#", host:GetRegions()) do
-            local r = select(i, host:GetRegions())
-            if r and r.IsObjectType and r:IsObjectType("FontString") then
-                WSkin.White(r)
-            end
-        end
-    end
-    WhitenIn(f)
+    WhitenTextIn(f)
     if f.CloseButton then WSkin.CloseButton(f.CloseButton) end
     if f.raceFilterDropdown then WSkin.Dropdown(f.raceFilterDropdown) end
     if f.RaceFilterDropdown then WSkin.Dropdown(f.RaceFilterDropdown) end
@@ -2330,7 +2321,7 @@ local function Skin_Archaeology()
         local pg = f[k]
         if pg then
             WSkin.FadeKeyedArt(pg)
-            WhitenIn(pg)
+            WhitenTextIn(pg)
         end
     end
     -- Help page scroll text lives a level deeper than the page sweeps.

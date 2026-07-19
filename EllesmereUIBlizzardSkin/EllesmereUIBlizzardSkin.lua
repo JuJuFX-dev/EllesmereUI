@@ -119,6 +119,57 @@ end
         return not EllesmereUIDB or EllesmereUIDB.reskinPopupsMenus ~= false
     end
 
+    local function _applyConfiguredBorder(owner, prefix, legacySize)
+        if not owner or not EllesmereUI.ApplyBorderStyle then return end
+        local db = EllesmereUIDB or {}
+        local key = db[prefix .. "BorderThickness"]
+        local sizes = { none=0, thin=1, normal=2, heavy=3, strong=4 }
+        local size = key and (sizes[key] or 1) or (legacySize or 1)
+        key = key or ({ [0]="none", [1]="thin", [2]="normal", [3]="heavy", [4]="strong" })[size] or "thin"
+        local mode = db[prefix .. "BorderColorMode"] or "custom"
+        local color
+        if mode == "accent" then
+            color = EllesmereUI.ELLESMERE_GREEN or { r=.27, g=.86, b=.49 }
+        elseif mode == "class" then
+            local _, class = UnitClass("player")
+            color = class and RAID_CLASS_COLORS[class] or { r=1, g=1, b=1 }
+        else
+            color = db[prefix .. "BorderColor"] or { r=1, g=1, b=1 }
+        end
+        local alpha = db[prefix .. "BorderOpacity"]
+        if alpha == nil then alpha = (mode == "custom") and EllesmereUI.RESKIN.BRD_ALPHA or .5 end
+        local data = GetFFD(owner)
+        if not data.configBorder then
+            data.configBorder = CreateFrame("Frame", nil, owner, "BackdropTemplate")
+            data.configBorder:SetAllPoints(owner)
+            data.configBorder:SetFrameLevel(owner:GetFrameLevel() + 5)
+            data.configBorder:EnableMouse(false)
+            if not _PP then _PP = EllesmereUI.PP end
+            if _PP and _PP.HideBorder then _PP.HideBorder(owner) end
+        end
+        EllesmereUI.ApplyBorderStyle(data.configBorder, size, color.r, color.g, color.b, alpha,
+            db[prefix .. "BorderTexture"] or "solid", db[prefix .. "BorderOffsetX"],
+            db[prefix .. "BorderOffsetY"], db[prefix .. "BorderShiftX"], db[prefix .. "BorderShiftY"],
+            "blizzardSkin", key)
+    end
+    EllesmereUI._applyBlizzardConfiguredBorder = _applyConfiguredBorder
+
+    local function _getElementColor()
+        local db = EllesmereUIDB or {}
+        local mode = db.popupMenuButtonTextColorMode or "accent"
+        if mode == "custom" then
+            local c = db.popupMenuButtonTextColor or { r=1, g=1, b=1 }
+            return c.r, c.g, c.b
+        elseif mode == "class" then
+            local _, class = UnitClass("player")
+            local c = class and RAID_CLASS_COLORS[class]
+            if c then return c.r, c.g, c.b end
+        end
+        local c = EllesmereUI.ELLESMERE_GREEN or { r=.27, g=.86, b=.49 }
+        return c.r, c.g, c.b
+    end
+    EllesmereUI._getPopupMenuButtonTextColor = _getElementColor
+
     local function _ttSkin(tt, _, isEmbedded)
         if not tt or tt:IsForbidden() or not _enabled() then return end
         -- Embedded tooltips (e.g. EmbeddedItemTooltip, the reward-item block
@@ -132,10 +183,6 @@ end
         if not GetFFD(tt).bg then
             GetFFD(tt).bg = tt:CreateTexture(nil, "BACKGROUND", nil, -8)
             GetFFD(tt).bg:SetAllPoints()
-            if _PP and _PP.CreateBorder then
-                local bR, bG, bB, bA, bSize = EllesmereUI.GetTooltipBorder()
-                _PP.CreateBorder(tt, bR, bG, bB, bA, bSize, "OVERLAY", 7)
-            end
         end
         -- Unified, user-customizable background (shared with the EUI custom
         -- tooltips via EllesmereUI.GetTooltipBg). Re-applied each skin call so a
@@ -145,16 +192,8 @@ end
         -- Border size + colour are user-customizable (Blizz UI Enhanced >
         -- Blizzard Tooltip > Border). Re-applied each call like the bg so a
         -- change shows on the next tooltip; size 0 hides the border.
-        if _PP and _PP.GetBorders and _PP.GetBorders(tt) then
-            local bR, bG, bB, bA, bSize = EllesmereUI.GetTooltipBorder()
-            if bSize and bSize > 0 then
-                _PP.SetBorderSize(tt, bSize)
-                _PP.SetBorderColor(tt, bR, bG, bB, bA)
-                _PP.ShowBorder(tt)
-            else
-                _PP.HideBorder(tt)
-            end
-        end
+        local _, _, _, _, legacySize = EllesmereUI.GetTooltipBorder()
+        _applyConfiguredBorder(tt, "tooltip", legacySize)
     end
 
     local function _ttFonts(tt, startFrom)
@@ -197,7 +236,7 @@ end
     end
 
     local function _accentEnabled()
-        return EllesmereUIDB and EllesmereUIDB.accentReskinElements
+        return true
     end
 
     -- Unified inspect system: one NotifyInspect per GUID, one INSPECT_READY
@@ -607,8 +646,7 @@ end
             if tt ~= _GameTooltip or tt:IsForbidden() or not _accentEnabled() then return end
             if not _nameL1 then _nameL1 = _G.GameTooltipTextLeft1 end
             if _nameL1 then
-                local EG = EllesmereUI.ELLESMERE_GREEN
-                if EG then _nameL1:SetTextColor(EG.r, EG.g, EG.b) end
+                local r,g,b=_getElementColor(); _nameL1:SetTextColor(r,g,b)
             end
         end
         if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
@@ -640,13 +678,8 @@ end
                 region:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
             end
         end
-        if not _menuSkinned[frame] then
-            _menuSkinned[frame] = true
-            if _PP and _PP.CreateBorder then
-                local RS = EllesmereUI.RESKIN
-                _PP.CreateBorder(frame, 1, 1, 1, RS.BRD_ALPHA, 1, "OVERLAY", 7)
-            end
-        end
+        _menuSkinned[frame] = true
+        _applyConfiguredBorder(frame, "popupMenu", 1)
     end
 
     local function _menuOnOpen(manager, _, menuDescription)
@@ -711,6 +744,7 @@ end
             end
         end
         GetFFD(popup).bg:Show()
+        _applyConfiguredBorder(popup, "popupMenu", 1)
         -- Skin buttons (1-4 plus the optional extra action button)
         local popupBtns = {}
         for i = 1, 4 do
@@ -730,22 +764,10 @@ end
                         if r.SetAtlas then r:SetAtlas("") end
                     end
                 end
-                local RS = EllesmereUI.RESKIN
-                local EG = EllesmereUI.ELLESMERE_GREEN
-                local useAccent = _accentEnabled() and EG
                 local btnBg = btn:CreateTexture(nil, "BACKGROUND", nil, -6)
                 btnBg:SetAllPoints()
-                btnBg:SetColorTexture(0.1, 0.1, 0.1, 0.8)
                 GetFFD(btnBg).owned = true
                 GetFFD(btn).bg = btnBg
-                if not _PP then _PP = EllesmereUI and EllesmereUI.PP end
-                if _PP and _PP.CreateBorder then
-                    if useAccent then
-                        _PP.CreateBorder(btn, EG.r, EG.g, EG.b, 0.5, 1, "OVERLAY", 7)
-                    else
-                        _PP.CreateBorder(btn, 1, 1, 1, RS.BRD_ALPHA, 1, "OVERLAY", 7)
-                    end
-                end
                 -- House hover: 10% white wash (HIGHLIGHT layer only renders
                 -- while the button is enabled and hovered).
                 local hov = btn:CreateTexture(nil, "HIGHLIGHT")
@@ -760,12 +782,8 @@ end
                     local enabled = (self.IsEnabled and self:IsEnabled()) and true or false
                     if fs then
                         if enabled then
-                            local EG2 = EllesmereUI.ELLESMERE_GREEN
-                            if _accentEnabled() and EG2 then
-                                fs:SetTextColor(EG2.r, EG2.g, EG2.b, 1)
-                            else
-                                fs:SetTextColor(1, 1, 1, 1)
-                            end
+                            local r, g, b = _getElementColor()
+                            fs:SetTextColor(r, g, b, 1)
                         else
                             fs:SetTextColor(0.4, 0.4, 0.4, 1)
                         end
@@ -778,6 +796,11 @@ end
                 btn:HookScript("OnEnable",  _euiRefreshEnabled)
                 btn:HookScript("OnDisable", _euiRefreshEnabled)
                 _euiRefreshEnabled(btn)
+            end
+            if btn then
+                local c = EllesmereUIDB and EllesmereUIDB.popupMenuButtonBackgroundColor or { r=.1,g=.1,b=.1,a=.8 }
+                if GetFFD(btn).bg then GetFFD(btn).bg:SetColorTexture(c.r, c.g, c.b, c.a == nil and .8 or c.a) end
+                _applyConfiguredBorder(btn, "popupMenuButton", 1)
             end
         end
 
@@ -822,15 +845,10 @@ end
             ebBg:SetColorTexture(0.05, 0.05, 0.05, 0.9)
             GetFFD(ebBg).owned = true
             -- Border matching the popup buttons (accent or white).
-            local RS2 = EllesmereUI.RESKIN
-            local EG3 = EllesmereUI.ELLESMERE_GREEN
+            local borderR, borderG, borderB = _getElementColor()
             if not _PP then _PP = EllesmereUI and EllesmereUI.PP end
             if _PP and _PP.CreateBorder then
-                if _accentEnabled() and EG3 then
-                    _PP.CreateBorder(eb, EG3.r, EG3.g, EG3.b, 0.5, 1, "OVERLAY", 7)
-                else
-                    _PP.CreateBorder(eb, 1, 1, 1, RS2.BRD_ALPHA, 1, "OVERLAY", 7)
-                end
+                _PP.CreateBorder(eb, borderR, borderG, borderB, 0.5, 1, "OVERLAY", 7)
             end
         end
     end
@@ -842,6 +860,128 @@ end
                 popup:HookScript("OnShow", function(self) _popupSkin(self) end)
             end
         end
+    end
+
+    ---------------------------------------------------------------------------
+    --  Resurrect Accept Glow (resurrectAcceptGlow, default OFF)
+    --  Pulsating border around button1 of the RESURRECT StaticPopups so a
+    --  pending resurrect is hard to miss. Independent of reskinPopupsMenus.
+    --  Zero cost until first enable: no hooks or frames exist before then.
+    --  The overlay is our own frame (state in FFD); the pulse is a C-side
+    --  Alpha AnimationGroup, so there is no per-frame Lua while it runs.
+    ---------------------------------------------------------------------------
+    local RES_WHICH = {
+        RESURRECT             = true,
+        RESURRECT_NO_SICKNESS = true,
+        RESURRECT_NO_TIMER    = true,
+    }
+    local _resGlowHooked = false
+
+    local function _resGlowEnabled()
+        return EllesmereUIDB and EllesmereUIDB.resurrectAcceptGlow or false
+    end
+
+    local function _resGlowButton(popup)
+        return popup.button1
+            or (popup.GetName and popup:GetName() and _G[popup:GetName() .. "Button1"])
+    end
+
+    -- Addon-owned overlay anchored 3px outside the button, built once per
+    -- button on first glow; state lives in FFD, never on the Blizzard frame.
+    local function _resGlowGet(btn)
+        local d = GetFFD(btn)
+        if not d.resGlow then
+            local ov = CreateFrame("Frame", nil, btn)
+            ov:SetPoint("TOPLEFT", btn, "TOPLEFT", -3, 3)
+            ov:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 3, -3)
+            ov:SetFrameLevel(btn:GetFrameLevel() + 5)
+            ov:Hide()
+            if not _PP then _PP = EllesmereUI and EllesmereUI.PP end
+            if _PP and _PP.CreateBorder then
+                _PP.CreateBorder(ov, 1, 1, 1, 1, 2, "OVERLAY", 7)
+            end
+            local ag = ov:CreateAnimationGroup()
+            ag:SetLooping("BOUNCE")
+            local pulse = ag:CreateAnimation("Alpha")
+            pulse:SetFromAlpha(1); pulse:SetToAlpha(0.15)
+            pulse:SetDuration(0.7); pulse:SetSmoothing("IN_OUT")
+            d.resGlow = ov
+            d.resGlowAG = ag
+        end
+        return d.resGlow, d.resGlowAG
+    end
+
+    local function _resGlowStart(btn)
+        local ov, ag = _resGlowGet(btn)
+        if not ov then return end
+        -- Color resolved at every start so re-shows follow the current
+        -- Accent Colored Elements setting (same source as the popup skin).
+        local EG = EllesmereUI.ELLESMERE_GREEN
+        if _PP and _PP.SetBorderColor then
+            if _accentEnabled() and EG then
+                _PP.SetBorderColor(ov, EG.r, EG.g, EG.b, 1)
+            else
+                _PP.SetBorderColor(ov, 1, 1, 1, 1)
+            end
+        end
+        ov:SetAlpha(1)
+        ov:Show()
+        if ag and not ag:IsPlaying() then ag:Play() end
+    end
+
+    -- Raw FFD read (not GetFFD): stopping must never allocate state for a
+    -- button that never glowed.
+    local function _resGlowStop(btn)
+        local d = btn and FFD[btn]
+        local ov = d and d.resGlow
+        if ov then
+            if d.resGlowAG then d.resGlowAG:Stop() end
+            ov:Hide()
+        end
+    end
+
+    local function _resGlowRefresh(popup)
+        local btn = _resGlowButton(popup)
+        if not btn then return end
+        if _resGlowEnabled() and RES_WHICH[popup.which] and popup:IsShown() then
+            _resGlowStart(btn)
+        else
+            _resGlowStop(btn)
+        end
+    end
+
+    local function _resGlowRefreshAll()
+        for i = 1, STATICPOPUP_NUMDIALOGS or 4 do
+            local popup = _G["StaticPopup" .. i]
+            if popup and not popup:IsForbidden() then _resGlowRefresh(popup) end
+        end
+    end
+
+    -- Install OnShow/OnHide hooks once. Hooks cannot be uninstalled, so they
+    -- self-gate: OnShow early-returns when the toggle is off, OnHide is a raw
+    -- weak-table lookup. Never called before the first enable.
+    local function _resGlowInit()
+        if _resGlowHooked then return end
+        _resGlowHooked = true
+        for i = 1, STATICPOPUP_NUMDIALOGS or 4 do
+            local popup = _G["StaticPopup" .. i]
+            if popup then
+                popup:HookScript("OnShow", function(self)
+                    if not _resGlowEnabled() then return end
+                    _resGlowRefresh(self)
+                end)
+                popup:HookScript("OnHide", function(self)
+                    _resGlowStop(_resGlowButton(self))
+                end)
+            end
+        end
+    end
+
+    -- Options-panel entry point: installs hooks on first enable and syncs
+    -- currently visible popups on any flip, so no reload is ever needed.
+    EllesmereUI._EnsureResurrectGlow = function()
+        if _resGlowEnabled() then _resGlowInit() end
+        if _resGlowHooked then _resGlowRefreshAll() end
     end
 
     do
@@ -864,6 +1004,12 @@ end
             if _pmEnabled() then
                 _menuInit()
                 _popupInit()
+            end
+            -- Resurrect Accept Glow: independent of both reskin masters.
+            -- Default OFF; disabled users pay only this boolean check
+            -- (no hooks, no frames).
+            if _resGlowEnabled() then
+                _resGlowInit()
             end
         end)
     end
@@ -946,10 +1092,8 @@ end
                 GetFFD(popup).bg:SetAllPoints()
                 GetFFD(popup).bg:SetColorTexture(RS.BG_R, RS.BG_G, RS.BG_B, RS.QT_ALPHA)
                 GetFFD(GetFFD(popup).bg).owned = true
-                if _PP and _PP.CreateBorder then
-                    _PP.CreateBorder(bgFrame, 1, 1, 1, RS.BRD_ALPHA, 1, "OVERLAY", 7)
-                end
             end
+            _applyConfiguredBorder(GetFFD(popup).bgFrame, "popupMenu", 1)
 
             -- Skin buttons (Enter Dungeon / Leave Queue).
             -- Re-strip textures every show (Blizzard re-applies art on each popup).
@@ -989,15 +1133,8 @@ end
                             local RS2 = EllesmereUI.RESKIN
                             local btnBg = btn:CreateTexture(nil, "BACKGROUND", nil, -6)
                             btnBg:SetAllPoints()
-                            btnBg:SetColorTexture(0.1, 0.1, 0.1, 0.8)
                             GetFFD(btnBg).owned = true
-                            if _PP and _PP.CreateBorder then
-                                if useAccent then
-                                    _PP.CreateBorder(btn, EG.r, EG.g, EG.b, 0.5, 1, "OVERLAY", 7)
-                                else
-                                    _PP.CreateBorder(btn, 1, 1, 1, RS2.BRD_ALPHA, 1, "OVERLAY", 7)
-                                end
-                            end
+                            GetFFD(btn).bg = btnBg
                             -- House hover: 10% white wash (owned, so the
                             -- every-show re-strip above leaves it alone).
                             local hov = btn:CreateTexture(nil, "HIGHLIGHT")
@@ -1006,11 +1143,13 @@ end
                             GetFFD(hov).owned = true
                         end
                         -- Accent-color the button text (every show)
-                        local EG = EllesmereUI.ELLESMERE_GREEN
-                        local useAccent = _accentEnabled() and EG
+                        local c = EllesmereUIDB and EllesmereUIDB.popupMenuButtonBackgroundColor or { r=.1,g=.1,b=.1,a=.8 }
+                        if GetFFD(btn).bg then GetFFD(btn).bg:SetColorTexture(c.r,c.g,c.b,c.a == nil and .8 or c.a) end
+                        _applyConfiguredBorder(btn, "popupMenuButton", 1)
                         local fs = btn:GetFontString()
-                        if fs and useAccent then
-                            fs:SetTextColor(EG.r, EG.g, EG.b, 1)
+                        if fs then
+                            local r, g, b = _getElementColor()
+                            fs:SetTextColor(r, g, b, 1)
                         end
                     end
                 end
@@ -1235,8 +1374,7 @@ do
 
         -- Reskin buttons (Okay, Cancel, Defaults, UseCharacterBindings)
         local btnNames = { "OkayButton", "CancelButton", "DefaultsButton" }
-        local EG = EllesmereUI.ELLESMERE_GREEN
-        local useAccent = (EllesmereUIDB and EllesmereUIDB.accentReskinElements) and EG
+        local er,eg,eb=EllesmereUI._getPopupMenuButtonTextColor(); local EG={r=er,g=eg,b=eb}; local useAccent=EG
         for _, name in ipairs(btnNames) do
             local btn = qkb[name]
             if btn and not GetFFD(btn).skinned then
@@ -1350,7 +1488,7 @@ do
 
         -- Skin buttons
         local function _accentOn()
-            return EllesmereUIDB and EllesmereUIDB.accentReskinElements
+            return true
         end
         for _, btnName in ipairs({ "AcceptButton", "DeclineButton", "AcknowledgeButton" }) do
             local btn = dialog[btnName]
@@ -1375,7 +1513,7 @@ do
                             end)
                         end
                     end
-                    local EG = EllesmereUI.ELLESMERE_GREEN
+                    local er,eg,eb=EllesmereUI._getPopupMenuButtonTextColor(); local EG={r=er,g=eg,b=eb}
                     local useAccent = _accentOn() and EG
                     local btnBg = btn:CreateTexture(nil, "BACKGROUND", nil, -6)
                     btnBg:SetAllPoints()
@@ -1390,7 +1528,7 @@ do
                     end
                 end
                 -- Accent text (every show)
-                local EG = EllesmereUI.ELLESMERE_GREEN
+                local er,eg,eb=EllesmereUI._getPopupMenuButtonTextColor(); local EG={r=er,g=eg,b=eb}
                 local useAccent = _accentOn() and EG
                 local fs = btn:GetFontString()
                 if fs and useAccent then
@@ -1460,7 +1598,7 @@ do
         end
 
         local function _accentOn()
-            return EllesmereUIDB and EllesmereUIDB.accentReskinElements
+            return true
         end
         for _, btnName in ipairs({ "SignUpButton", "CancelButton" }) do
             local btn = dialog[btnName]
@@ -1483,7 +1621,7 @@ do
                         end)
                     end
                 end
-                local EG = EllesmereUI.ELLESMERE_GREEN
+                local er,eg,eb=EllesmereUI._getPopupMenuButtonTextColor(); local EG={r=er,g=eg,b=eb}
                 local useAccent = _accentOn() and EG
                 local btnBg = btn:CreateTexture(nil, "BACKGROUND", nil, -6)
                 btnBg:SetAllPoints()
@@ -1530,8 +1668,6 @@ do
         if EllesmereUIDB and EllesmereUIDB.reskinGameMenu == false then return end
 
         local RS = EllesmereUI.RESKIN
-        local PP = EllesmereUI.PP
-        local ELLESMERE_GREEN = EllesmereUI.ELLESMERE_GREEN or { r = 0.27, g = 0.86, b = 0.49 }
 
         -- Strip decorative textures
         for i = 1, select("#", GameMenuFrame:GetRegions()) do
@@ -1549,7 +1685,8 @@ do
             end
             local headerText = header.Text or (header.GetRegions and select(1, header:GetRegions()))
             if headerText and headerText.SetTextColor then
-                headerText:SetTextColor(ELLESMERE_GREEN.r, ELLESMERE_GREEN.g, ELLESMERE_GREEN.b, 1)
+                local r, g, b = EllesmereUI._getPopupMenuButtonTextColor()
+                headerText:SetTextColor(r, g, b, 1)
                 local euiFont = EllesmereUI.GetFontPath and EllesmereUI.GetFontPath("blizzardSkin") or "Fonts\\FRIZQT__.TTF"
                 local _, hSize = headerText:GetFont()
                 headerText:SetFont(euiFont, hSize or 16, "")
@@ -1561,9 +1698,29 @@ do
         local gmBg = GameMenuFrame:CreateTexture(nil, "BACKGROUND")
         gmBg:SetAllPoints()
         gmBg:SetColorTexture(RS.BG_R, RS.BG_G, RS.BG_B, RS.QT_ALPHA)
-        if PP and PP.CreateBorder then
-            PP.CreateBorder(GameMenuFrame, 1, 1, 1, RS.BRD_ALPHA, 1, "OVERLAY", 7)
+        local function ApplyButtonStyle(btn)
+            local d = GetFFD(btn)
+            if not d.gameMenuInset then return end
+            local c = EllesmereUIDB and EllesmereUIDB.popupMenuButtonBackgroundColor or { r=.1,g=.1,b=.1,a=.8 }
+            d.gameMenuButtonBg:SetColorTexture(c.r, c.g, c.b, c.a == nil and .8 or c.a)
+            EllesmereUI._applyBlizzardConfiguredBorder(d.gameMenuInset, "popupMenuButton", 1)
+            local fs = btn:GetFontString()
+            if fs then
+                local r, g, b = EllesmereUI._getPopupMenuButtonTextColor()
+                fs:SetTextColor(r, g, b, 1)
+            end
         end
+        local function ApplyMenuStyle()
+            EllesmereUI._applyBlizzardConfiguredBorder(GameMenuFrame, "popupMenu", 1)
+            if GameMenuFrame.buttonPool then
+                for btn in GameMenuFrame.buttonPool:EnumerateActive() do ApplyButtonStyle(btn) end
+            end
+            local d = GetFFD(GameMenuFrame)
+            if d.euiBtn then ApplyButtonStyle(d.euiBtn) end
+            if d.unlockBtn then ApplyButtonStyle(d.unlockBtn) end
+        end
+        ApplyMenuStyle()
+        GameMenuFrame:HookScript("OnShow", ApplyMenuStyle)
         -- Skin pooled buttons via InitButtons hook
         hooksecurefunc(GameMenuFrame, "InitButtons", function(menu)
             if not menu.buttonPool then return end
@@ -1595,10 +1752,8 @@ do
                     inset:SetFrameLevel(menuBtn:GetFrameLevel())
                     local btnBg = inset:CreateTexture(nil, "BACKGROUND", nil, -6)
                     btnBg:SetAllPoints()
-                    btnBg:SetColorTexture(0.1, 0.1, 0.1, 0.8)
-                    if PP and PP.CreateBorder then
-                        PP.CreateBorder(inset, 1, 1, 1, RS.BRD_ALPHA, 1, "OVERLAY", 7)
-                    end
+                    GetFFD(menuBtn).gameMenuInset = inset
+                    GetFFD(menuBtn).gameMenuButtonBg = btnBg
                     local hl = menuBtn:CreateTexture(nil, "HIGHLIGHT")
                     hl:SetAllPoints(inset)
                     hl:SetColorTexture(1, 1, 1, 0.1)
@@ -1609,6 +1764,7 @@ do
                         fs:SetFont(euiFont or "Fonts\\FRIZQT__.TTF", (size or 14) - 2, flags or "")
                     end
                 end
+                ApplyButtonStyle(menuBtn)
             end
         end)
     end)

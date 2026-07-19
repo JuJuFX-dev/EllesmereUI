@@ -2041,9 +2041,14 @@ initFrame:SetScript("OnEvent", function(self)
                 if sb then sb:SetFrameLevel(base + 1) end
                 if wrap._gradClip and sb then wrap._gradClip:SetFrameLevel(sb:GetFrameLevel() + 1) end
                 if wrap._chargeHashFillClip and sb then wrap._chargeHashFillClip:SetFrameLevel(sb:GetFrameLevel() + 1) end
-                if wrap._threshOverlay and sb then wrap._threshOverlay:SetFrameLevel(sb:GetFrameLevel() + 2) end
-                if wrap._sparkOverlay and sb then wrap._sparkOverlay:SetFrameLevel(sb:GetFrameLevel() + 2) end
-                if wrap._chargeHashOverlay and sb then wrap._chargeHashOverlay:SetFrameLevel(sb:GetFrameLevel() + 4) end
+                if wrap._threshOverlays and sb then
+                    for i = 1, #wrap._threshOverlays do
+                        local ov = wrap._threshOverlays[i]
+                        if ov then ov:SetFrameLevel(sb:GetFrameLevel() + 2) end
+                    end
+                end
+                if wrap._sparkOverlay and sb then wrap._sparkOverlay:SetFrameLevel(sb:GetFrameLevel() + 3) end
+                if wrap._chargeHashOverlay and sb then wrap._chargeHashOverlay:SetFrameLevel(sb:GetFrameLevel() + 5) end
                 if wrap._barBorder then wrap._barBorder:SetFrameLevel(base + 5) end
                 if wrap._pandemicGlowOverlay then wrap._pandemicGlowOverlay:SetFrameLevel(base + 7) end
                 if wrap._textOverlay and sb then wrap._textOverlay:SetFrameLevel(sb:GetFrameLevel() + 7) end
@@ -2961,6 +2966,341 @@ initFrame:SetScript("OnEvent", function(self)
         return "Preset " .. n
     end
 
+    ---------------------------------------------------------------------------
+    --  Stack threshold editor (opt-in). A small popup, opened from the cog on
+    --  the "Enable Stack Threshold" row, that edits cfg.stackThresholds -- an
+    --  ordered list of { value=<stack count>, r,g,b,a } color stops, capped at
+    --  STACK_THRESH_MAX. The list only drives rendering while
+    --  cfg.stackThresholdMulti is on; until then the legacy single-threshold
+    --  keys own the bar, so opening this popup changes nothing on its own.
+    --  ShowStackThreshEditor() rebinds it to the calling bar each time it opens.
+    ---------------------------------------------------------------------------
+    local STACK_THRESH_MAX = 5
+    local _stCloseIcon = "Interface\\AddOns\\EllesmereUI\\media\\icons\\eui-close.png"
+    local stPopup
+    local _stRows = {}
+    local _stGetCfg, _stRefreshFn
+    local _stMultiRow, _stMultiSnap, _stAddBtn, _stAddLbl
+    local ST_POPUP_W = 260
+    local ST_ROW_H = 26
+    local ST_PAD = 14
+    local ST_GAP = 10
+    local ST_DEF_R, ST_DEF_G, ST_DEF_B, ST_DEF_A = 0.8, 0.1, 0.1, 1
+    local RefreshStackThreshEditor  -- forward decl
+
+    -- Shared explainers. The literals live inside the L() calls so
+    -- .tools/extract-locale-keys.sh can see them (it only reads string
+    -- literals passed directly to L/Lf, never variables).
+    local function StackThreshHelpTip()
+        return EllesmereUI.L("Color the bar differently at several stack counts. The highest count you have reached wins.")
+    end
+    local function StackThreshReplacesTip()
+        return EllesmereUI.L("The single stack threshold is off while Multiple Thresholds is on.")
+    end
+    local function StackThreshAtCapTip()
+        return EllesmereUI.L("Maximum of 5 thresholds.")
+    end
+
+    local function CurrentStackThreshCfg()
+        if not _stGetCfg then return nil end
+        return _stGetCfg()
+    end
+
+    local function SortStackThresholds(list)
+        table.sort(list, function(a, b) return (a.value or 0) < (b.value or 0) end)
+    end
+
+    local function BuildStackThreshPopup()
+        stPopup = CreateFrame("Frame", nil, UIParent)
+        stPopup:SetFrameStrata("FULLSCREEN_DIALOG")
+        stPopup:SetFrameLevel(260)
+        stPopup:SetClampedToScreen(true)
+        stPopup:EnableMouse(true)
+        stPopup:SetScale(0.9)
+        stPopup:Hide()
+        PP.Size(stPopup, ST_POPUP_W, 200)
+
+        local bg = stPopup:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetColorTexture(0.06, 0.08, 0.10, 0.97)
+        PP.CreateBorder(stPopup, 1, 1, 1, 0.18, 1, "BORDER", 7)
+
+        local clickCatcher = CreateFrame("Button", nil, stPopup)
+        clickCatcher:SetFrameStrata("FULLSCREEN_DIALOG")
+        clickCatcher:SetFrameLevel(stPopup:GetFrameLevel() - 1)
+        clickCatcher:SetAllPoints((EllesmereUI.GetMainFrame and EllesmereUI:GetMainFrame()) or UIParent)
+        clickCatcher:SetScript("OnClick", function() stPopup:Hide() end)
+        clickCatcher:Hide()
+        -- Close on entering combat
+        stPopup:SetScript("OnEvent", function(self, event)
+            if event == "PLAYER_REGEN_DISABLED" then self:Hide() end
+        end)
+        stPopup:SetScript("OnShow", function(self)
+            clickCatcher:Show()
+            self:RegisterEvent("PLAYER_REGEN_DISABLED")
+            self:SetScript("OnUpdate", function(p)
+                if IsMouseButtonDown("LeftButton") then
+                    local mf = EllesmereUI._mainFrame
+                    local dm = EllesmereUI._openDropdownMenu
+                    if not p:IsMouseOver() and not (mf and mf:IsMouseOver()) and not (dm and dm:IsShown() and dm:IsMouseOver()) then p:Hide() end
+                end
+            end)
+        end)
+        stPopup:SetScript("OnHide", function(self)
+            clickCatcher:Hide()
+            self:UnregisterEvent("PLAYER_REGEN_DISABLED")
+            self:SetScript("OnUpdate", nil)
+        end)
+
+        local titleFS = EllesmereUI.MakeFont(stPopup, 13, nil, 1, 1, 1)
+        titleFS:SetAlpha(0.6)
+        titleFS:SetPoint("TOP", stPopup, "TOP", 0, -ST_PAD)
+        titleFS:SetText(EllesmereUI.L("Stack Thresholds"))
+
+        -- Row: multi opt-in (label left, toggle right) -- matches the band editor.
+        _stMultiRow = CreateFrame("Frame", nil, stPopup)
+        _stMultiRow:SetFrameLevel(stPopup:GetFrameLevel() + 3)
+        PP.Height(_stMultiRow, ST_ROW_H)
+        local mlbl = EllesmereUI.MakeFont(_stMultiRow, 12, nil, 1, 1, 1)
+        mlbl:SetAlpha(0.6)
+        mlbl:SetPoint("LEFT", _stMultiRow, "LEFT", 0, 0)
+        mlbl:SetText(EllesmereUI.L("Use Multiple Thresholds"))
+        local multiToggle
+        multiToggle, _, _stMultiSnap = EllesmereUI.BuildToggleControl(
+            _stMultiRow, _stMultiRow:GetFrameLevel() + 3,
+            function()
+                local cfg = CurrentStackThreshCfg()
+                return cfg and cfg.stackThresholdMulti
+            end,
+            function(v)
+                local cfg = CurrentStackThreshCfg(); if not cfg then return end
+                cfg.stackThresholdMulti = v and true or false
+                if _stRefreshFn then _stRefreshFn() end
+                RefreshStackThreshEditor()
+                EllesmereUI:RefreshPage()
+            end,
+            { sizeRatio = 0.95 })
+        multiToggle:SetPoint("RIGHT", _stMultiRow, "RIGHT", 0, 0)
+        local multiHit = CreateFrame("Frame", nil, _stMultiRow)
+        multiHit:SetAllPoints(mlbl)
+        multiHit:EnableMouse(true)
+        multiHit:SetScript("OnEnter", function(self) EllesmereUI.ShowWidgetTooltip(self, StackThreshHelpTip()) end)
+        multiHit:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+
+        -- Add Threshold button
+        _stAddBtn = CreateFrame("Button", nil, stPopup)
+        PP.Size(_stAddBtn, ST_POPUP_W - ST_PAD * 2, 26)
+        _stAddBtn:SetFrameLevel(stPopup:GetFrameLevel() + 3)
+        local abg = EllesmereUI.SolidTex(_stAddBtn, "BACKGROUND", 0.05, 0.07, 0.09, 0.92)
+        abg:SetAllPoints()
+        _stAddBtn._border = EllesmereUI.MakeBorder(_stAddBtn, 1, 1, 1, 0.4, PP)
+        _stAddLbl = EllesmereUI.MakeFont(_stAddBtn, 12, nil, 1, 1, 1)
+        _stAddLbl:SetAlpha(0.5)
+        _stAddLbl:SetPoint("CENTER")
+        _stAddLbl:SetText(EllesmereUI.L("+ Add Threshold"))
+        _stAddBtn:SetScript("OnEnter", function(self)
+            local cfg = CurrentStackThreshCfg()
+            local list = cfg and cfg.stackThresholds
+            if list and #list >= STACK_THRESH_MAX then
+                EllesmereUI.ShowWidgetTooltip(self, StackThreshAtCapTip())
+                return
+            end
+            _stAddLbl:SetAlpha(0.7)
+            if self._border and self._border.SetColor then self._border:SetColor(1, 1, 1, 0.6) end
+        end)
+        _stAddBtn:SetScript("OnLeave", function(self)
+            EllesmereUI.HideWidgetTooltip()
+            _stAddLbl:SetAlpha(0.5)
+            if self._border and self._border.SetColor then self._border:SetColor(1, 1, 1, 0.4) end
+        end)
+        _stAddBtn:SetScript("OnClick", function()
+            local cfg = CurrentStackThreshCfg(); if not cfg then return end
+            if not cfg.stackThresholds then cfg.stackThresholds = {} end
+            local list = cfg.stackThresholds
+            if #list >= STACK_THRESH_MAX then return end
+            local last = list[#list]
+            local nextVal = last and math.min(100, (last.value or 0) + 1) or 5
+            list[#list + 1] = { value = nextVal, r = ST_DEF_R, g = ST_DEF_G, b = ST_DEF_B, a = ST_DEF_A }
+            SortStackThresholds(list)
+            if _stRefreshFn then _stRefreshFn() end
+            RefreshStackThreshEditor()
+        end)
+    end
+
+    -- Lazily create the widgets for threshold row k; returns the row table.
+    local function EnsureStackThreshRow(k)
+        local row = _stRows[k]
+        if row then return row end
+        row = {}
+        local rf = CreateFrame("Frame", nil, stPopup)
+        rf:SetSize(ST_POPUP_W - ST_PAD * 2, ST_ROW_H)
+        rf:SetFrameLevel(stPopup:GetFrameLevel() + 2)
+        row.frame = rf
+
+        local lbl = EllesmereUI.MakeFont(rf, 12, nil, 1, 1, 1)
+        lbl:SetAlpha(0.6)
+        lbl:SetPoint("LEFT", rf, "LEFT", 2, 0)
+        lbl:SetText(EllesmereUI.L("At"))
+        row.lbl = lbl
+
+        local input = CreateFrame("EditBox", nil, rf)
+        input:SetSize(54, 22)
+        input:SetPoint("LEFT", lbl, "RIGHT", 6, 0)
+        input:SetFrameLevel(rf:GetFrameLevel() + 2)
+        input:SetAutoFocus(false)
+        input:SetFontObject(GameFontHighlightSmall)
+        local inFont = EllesmereUI.GetFontPath and EllesmereUI.GetFontPath("main") or "Fonts\\FRIZQT__.TTF"
+        input:SetFont(inFont, 12, "")
+        input:SetTextColor(1, 1, 1, 0.75)
+        input:SetJustifyH("CENTER")
+        input:SetNumeric(true)
+        local inBg = input:CreateTexture(nil, "BACKGROUND")
+        inBg:SetAllPoints()
+        inBg:SetColorTexture(0.12, 0.12, 0.12, 0.8)
+        EllesmereUI.MakeBorder(input, 1, 1, 1, 0.08, PP)
+        row.input = input
+
+        -- Commit on focus loss (Enter clears focus -> triggers this; Escape sets
+        -- _cancelCommit so leaving the field discards the typed text).
+        local function CommitInput(self)
+            if self._cancelCommit then self._cancelCommit = nil; return end
+            local cfg = CurrentStackThreshCfg()
+            local list = cfg and cfg.stackThresholds
+            local ent = list and list[row._idx]
+            if not ent then return end
+            local val = tonumber(self:GetText())
+            if val then
+                -- Same range as the single-threshold slider on the Extras row.
+                ent.value = math.max(0, math.min(100, math.floor(val + 0.5)))
+                SortStackThresholds(list)
+                if _stRefreshFn then _stRefreshFn() end
+            end
+            RefreshStackThreshEditor()
+        end
+        input:SetScript("OnEditFocusLost", CommitInput)
+        input:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+        input:SetScript("OnEscapePressed", function(self) self._cancelCommit = true; self:ClearFocus(); RefreshStackThreshEditor() end)
+
+        local swatch, swatchSnap = EllesmereUI.BuildColorSwatch(rf, rf:GetFrameLevel() + 3,
+            function()
+                local cfg = CurrentStackThreshCfg()
+                local list = cfg and cfg.stackThresholds
+                local ent = list and list[row._idx]
+                if not ent then return ST_DEF_R, ST_DEF_G, ST_DEF_B, ST_DEF_A end
+                return ent.r or ST_DEF_R, ent.g or ST_DEF_G, ent.b or ST_DEF_B, ent.a or ST_DEF_A
+            end,
+            function(r, g, b, a)
+                local cfg = CurrentStackThreshCfg()
+                local list = cfg and cfg.stackThresholds
+                local ent = list and list[row._idx]
+                if ent then
+                    ent.r, ent.g, ent.b, ent.a = r, g, b, a
+                    if _stRefreshFn then _stRefreshFn() end
+                end
+            end, true, 19)
+        swatch:SetPoint("LEFT", input, "RIGHT", 10, 0)
+        row.swatch = swatch
+        row.swatchSnap = swatchSnap
+
+        local delBtn = CreateFrame("Button", nil, rf)
+        delBtn:SetSize(14, 14)
+        delBtn:SetPoint("RIGHT", rf, "RIGHT", -2, 0)
+        delBtn:SetFrameLevel(rf:GetFrameLevel() + 3)
+        local delIcon = delBtn:CreateTexture(nil, "OVERLAY")
+        delIcon:SetAllPoints()
+        delIcon:SetTexture(_stCloseIcon)
+        delIcon:SetAlpha(0.4)
+        delBtn:SetScript("OnEnter", function() delIcon:SetAlpha(0.9) end)
+        delBtn:SetScript("OnLeave", function() delIcon:SetAlpha(0.4) end)
+        delBtn:SetScript("OnClick", function()
+            local cfg = CurrentStackThreshCfg()
+            local list = cfg and cfg.stackThresholds
+            if list and list[row._idx] then
+                table.remove(list, row._idx)
+                -- An empty list would silently fall back to the single
+                -- threshold while the toggle still reads "on"; turn it off so
+                -- what the popup says matches what the bar does.
+                if #list == 0 and cfg.stackThresholdMulti then
+                    cfg.stackThresholdMulti = false
+                    EllesmereUI:RefreshPage()
+                end
+                if _stRefreshFn then _stRefreshFn() end
+                RefreshStackThreshEditor()
+            end
+        end)
+        row.delBtn = delBtn
+
+        _stRows[k] = row
+        return row
+    end
+
+    RefreshStackThreshEditor = function()
+        if not stPopup then return end
+        local cfg = CurrentStackThreshCfg()
+        if not cfg then stPopup:Hide(); return end
+        if not cfg.stackThresholds then cfg.stackThresholds = {} end
+        local list = cfg.stackThresholds
+
+        local curY = -(ST_PAD + 24)  -- below the title
+
+        _stMultiRow:ClearAllPoints()
+        PP.Point(_stMultiRow, "TOPLEFT", stPopup, "TOPLEFT", ST_PAD, curY)
+        PP.Point(_stMultiRow, "TOPRIGHT", stPopup, "TOPRIGHT", -ST_PAD, curY)
+        _stMultiRow:Show()
+        if _stMultiSnap then _stMultiSnap() end
+        curY = curY - ST_ROW_H - ST_GAP
+
+        local n = #list
+        for k = 1, n do
+            local row = EnsureStackThreshRow(k)
+            row._idx = k
+            row.frame:ClearAllPoints()
+            PP.Point(row.frame, "TOPLEFT", stPopup, "TOPLEFT", ST_PAD, curY)
+            row.input:SetText(tostring(list[k].value or 5))
+            if row.swatchSnap then row.swatchSnap() end
+            row.frame:Show()
+            curY = curY - ST_ROW_H - 4
+        end
+        for k = n + 1, #_stRows do
+            if _stRows[k] then _stRows[k].frame:Hide() end
+        end
+
+        curY = curY - 4
+        _stAddBtn:ClearAllPoints()
+        PP.Point(_stAddBtn, "TOPLEFT", stPopup, "TOPLEFT", ST_PAD, curY)
+        local atCap = (n >= STACK_THRESH_MAX)
+        _stAddBtn:SetEnabled(not atCap)
+        _stAddBtn:SetAlpha(atCap and 0.35 or 1)
+        curY = curY - 26
+
+        local totalH = math.abs(curY) + ST_PAD
+        PP.Size(stPopup, ST_POPUP_W, totalH)
+    end
+
+    -- params = { getCfg, refreshFn, anchor }
+    local function ShowStackThreshEditor(params)
+        if not stPopup then BuildStackThreshPopup() end
+        _stGetCfg   = params.getCfg
+        _stRefreshFn = params.refreshFn
+        local cfg = CurrentStackThreshCfg()
+        if cfg then
+            if not cfg.stackThresholds then cfg.stackThresholds = {} end
+            -- Seed the first entry from the single threshold the first time.
+            -- Inert until stackThresholdMulti is turned on, so simply opening
+            -- and closing this popup changes nothing on the bar.
+            if #cfg.stackThresholds == 0 then
+                cfg.stackThresholds[1] = {
+                    value = cfg.stackThreshold or 5,
+                    r = cfg.stackThresholdR or ST_DEF_R, g = cfg.stackThresholdG or ST_DEF_G,
+                    b = cfg.stackThresholdB or ST_DEF_B, a = cfg.stackThresholdA or ST_DEF_A,
+                }
+            end
+        end
+        RefreshStackThreshEditor()
+        stPopup:ClearAllPoints()
+        stPopup:SetPoint("TOP", params.anchor, "BOTTOM", 0, -4)
+        stPopup:Show()
+    end
 
     local function BuildBuffBarsPage(pageName, parent, yOffset)
         local W = EllesmereUI.Widgets
@@ -5553,12 +5893,41 @@ initFrame:SetScript("OnEvent", function(self)
                 self:SetText(bd and bd.stackThresholdTicks or "")
             end)
 
+            -- Inline swatch for tick mark color (left of the input box)
+            local tickSwatch, updateTickSwatch = EllesmereUI.BuildColorSwatch(
+                rgn, box:GetFrameLevel() + 1,
+                function()
+                    local bd = SelectedTBB()
+                    if not bd then return 1, 1, 1, 1 end
+                    local a = bd.stackThresholdTickA
+                    if a == nil then a = 1 end
+                    return bd.stackThresholdTickR or 1, bd.stackThresholdTickG or 1,
+                           bd.stackThresholdTickB or 1, a
+                end,
+                function(r, g, b, a)
+                    local bd = SelectedTBB(); if not bd then return end
+                    bd.stackThresholdTickR, bd.stackThresholdTickG = r, g
+                    bd.stackThresholdTickB, bd.stackThresholdTickA = b, a; RefreshTBB()
+                end,
+                true, 20)
+            PP.Point(tickSwatch, "RIGHT", box, "LEFT", -8, 0)
+            local tickBlock = CreateFrame("Frame", nil, tickSwatch)
+            tickBlock:SetAllPoints(); tickBlock:SetFrameLevel(tickSwatch:GetFrameLevel() + 10)
+            tickBlock:EnableMouse(true)
+            tickBlock:SetScript("OnEnter", function()
+                EllesmereUI.ShowWidgetTooltip(tickSwatch, EllesmereUI.DisabledTooltip("Max Stacks"))
+            end)
+            tickBlock:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+
             local function UpdateTicksInput()
                 local bd = SelectedTBB()
                 box:SetText(bd and bd.stackThresholdTicks or "")
                 local off = maxStacksOff()
                 box:SetAlpha(off and 0.3 or 1)
                 box:EnableMouse(not off)
+                if off then tickSwatch:SetAlpha(0.3); tickBlock:Show()
+                else tickSwatch:SetAlpha(1); tickBlock:Hide() end
+                if updateTickSwatch then updateTickSwatch() end
             end
             EllesmereUI.RegisterWidgetRefresh(UpdateTicksInput)
             UpdateTicksInput()
@@ -5575,9 +5944,20 @@ initFrame:SetScript("OnEvent", function(self)
                   bd.stackThresholdEnabled = v; RefreshTBB(); EllesmereUI:RefreshPage()
               end },
             { type = "slider", text = "Stack Threshold",
-              min = 0, max = 50, step = 1,
-              disabled = function() local bd = SelectedTBB(); return not bd or not bd.stackThresholdEnabled end,
-              disabledTooltip = "Stack Threshold",
+              min = 0, max = 100, step = 1,
+              disabled = function()
+                  local bd = SelectedTBB()
+                  if not bd or not bd.stackThresholdEnabled then return true end
+                  return bd.stackThresholdMulti and true or false
+              end,
+              disabledTooltip = function()
+                  local bd = SelectedTBB()
+                  if bd and bd.stackThresholdEnabled and bd.stackThresholdMulti then
+                      return StackThreshReplacesTip()
+                  end
+                  return EllesmereUI.DisabledTooltip("Stack Threshold")
+              end,
+              rawTooltip = true,
               getValue = function() local bd = SelectedTBB(); return bd and bd.stackThreshold or 5 end,
               setValue = function(v)
                   local bd = SelectedTBB(); if not bd then return end
@@ -5605,14 +5985,44 @@ initFrame:SetScript("OnEvent", function(self)
             threshBlock:SetAllPoints(); threshBlock:SetFrameLevel(threshSwatch:GetFrameLevel() + 10)
             threshBlock:EnableMouse(true)
             threshBlock:SetScript("OnEnter", function()
+                local bd = SelectedTBB()
+                if bd and bd.stackThresholdEnabled and bd.stackThresholdMulti then
+                    EllesmereUI.ShowWidgetTooltip(threshSwatch, StackThreshReplacesTip())
+                    return
+                end
                 EllesmereUI.ShowWidgetTooltip(threshSwatch, EllesmereUI.DisabledTooltip("Stack Threshold"))
             end)
             threshBlock:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+
+            -- Cog: opens the multi-threshold editor. Stays usable while multi is
+            -- on, since it is the only way back out of it.
+            local threshCog = MakeCogBtn(rgn, function(self)
+                ShowStackThreshEditor({
+                    getCfg    = SelectedTBB,
+                    refreshFn = RefreshTBB,
+                    anchor    = self,
+                })
+            end, threshSwatch, EllesmereUI.COGS_ICON)
+            threshCog:SetScript("OnEnter", function(self)
+                if not self:IsEnabled() then return end
+                self:SetAlpha(0.7)
+                EllesmereUI.ShowWidgetTooltip(self, StackThreshHelpTip())
+            end)
+            threshCog:SetScript("OnLeave", function(self)
+                if self:IsEnabled() then self:SetAlpha(0.4) end
+                EllesmereUI.HideWidgetTooltip()
+            end)
+
             local function UpdateThreshSwatchState()
                 local bd = SelectedTBB()
-                local off = not bd or not bd.stackThresholdEnabled
+                local enabled = bd and bd.stackThresholdEnabled
+                -- The swatch edits the single threshold color, so multi masks it
+                -- the same way it masks the slider.
+                local off = not enabled or (bd.stackThresholdMulti and true or false)
                 if off then threshSwatch:SetAlpha(0.3); threshBlock:Show()
                 else threshSwatch:SetAlpha(1); threshBlock:Hide() end
+                threshCog:SetEnabled(enabled and true or false)
+                threshCog:SetAlpha(enabled and 0.4 or 0.15)
             end
             EllesmereUI.RegisterWidgetRefresh(function() updateThreshSwatch(); UpdateThreshSwatchState() end)
             UpdateThreshSwatchState()
@@ -5921,10 +6331,6 @@ initFrame:SetScript("OnEvent", function(self)
                           and ns.cdmBarIcons and ns.cdmBarIcons[barKeyE]
         if liveIcons then
             if not sd.assignedSpells then sd.assignedSpells = {} end
-            local seen = {}
-            for _, existing in ipairs(sd.assignedSpells) do
-                seen[existing] = true
-            end
             local removed = sd.removedSpells
             -- Never materialize a spell that's currently HIDDEN (in the ghost bar)
             -- onto a visible bar -- that recreates a both-state and the spell would
@@ -5968,7 +6374,14 @@ initFrame:SetScript("OnEvent", function(self)
             -- position instead of being appended at the very end (which piled
             -- talent-swap spells after the trinket/racial slots and never survived
             -- a /reload cleanly).
-            local insertAfterSid = nil
+            -- Variant-aware presence + POSITION cursor (mirrors the reseed pass in
+            -- EllesmereUICooldownManager.lua): the old exact-match seen set missed a
+            -- stored entry when the live icon resolved to a different variant form,
+            -- re-inserting a duplicate at Blizzard's position -- and the normalize
+            -- pass above then deduped keeping that copy, deleting the user's saved
+            -- slot (the Raptor Strike / Kill Command order swap, 8.4.9). The
+            -- by-value cursor lookup failed identically and dumped inserts at 1.
+            local insertPos = nil
             for _, icon in ipairs(liveIcons) do
                 -- Resolve the live icon's DISPLAYED spell the same way the picker
                 -- does (canonical = GetSpellID-first, with the active-frame cache),
@@ -5985,6 +6398,22 @@ initFrame:SetScript("OnEvent", function(self)
                 -- for the same spell (the buff frame's id resolves positive).
                 local _fdLI = ns._hookFrameData and ns._hookFrameData[icon]
                 if icon._isPlaceholderFrame or (_fdLI and _fdLI._isBuffViewerFrame) then
+                    -- Advance the cursor over the hosted buff's MARKER entry so
+                    -- a spell inserted after it on a mixed bar lands after the
+                    -- buff, not squeezed back beside the previous CD spell
+                    -- (mirrors the reseed pass).
+                    if type(_sid) == "number" and _sid > 0
+                       and ns.HostedBuffMarkerToSpell
+                       and not (ns.CdmFrameOverflowBar and ns.CdmFrameOverflowBar(icon)) then
+                        for i = 1, #sd.assignedSpells do
+                            local dec = ns.HostedBuffMarkerToSpell(sd.assignedSpells[i])
+                            if dec and (dec == _sid
+                                or (ns.IsVariantOf and ns.IsVariantOf(dec, _sid))) then
+                                if not insertPos or i > insertPos then insertPos = i end
+                                break
+                            end
+                        end
+                    end
                     _sid = nil
                 end
                 -- Skip overflow-diverted icons outright: they render on this
@@ -5997,30 +6426,23 @@ initFrame:SetScript("OnEvent", function(self)
                 end
                 if _sid and _sid ~= 0 then
                     if _sid > 0 then _sid = NormalizeToBase(_sid) end
-                    if seen[_sid] then
-                        -- Already has a slot (Blizzard spell OR a custom trinket/item
-                        -- marker): advance the cursor so the next NEW spell lands after
-                        -- it, matching the on-screen order across custom entries too.
-                        insertAfterSid = _sid
+                    -- FindVar handles negatives by exact scan internally; variant
+                    -- matching is a superset of exact for positives.
+                    local at = FindVar and FindVar(sd.assignedSpells, _sid)
+                    if at then
+                        -- Already has a slot (any variant form, or a custom trinket/
+                        -- item marker): advance the cursor so the next NEW spell
+                        -- lands after it, matching the on-screen order.
+                        insertPos = at
                     elseif _sid > 0
                        and not (removed and removed[_sid])
                        and not (ghostList and FindVar and FindVar(ghostList, _sid))
                        and not (claimedElsewhere and ns.ResolveVariantValue and ns.ResolveVariantValue(claimedElsewhere, _sid)) then
-                        local pos
-                        if insertAfterSid then
-                            for i = 1, #sd.assignedSpells do
-                                if sd.assignedSpells[i] == insertAfterSid then pos = i; break end
-                            end
-                        end
-                        if pos then
-                            table.insert(sd.assignedSpells, pos + 1, _sid)
-                        else
-                            -- No anchored predecessor yet: this new spell is the
-                            -- left-most live icon, so it belongs at the front.
-                            table.insert(sd.assignedSpells, 1, _sid)
-                        end
-                        seen[_sid] = true
-                        insertAfterSid = _sid
+                        -- No anchored predecessor yet: this new spell is the
+                        -- left-most live icon, so it belongs at the front.
+                        local pos = insertPos and (insertPos + 1) or 1
+                        table.insert(sd.assignedSpells, pos, _sid)
+                        insertPos = pos
                     end
                 end
             end
@@ -7016,14 +7438,27 @@ initFrame:SetScript("OnEvent", function(self)
             end
         end
 
-        for _, sp in ipairs(knownSpells) do
-            local item = MakeSpellRow(sp)
-            item:SetScript("OnClick", function()
-                if onChanged then onChanged(sp.spellID) end
-                -- Keep the picker open so several buffs can be added in a row;
-                -- gray this row in place to reflect that it was added.
-                if item._grayOut then item._grayOut() end
-            end)
+        do
+            -- Pre-gray rows whose SLOT (cooldownID) is already tracked here: a
+            -- collided pair renders two identical rows, and only the cd-level
+            -- claim tells them apart.
+            local sdRows = ns.GetBarSpellData(targetBarKey)
+            local cdTracked = sdRows and sdRows.assignedBuffCdIDs
+            for _, sp in ipairs(knownSpells) do
+                local item = MakeSpellRow(sp)
+                if cdTracked and sp.cdID and cdTracked[sp.cdID] then
+                    if item._grayOut then item._grayOut() end
+                else
+                    item:SetScript("OnClick", function()
+                        -- cdID rides along so collided buffs can be claimed per
+                        -- viewer slot rather than per (shared) spellID.
+                        if onChanged then onChanged(sp.spellID, sp.cdID) end
+                        -- Keep the picker open so several buffs can be added in a
+                        -- row; gray this row in place to reflect that it was added.
+                        if item._grayOut then item._grayOut() end
+                    end)
+                end
+            end
         end
 
         -- "Missing Spells?" footer: centered, accent-colored prompt that opens
@@ -7840,6 +8275,11 @@ initFrame:SetScript("OnEvent", function(self)
                         if ns.RebuildSpellRouteMap then ns.RebuildSpellRouteMap() end
                         if ns.QueueReanchor then ns.QueueReanchor() end
                     end
+                elseif anchorFrame and anchorFrame._previewCdOnly and ns.RemoveTrackedBuffCdID then
+                    -- cooldownID-claimed slot (collided buff): remove by cdID.
+                    -- slotIndex points past assignedSpells for these slots, so
+                    -- the index path below would remove nothing (or worse).
+                    ns.RemoveTrackedBuffCdID(barKey, anchorFrame._previewCdOnly)
                 else
                     -- A legacy-duplicate buff slot covers >1 assignedSpells entry
                     -- (anchorFrame._dataGroup); remove them all, highest index
@@ -10050,8 +10490,8 @@ initFrame:SetScript("OnEvent", function(self)
                                       get=function() return ss.stackCountR or (cdmBd and cdmBd.stackCountR) or 1, ss.stackCountG or (cdmBd and cdmBd.stackCountG) or 1, ss.stackCountB or (cdmBd and cdmBd.stackCountB) or 1 end,
                                       set=function(r, g, b) EnsureSS(); ss.stackCountR = r; ss.stackCountG = g; ss.stackCountB = b; if ns.RefreshCDMIconAppearance then ns.RefreshCDMIconAppearance(barKey) end if row._updateLabel then row._updateLabel() end end },
                                     { type="dropdown", label="Position",
-                                      values={ bottomright="Bottom Right", bottomleft="Bottom Left", topright="Top Right", topleft="Top Left", center="Center" },
-                                      order={ "bottomright", "bottomleft", "topright", "topleft", "center" },
+                                      values={ bottomright="Bottom Right", bottom="Bottom", bottomleft="Bottom Left", left="Left", topleft="Top Left", top="Top", topright="Top Right", right="Right", center="Center" },
+                                      order={ "bottomright", "bottom", "bottomleft", "left", "topleft", "top", "topright", "right", "center" },
                                       get=function() return ss.stackCountPosition or (cdmBd and cdmBd.stackCountPosition) or "bottomright" end,
                                       set=function(v) EnsureSS(); ss.stackCountPosition = v; if ns.RefreshCDMIconAppearance then ns.RefreshCDMIconAppearance(barKey) end if row._updateLabel then row._updateLabel() end end },
                                     { type="slider", label="X Offset", min=-150, max=150, step=1,
@@ -13533,6 +13973,13 @@ initFrame:SetScript("OnEvent", function(self)
                     if _spellPickerMenu and _spellPickerMenu:IsShown() then
                         _spellPickerMenu:Hide()
                     end
+                    -- cooldownID-claimed slot (collided buff): remove by cdID --
+                    -- it has no assignedSpells index to remove by.
+                    if self._previewCdOnly and ns.RemoveTrackedBuffCdID then
+                        ns.RemoveTrackedBuffCdID(bd.key, self._previewCdOnly)
+                        RefreshCDPreview()
+                        return
+                    end
                     if isDefaultBuffs then
                         -- Custom item slot (negative -itemID marker): remove it
                         -- directly. slotIndex maps to the mixed preview list, so
@@ -13909,6 +14356,9 @@ initFrame:SetScript("OnEvent", function(self)
                 -- icon order is driven by nameplate state, not user order.
                 local bdDrag = SelectedCDMBar()
                 if bdDrag and bdDrag.key == ns.FOCUSKICK_BAR_KEY then return end
+                -- cooldownID-claimed slots have no assignedSpells index, so the
+                -- index-based reorder cannot move them; don't start a drag.
+                if self._previewCdOnly then return end
                 local cx, cy = GetCursorPosition()
                 pendingDragSlot = self
                 pendingStartX = cx
@@ -14010,9 +14460,19 @@ initFrame:SetScript("OnEvent", function(self)
                 -- family sweep removes the spell from every other
                 -- buff-family bar (including the ghost hidden bar, which
                 -- is the "unhide" step) before claiming it for bd.key.
-                ShowBuffBarPicker(self, bd.key, function(newSpellID)
+                ShowBuffBarPicker(self, bd.key, function(newSpellID, newCdID)
                     if newSpellID then
-                        ns.AddTrackedSpell(bd.key, newSpellID)
+                        -- Collided pair (two viewer slots, one shared spellID):
+                        -- claim by cooldownID so each slot is addable on its
+                        -- own. Non-collided buffs keep the sid path -- spellID
+                        -- identity survives talent swaps, cooldownIDs drift.
+                        if newCdID and ns.IsCollidedBuffSid
+                           and ns.IsCollidedBuffSid(newSpellID)
+                           and ns.AddTrackedBuffByCdID then
+                            ns.AddTrackedBuffByCdID(bd.key, newCdID)
+                        else
+                            ns.AddTrackedSpell(bd.key, newSpellID)
+                        end
                     end
                     FinalizeAdd()
                 end)
@@ -14135,6 +14595,7 @@ initFrame:SetScript("OnEvent", function(self)
             local trackedCd
             pf._buffDispGroups = nil
             pf._buffSlotKeys = nil
+            pf._cdOnlySlots = nil  -- slot idx -> cooldownID (collided-buff claims)
             if bd.key == "buffs" then
                 if ns.ReconcileBuffDisplayOrder then ns.ReconcileBuffDisplayOrder() end
                 local entries = ns.CollectDefaultBuffTrackEntries
@@ -14174,6 +14635,47 @@ initFrame:SetScript("OnEvent", function(self)
                     -- Collapse legacy duplicate buff ids in the PREVIEW only (the
                     -- stored data is left intact so routing is untouched).
                     tracked, pf._buffDispGroups = BuildBuffDisplayDedup(raw)
+                    -- Append cooldownID-level claims (collided buffs tracked by
+                    -- slot, sd.assignedBuffCdIDs). Their sid comes from the clean
+                    -- cache (never a secret); slot idx is marked in _cdOnlySlots
+                    -- so click/remove/drag handlers don't treat it as an
+                    -- assignedSpells index.
+                    if sdUpd and sdUpd.assignedBuffCdIDs and next(sdUpd.assignedBuffCdIDs) then
+                        local cds = {}
+                        for cdID in pairs(sdUpd.assignedBuffCdIDs) do
+                            if type(cdID) == "number" then cds[#cds + 1] = cdID end
+                        end
+                        table.sort(cds)
+                        for _, cdID in ipairs(cds) do
+                            local csid = ns._cdmCleanSidByCDID and ns._cdmCleanSidByCDID[cdID]
+                            if not (type(csid) == "number" and csid > 0) then
+                                -- Clean cache not primed yet (fresh login, buff
+                                -- active since): fall back to cooldownInfo. Each
+                                -- field is vetted on its own -- never `or`-chain
+                                -- possibly-secret values (truthiness taints).
+                                local gci = C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCooldownInfo
+                                local info = gci and gci(cdID)
+                                local raw2 = info and info.overrideSpellID
+                                if not (type(raw2) == "number"
+                                        and not (issecretvalue and issecretvalue(raw2))
+                                        and raw2 > 0) then
+                                    raw2 = info and info.spellID
+                                end
+                                if type(raw2) == "number"
+                                   and not (issecretvalue and issecretvalue(raw2))
+                                   and raw2 > 0 then
+                                    csid = raw2
+                                end
+                            end
+                            if type(csid) == "number" and csid > 0 then
+                                tracked[#tracked + 1] = csid
+                                trackedCd = trackedCd or {}
+                                trackedCd[#tracked] = cdID
+                                pf._cdOnlySlots = pf._cdOnlySlots or {}
+                                pf._cdOnlySlots[#tracked] = cdID
+                            end
+                        end
+                    end
                 else
                     tracked = raw
                 end
@@ -14343,6 +14845,7 @@ initFrame:SetScript("OnEvent", function(self)
                     local id = tracked[i]
                     slot._previewSpellID = nil  -- reset each update
                     slot._previewCdID = trackedCd and trackedCd[i] or nil
+                    slot._previewCdOnly = pf._cdOnlySlots and pf._cdOnlySlots[i] or nil
                     slot._previewItemID = nil
                     slot._previewHostedBuff = nil
                     if id then
@@ -14389,6 +14892,7 @@ initFrame:SetScript("OnEvent", function(self)
                     slot._icon:SetTexture(nil)
                     slot._previewSpellID = nil
                     slot._previewCdID = nil
+                    slot._previewCdOnly = nil
                     slot._previewItemID = nil
                     slot._previewHostedBuff = nil
                 end
@@ -14442,9 +14946,13 @@ initFrame:SetScript("OnEvent", function(self)
                         local scY = bd.stackCountY or 0
                         local scPoint = bd.stackCountPosition or "bottomright"
                         if scPoint == "bottomleft" then scPoint = "BOTTOMLEFT"; scY = scY + 2
+                        elseif scPoint == "bottom" then scPoint = "BOTTOM"; scY = scY + 2
                         elseif scPoint == "topright" then scPoint = "TOPRIGHT"
+                        elseif scPoint == "top" then scPoint = "top"
                         elseif scPoint == "topleft" then scPoint = "TOPLEFT"
                         elseif scPoint == "center" then scPoint = "CENTER"
+                        elseif scPoint == "left" then scPoint = "LEFT"
+                        elseif scPoint == "right" then scPoint = "RIGHT"
                         else scPoint = "BOTTOMRIGHT"; scY = scY + 2 end
                         EllesmereUI.ApplyIconTextFont(slot._stackText, scFont, scSize, "cdm")
                         slot._stackText:SetTextColor(scR, scG, scB)
@@ -17457,8 +17965,8 @@ initFrame:SetScript("OnEvent", function(self)
                           ns.RefreshCDMIconAppearance(BD().key); ns.BuildAllCDMBars(); Refresh(); UpdateCDMPreview(); EllesmereUI:RefreshPage()
                       end },
                     { type="dropdown", label="Position",
-                      values={ bottomright="Bottom Right", bottomleft="Bottom Left", topright="Top Right", topleft="Top Left", center="Center" },
-                      order={ "bottomright", "bottomleft", "topright", "topleft", "center" },
+                      values={ bottomright="Bottom Right", bottom="Bottom", bottomleft="Bottom Left", left="Left", topleft="Top Left", top="Top", topright="Top Right", right="Right", center="Center" },
+                      order={ "bottomright", "bottom", "bottomleft", "left", "topleft", "top", "topright", "right", "center" },
                       get=function() return BD().stackCountPosition or "bottomright" end,
                       set=function(v)
                           BD().stackCountPosition = v

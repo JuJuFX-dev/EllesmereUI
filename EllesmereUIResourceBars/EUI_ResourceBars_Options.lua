@@ -7315,6 +7315,8 @@ initFrame:SetScript("OnEvent", function(self)
               disabled = function()
                   local p = DB(); if not p then return false end
                   if not p.primary.enabled then return true end
+                  -- Disabled when height matched
+                  if EllesmereUI.GetHeightMatchTarget and EllesmereUI.GetHeightMatchTarget("ERB_Power") then return true end
                   -- Shift blocks expand when the dropdown is set to Up/Down. This is
                   -- independent of "Show Class Resource" -- toggling the resource bar
                   -- must NOT change this control's disabled state.
@@ -7324,6 +7326,9 @@ initFrame:SetScript("OnEvent", function(self)
               disabledTooltip = function()
                   local p = DB()
                   if p and not p.primary.enabled then return "Power Bar" end
+	              if EllesmereUI.GetHeightMatchTarget and EllesmereUI.GetHeightMatchTarget("ERB_Power") then
+                      return "This option can't be used while you have the Power Bar Height Matched in the Unlock Mode."
+                  end
                   return "This option can't be used while Shift Elements if No Resource is enabled."
               end,
               getValue = function()
