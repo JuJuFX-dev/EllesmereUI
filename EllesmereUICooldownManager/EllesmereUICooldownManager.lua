@@ -7328,25 +7328,52 @@ function ns.ReseedAssignedSpellsFromLiveIcons(cdUtilOnly)
             local icons = ns.cdmBarIcons and ns.cdmBarIcons[barData.key]
             if sd and icons then
                 if not sd.assignedSpells then sd.assignedSpells = {} end
-                local seen = {}
-                for _, existing in ipairs(sd.assignedSpells) do
-                    seen[existing] = true
-                end
                 -- Insert each missing spell right after its left neighbour in the
                 -- live icon order (which CollectAndReanchor has already placed in
                 -- Blizzard-layout order), instead of appending at the end. This keeps
                 -- the seeded list matching what the player sees so re-talenting a
                 -- cooldown restores it to its Blizzard-CDM slot rather than the tail.
-                local insertAfterSid = nil
+                --
+                -- Presence is VARIANT-AWARE and the cursor is a POSITION, not an id.
+                -- The old exact-match seen set missed a stored entry when the live
+                -- icon reported a different variant form (fc.spellID can be the
+                -- talent override, e.g. Mongoose Bite 259387, while the stored slot
+                -- holds the base Raptor Strike 186270 the options normalize pass
+                -- wrote). Every reload then re-inserted the live form at Blizzard's
+                -- position, the order map ranked the frame by that copy, and the
+                -- next options normalize deduped in favor of it -- permanently
+                -- snapping the user's saved order back to Blizzard order (the
+                -- Raptor Strike / Kill Command swap, 8.4.9). The by-value cursor
+                -- lookup failed the same way and dumped inserts at slot 1.
+                local insertPos = nil
                 for _, icon in ipairs(icons) do
                     local fc = ns._ecmeFC and ns._ecmeFC[icon]
                     local sid = fc and fc.spellID
                     -- Skip hosted-buff frames and their placeholders: their bar
                     -- membership is the hosted MARKER entry, and their positive
                     -- spellID would materialize the same spell's COOLDOWN form.
+                    -- But DO advance the cursor over their marker: on a mixed
+                    -- bar (spells + hosted buffs) a spell re-inserted after a
+                    -- buff must land after the buff's marker, not squeezed back
+                    -- next to the previous CD spell (reported: Shift snapping
+                    -- to right after Voidray, jumping its three buffs).
                     local fdRS = ns._hookFrameData and ns._hookFrameData[icon]
                     if (fc and fc.isHostedBuff) or icon._isPlaceholderFrame
                        or (fdRS and fdRS._isBuffViewerFrame) then
+                        local hSid = fc and fc.spellID
+                        if type(hSid) == "number" and hSid > 0
+                           and ns.HostedBuffMarkerToSpell
+                           and not (fc and fc._overflowLayoutBar) then
+                            for i = 1, #sd.assignedSpells do
+                                local dec = ns.HostedBuffMarkerToSpell(sd.assignedSpells[i])
+                                if dec and (dec == hSid
+                                    or (ns.IsVariantOf and ns.IsVariantOf(dec, hSid))) then
+                                    -- Forward-only: never drag the cursor backward.
+                                    if not insertPos or i > insertPos then insertPos = i end
+                                    break
+                                end
+                            end
+                        end
                         sid = nil
                     end
                     -- Skip overflow-diverted icons: they render on this bar
@@ -7356,11 +7383,15 @@ function ns.ReseedAssignedSpellsFromLiveIcons(cdUtilOnly)
                         sid = nil
                     end
                     if type(sid) == "number" and sid ~= 0 then
-                        if seen[sid] then
-                            -- Already has a slot (Blizzard spell OR a custom trinket/
-                            -- item marker): advance the cursor so the next NEW spell
-                            -- lands after it, matching the on-screen order.
-                            insertAfterSid = sid
+                        -- FindVar handles negatives by exact scan internally, and
+                        -- variant matching is a strict superset of exact equality
+                        -- for stored positives -- no exact fallback needed.
+                        local at = FindVar and FindVar(sd.assignedSpells, sid)
+                        if at then
+                            -- Already has a slot (any variant form, or a custom
+                            -- trinket/item marker): advance the cursor so the next
+                            -- NEW spell lands after it, matching on-screen order.
+                            insertPos = at
                         elseif sid > 0 then
                             -- Never materialize a hidden (ghosted) spell, or a spell a
                             -- DIFFERENT bar already owns (variant-aware).
@@ -7368,19 +7399,18 @@ function ns.ReseedAssignedSpellsFromLiveIcons(cdUtilOnly)
                                           and ns.ResolveVariantValue(ownerOf, sid)
                             local ghosted = ghostList and FindVar and FindVar(ghostList, sid)
                             if not ghosted and not (owner and owner ~= barData.key) then
-                                local pos
-                                if insertAfterSid then
-                                    for i = 1, #sd.assignedSpells do
-                                        if sd.assignedSpells[i] == insertAfterSid then pos = i; break end
-                                    end
+                                -- Store the BASE form, matching what the options
+                                -- normalize pass writes -- otherwise this pass
+                                -- persists the talent-override form and the two
+                                -- writers diverge (exports could ship either).
+                                local nsid = sid
+                                if C_Spell and C_Spell.GetBaseSpell then
+                                    local b = C_Spell.GetBaseSpell(sid)
+                                    if b and b > 0 then nsid = b end
                                 end
-                                if pos then
-                                    table.insert(sd.assignedSpells, pos + 1, sid)
-                                else
-                                    table.insert(sd.assignedSpells, 1, sid)
-                                end
-                                seen[sid] = true
-                                insertAfterSid = sid
+                                local pos = insertPos and (insertPos + 1) or 1
+                                table.insert(sd.assignedSpells, pos, nsid)
+                                insertPos = pos
                             end
                         end
                     end
@@ -8903,6 +8933,49 @@ SlashCmdList.EUIORDER = function()
             end
             P("   rendered(" .. (icons and #icons or 0) .. "): "
                 .. (next(rparts) and table.concat(rparts, "  ") or (DIM .. "(none)" .. OFF)))
+            -- Per-icon identity probes: every id the OrderKeyFor chain can match
+            -- against the spellOrder map, so a wrong sortOrder can be traced to
+            -- the exact colliding/missing probe.
+            if icons then
+                local fso = C_SpellBook and C_SpellBook.FindSpellOverrideByID
+                for i = 1, #icons do
+                    local frame = icons[i]
+                    local fc = ns._ecmeFC and ns._ecmeFC[frame]
+                    local sid = fc and fc.spellID
+                    local ovr = (fso and type(sid) == "number" and sid > 0) and fso(sid) or nil
+                    local gbase = (C_Spell and C_Spell.GetBaseSpell and type(sid) == "number" and sid > 0)
+                        and C_Spell.GetBaseSpell(sid) or nil
+                    local canon = ns.GetCanonicalSpellIDForFrame and ns.GetCanonicalSpellIDForFrame(frame) or nil
+                    local linked = ""
+                    if fc and fc.linkedSpellIDs then
+                        local lp = {}
+                        for _, lid in ipairs(fc.linkedSpellIDs) do lp[#lp + 1] = tostring(lid) end
+                        linked = table.concat(lp, "/")
+                    end
+                    P(string.format("   probe %d) sid=%s base=%s fOvr=%s gBase=%s canon=%s rsv=%s linked=[%s] cdID=%s LI=%s so=%s",
+                        i, tostring(sid), tostring(fc and fc.baseSpellID), tostring(ovr),
+                        tostring(gbase), tostring(canon), tostring(fc and fc.resolvedSid), linked,
+                        tostring(frame.cooldownID), tostring(frame.layoutIndex),
+                        tostring(fc and fc.sortOrder)))
+                end
+            end
+            -- The bar's cached spellOrder map (id -> assignedSpells idx). Two ids
+            -- landing on the same idx, or a rendered sid absent here, IS the bug.
+            local container = cdmBarFrames[bd.key]
+            local om = container and container._cachedSpellOrder
+            if om and next(om) then
+                local entries = {}
+                for id, idx in pairs(om) do entries[#entries + 1] = { id = id, idx = idx } end
+                table.sort(entries, function(a, b)
+                    if a.idx ~= b.idx then return a.idx < b.idx end
+                    return a.id < b.id
+                end)
+                local mp = {}
+                for _, e in ipairs(entries) do mp[#mp + 1] = e.idx .. "<-" .. NM(e.id) end
+                P("   orderMap: " .. DIM .. table.concat(mp, "  ") .. OFF)
+            else
+                P("   orderMap: " .. DIM .. "(empty/stale)" .. OFF)
+            end
         end
     end
 end
