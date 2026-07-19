@@ -57,7 +57,7 @@ initFrame:SetScript("OnEvent", function(self)
     local EST_LEN = {
         clock = 150, fps = 70, ms = 70, gold = 150, xprep = 140, spec = 130,
         profession = 120, travel = 40, micromenu = 340, currency = 90, spacer = 40,
-        durability = 70, profession2 = 120,
+        durability = 70, profession2 = 120, greatvault = 100,
     }
 
     ---------------------------------------------------------------------------

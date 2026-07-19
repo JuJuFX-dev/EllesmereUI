@@ -4419,6 +4419,21 @@ do
     local IMPROVED = 383155   -- Improved Sweeping Strikes: 12 -> 18 charges
     local BROAD    = 1261049  -- Broad Strokes: Colossus Smash activates Sweep
     local FERVOR   = 202316   -- Fervor of Battle: Cleave/WW on 3+ targets Slams
+    -- Bladestorm: Slayer's Unhinged auto-casts Mortal Strike during it, but
+    -- those do NOT consume Sweeping Strikes charges. Observed in-game (8.5.1,
+    -- Slayer Arms): no CHANNEL events and no 227847 -- pressing Bladestorm
+    -- fires SUCCEEDED 446035 once, then SUCCEEDED 50622 pulses roughly every
+    -- 0.7 s for the storm's duration, with the Unhinged 12294 casts landing
+    -- between pulses. Each pulse extends the suppression window; the window
+    -- just needs to outlive the gap to the next pulse (and the trailing
+    -- Unhinged cast after the final pulse) without eating a real post-storm
+    -- Mortal Strike, which is >= a GCD away.
+    local BLADESTORM_IDS = {
+        [446035] = true,  -- cast on press
+        [50622]  = true,  -- per-pulse tick
+        [227847] = true,  -- talent/base cast id, kept in case a variant reports it
+    }
+    local BLADESTORM_PULSE_GAP = 1.0
 
     -- Cached IsSpellKnown flags. GetSweepingStrikes is polled every 0.1 s by
     -- the resource bar, unit frame and nameplate readouts, and
@@ -4484,6 +4499,7 @@ do
         [845]  = true,  -- Cleave
     }
     local fobWindow = 0  -- suppress a possibly-echoed Slam cast event
+    local bladestormUntil = 0  -- suppress Sweeping Strikes spends until this time
 
     -- Deduplicate cast events via GUID
     local seenGUID = {}
@@ -4522,18 +4538,27 @@ do
         if event == "PLAYER_DEAD" or event == "PLAYER_ALIVE" then
             stacks, expiresAt = 0, nil
             fobWindow = 0
+            bladestormUntil = 0
             wipe(seenGUID)
             guidCount = 0
             return
         end
         if event == "PLAYER_REGEN_ENABLED" then
             -- Clean up GUID cache on combat end to prevent unbounded growth
+            bladestormUntil = 0  -- safety: Bladestorm can't outlive combat
             wipe(seenGUID)
             guidCount = 0
             return
         end
         if event ~= "UNIT_SPELLCAST_SUCCEEDED" or unit ~= "player" then return end
         if not sweepKnown then return end
+
+        -- Before GUID dedup: every Bladestorm pulse must extend the window,
+        -- even if the game reuses a castGUID across pulses.
+        if BLADESTORM_IDS[spellID] then
+            bladestormUntil = GetTime() + BLADESTORM_PULSE_GAP
+            return
+        end
 
         if castGUID and seenGUID[castGUID] then return end
         if castGUID then
@@ -4553,11 +4578,17 @@ do
             -- charge. The trigger itself is not a player cast event, so it
             -- is counted here off the Cleave/WW cast, gated on 3 enemies in
             -- reach (with 3+ up, a sweep partner necessarily exists).
+            if GetTime() < bladestormUntil then return end
             if not EnemiesInReach(3) then return end
             fobWindow = GetTime() + 0.3
             stacks = max(0, stacks - 1)
             if stacks == 0 then expiresAt = nil end
         elseif SPENDERS[spellID] and stacks > 0 then
+            -- Bladestorm window: Slayer's Unhinged auto-casts Mortal Strike
+            -- (12294) here, but the game does not consume a Sweeping Strikes
+            -- charge for it (bug: LeoS, 8.5.1). Skip all spends until the
+            -- window closes so the bar matches the real buff.
+            if GetTime() < bladestormUntil then return end
             -- If the game echoes the Fervor-of-Battle Slam as a real cast
             -- event, skip it -- the charge was already counted above. A
             -- player-pressed Slam can't land inside the 0.3 s window (GCD).

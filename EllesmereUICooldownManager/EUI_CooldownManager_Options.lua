@@ -5553,12 +5553,41 @@ initFrame:SetScript("OnEvent", function(self)
                 self:SetText(bd and bd.stackThresholdTicks or "")
             end)
 
+            -- Inline swatch for tick mark color (left of the input box)
+            local tickSwatch, updateTickSwatch = EllesmereUI.BuildColorSwatch(
+                rgn, box:GetFrameLevel() + 1,
+                function()
+                    local bd = SelectedTBB()
+                    if not bd then return 1, 1, 1, 1 end
+                    local a = bd.stackThresholdTickA
+                    if a == nil then a = 1 end
+                    return bd.stackThresholdTickR or 1, bd.stackThresholdTickG or 1,
+                           bd.stackThresholdTickB or 1, a
+                end,
+                function(r, g, b, a)
+                    local bd = SelectedTBB(); if not bd then return end
+                    bd.stackThresholdTickR, bd.stackThresholdTickG = r, g
+                    bd.stackThresholdTickB, bd.stackThresholdTickA = b, a; RefreshTBB()
+                end,
+                true, 20)
+            PP.Point(tickSwatch, "RIGHT", box, "LEFT", -8, 0)
+            local tickBlock = CreateFrame("Frame", nil, tickSwatch)
+            tickBlock:SetAllPoints(); tickBlock:SetFrameLevel(tickSwatch:GetFrameLevel() + 10)
+            tickBlock:EnableMouse(true)
+            tickBlock:SetScript("OnEnter", function()
+                EllesmereUI.ShowWidgetTooltip(tickSwatch, EllesmereUI.DisabledTooltip("Max Stacks"))
+            end)
+            tickBlock:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+
             local function UpdateTicksInput()
                 local bd = SelectedTBB()
                 box:SetText(bd and bd.stackThresholdTicks or "")
                 local off = maxStacksOff()
                 box:SetAlpha(off and 0.3 or 1)
                 box:EnableMouse(not off)
+                if off then tickSwatch:SetAlpha(0.3); tickBlock:Show()
+                else tickSwatch:SetAlpha(1); tickBlock:Hide() end
+                if updateTickSwatch then updateTickSwatch() end
             end
             EllesmereUI.RegisterWidgetRefresh(UpdateTicksInput)
             UpdateTicksInput()

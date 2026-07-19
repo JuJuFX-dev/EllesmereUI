@@ -285,6 +285,8 @@ local TBB_DEFAULT_BAR = {
     stackThresholdMaxEnabled = false,
     stackThresholdMax = 10,
     stackThresholdTicks = "",
+    stackThresholdTickR = 1, stackThresholdTickG = 1,
+    stackThresholdTickB = 1, stackThresholdTickA = 1,
     stackBasedBar = false,
     pandemicGlow = true,
     pandemicGlowStyle = -1,
@@ -2019,11 +2021,18 @@ local function ApplyTBBTickMarks(sb, cfg, tickCache, isVert, tickParent)
     local parent = tickParent or sb
     while #tickCache < #vals do
         local t = parent:CreateTexture(nil, "OVERLAY", nil, 7)
-        t:SetColorTexture(1, 1, 1, 1)
         t:SetSnapToPixelGrid(false)
         t:SetTexelSnappingBias(0)
         tickCache[#tickCache + 1] = t
     end
+
+    -- Bars saved before the tick color existed carry no fields; fall back to
+    -- the historical hardcoded white so their ticks render unchanged.
+    local tickR = cfg.stackThresholdTickR or 1
+    local tickG = cfg.stackThresholdTickG or 1
+    local tickB = cfg.stackThresholdTickB or 1
+    local tickA = cfg.stackThresholdTickA
+    if tickA == nil then tickA = 1 end
 
     local onePx = PP and PP.Scale(1) or 1
     local barW, barH = sb:GetWidth(), sb:GetHeight()
@@ -2034,6 +2043,7 @@ local function ApplyTBBTickMarks(sb, cfg, tickCache, isVert, tickParent)
         if v <= maxStacks then
             local t = tickCache[i]
             local frac = v / maxStacks
+            t:SetColorTexture(tickR, tickG, tickB, tickA)
             t:ClearAllPoints()
             if isVert then
                 local off = PP and PP.Scale(barH * frac) or (barH * frac)

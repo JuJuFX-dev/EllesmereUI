@@ -340,10 +340,12 @@ OneBag
 OneBank
 OneWarbank
 Opacity
+Open Great Vault
 Override Active:
 Overwrite Existing Settings
 PER-SPELL OPTIONS
 Page
+Party Keystones
 Paste Interrupted
 Paste your profile string here...
 Patch Notes
@@ -530,6 +532,7 @@ X Position
 Y Offset
 Y Position
 Yes
+Your Keystone
 Your current spec has an assigned profile so you cannot switch to another. Please unassign to switch.
 [ Import string captured (%1$s characters) ]
 \
