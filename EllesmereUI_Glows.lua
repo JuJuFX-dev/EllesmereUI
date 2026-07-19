@@ -631,8 +631,14 @@ local function StartFlipBookGlow(wrapper, szOrW, entry, cr, cg, cb, szH)
     elseif entry.texture then
         d.tex:SetTexture(entry.texture)
     end
-    d.tex:SetDesaturated(true)
-    d.tex:SetVertexColor(cr, cg, cb)
+    if cr then
+        d.tex:SetDesaturated(true)
+        d.tex:SetVertexColor(cr, cg, cb)
+    else
+        -- no color requested - just show atlas untinted
+        d.tex:SetDesaturated(false)
+        d.tex:SetVertexColor(1, 1, 1)
+    end
     d.tex:Show()
     d.anim:SetFlipBookRows(entry.rows or 6)
     d.anim:SetFlipBookColumns(entry.columns or 5)

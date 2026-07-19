@@ -2229,6 +2229,8 @@ StartNativeGlow = function(overlay, style, cr, cg, cb, opts)
     local pW, pH = parent:GetWidth(), parent:GetHeight()
     if pW < 5 then pW = 36 end
     if pH < 5 then pH = 36 end
+    local noColor = (cr == nil)
+    if noColor then cr, cg, cb = 1.0, 0.788, 0.137 end
     cr = cr or 1; cg = cg or 1; cb = cb or 1
 
     if entry.shapeGlow then
@@ -2283,6 +2285,7 @@ StartNativeGlow = function(overlay, style, cr, cg, cb, opts)
     elseif entry.autocast then
         _G_Glows.StartAutoCastShine(overlay, pW, cr, cg, cb, 1.0, pH)
     else
+        if noColor then cr, cg, cb = nil, nil, nil end
         _G_Glows.StartFlipBookGlow(overlay, pW, entry, cr, cg, cb, pH)
     end
 
@@ -2518,9 +2521,6 @@ local function StopProcGlow(icon)
     if fd then fd.procGlowActive = false end
 end
 
--- Proc glow color: hardcoded gold (#ffc923)
-local PROC_GLOW_COLOR = { 1.0, 0.788, 0.137 }
-
 -- Install hooks on ActionButtonSpellAlertManager (called once during init)
 local _procGlowHooksInstalled = false
 local function InstallProcGlowHooks()
@@ -2542,8 +2542,7 @@ local function InstallProcGlowHooks()
         -- No defer needed -- icon mapping is current from the last reanchor.
         local ourIcon = FindOurIconForBlizzChild(barKey, cdmChild)
         if not ourIcon then return end
-        local cr, cg, cb = PROC_GLOW_COLOR[1], PROC_GLOW_COLOR[2], PROC_GLOW_COLOR[3]
-        ShowProcGlow(ourIcon, cr, cg, cb)
+        ShowProcGlow(ourIcon)
         -- Force icon texture re-evaluation so override textures apply immediately
         FC(ourIcon).lastTex = nil
     end)
@@ -5464,7 +5463,7 @@ local function RefreshCDMIconAppearance(barKey)
             -- Stop then restart with per-spell settings
             StopNativeGlow(glowOv)
             if ifd then ifd.procGlowActive = false end
-            ShowProcGlow(icon, PROC_GLOW_COLOR[1], PROC_GLOW_COLOR[2], PROC_GLOW_COLOR[3])
+            ShowProcGlow(icon)
         elseif hadActiveGlow then
             -- Don't touch: active glow is managed by the SetSwipeColor hook.
             -- Stopping it here causes a visible blink.
