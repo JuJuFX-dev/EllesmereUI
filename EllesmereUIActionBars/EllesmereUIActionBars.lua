@@ -9207,7 +9207,15 @@ function EAB:OnInitialize()
                                     if not quality and C_TooltipInfo and C_TooltipInfo.GetAction then
                                         local okT, tq = pcall(function()
                                             local tip = C_TooltipInfo.GetAction(action)
-                                            local lines = tip and tip.lines
+                                            if not tip then return nil end
+                                            -- The tooltip data's own hyperlink
+                                            -- carries the full modified link
+                                            -- (GetActionLink does not).
+                                            if tip.hyperlink and getQ then
+                                                local ql = getQ(tip.hyperlink)
+                                                if ql then return ql end
+                                            end
+                                            local lines = tip.lines
                                             if not lines then return nil end
                                             local nL = #lines
                                             if nL > 3 then nL = 3 end
@@ -9223,8 +9231,16 @@ function EAB:OnInitialize()
                                     end
                                     if EllesmereUI._RANKDEBUG then
                                         pcall(function()
+                                            local gta = C_TooltipInfo and C_TooltipInfo.GetAction
+                                            local tip = gta and gta(action)
+                                            local l1 = tip and tip.lines and tip.lines[1]
+                                                and tip.lines[1].leftText
                                             print("|cff33ff99[Rank]|r item", aID,
-                                                "q(id)", tostring(getQ and getQ(aID)),
+                                                "tipApi", tostring(gta ~= nil),
+                                                "tip", tostring(tip ~= nil),
+                                                "hlink", tostring(tip and tip.hyperlink),
+                                                "line1", type(l1) == "string"
+                                                    and l1:gsub("|", "||") or tostring(l1),
                                                 "final", tostring(quality))
                                         end)
                                     end
@@ -9282,6 +9298,16 @@ function EAB:OnInitialize()
         -- ForceButtonRefresh sweep on the same event.
         qf:RegisterEvent("SPELLS_CHANGED")
         qf:SetScript("OnEvent", QueueQualityScan)
+        -- A hover is what makes Blizzard lazily CREATE its overlay (and shows
+        -- it in the same breath) -- and no slot event fires from hovering, so
+        -- the suppression + our repaint would otherwise lag until the next
+        -- slot change. Re-scan off the tooltip hook (coalesced, deferred to a
+        -- clean context; same GameTooltip hook pattern as tooltip
+        -- suppression). Also converges anything the hover's item-data load
+        -- just made resolvable.
+        if GameTooltip then
+            hooksecurefunc(GameTooltip, "SetAction", QueueQualityScan)
+        end
         -- Initial paint (login / reload): bars applied before this block ran.
         QueueQualityScan()
     end
