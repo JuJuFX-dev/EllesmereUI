@@ -887,6 +887,12 @@ do
             b:SetFrameLevel(tip:GetFrameLevel() + 5)
             b:EnableMouse(true)
             b:RegisterForClicks("AnyUp")
+            -- Same full-row white hover wash the secure action rows carry
+            -- (house style: rows 0.10). These rows only ever recolored their
+            -- left text, so "exactly like the M+ teleport rows" was half true.
+            local hl = b:CreateTexture(nil, "HIGHLIGHT")
+            hl:SetAllPoints()
+            hl:SetColorTexture(1, 1, 1, 0.10)
             clickPool[activeClicks] = b
         end
         return b
