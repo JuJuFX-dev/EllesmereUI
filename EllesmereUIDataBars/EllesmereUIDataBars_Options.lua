@@ -1448,18 +1448,16 @@ initFrame:SetScript("OnEvent", function(self)
             _navGlowFrame:SetAlpha(1)
             _navGlowFrame:Show()
             local elapsed = 0
-            local holding = holdWhile ~= nil
             _navGlowFrame:SetScript("OnUpdate", function(glowSelf, dt)
                 elapsed = elapsed + dt
-                if holding then
+                if holdWhile then
                     if targetFrame:IsVisible() and holdWhile() then
                         glowSelf:SetAlpha(0.35 + 0.65 * math.abs(math.sin(elapsed * 3)))
                         return
                     end
-                    -- Released: restart the clock so the normal fade plays out
-                    -- from full alpha instead of expiring on its first frame.
-                    holding = false
-                    elapsed = 0
+                    -- Released: drop the predicate and restart the clock so the
+                    -- fade plays from full alpha instead of expiring at once.
+                    holdWhile, elapsed = nil, 0
                 end
                 if elapsed >= 0.75 then
                     glowSelf:Hide()
@@ -2375,6 +2373,8 @@ initFrame:SetScript("OnEvent", function(self)
                 -- Deep-link target for an unconfigured currency block: clicking
                 -- its "Select a currency" placeholder on the live bar lands on
                 -- the picker itself, not just the section (ns.OpenBlockSettings).
+                -- k == 1 IS the Currency dropdown: it heads the currency
+                -- typeRows built above. Prepend a row there and retarget here.
                 if b.type == "currency" and k == 1 then
                     parent._edbClickTargets["block:" .. blockId .. ":currency"] =
                         { section = secHdr, target = row, slotSide = "left",
@@ -2504,9 +2504,7 @@ initFrame:SetScript("OnEvent", function(self)
     --  preview strip navigates through _edbNavigateFn directly.
     ---------------------------------------------------------------------------
     function ns.OpenBlockSettings(barId, blockId, settingKey)
-        if not EllesmereUI.NavigateToElementSettings then return end
-        local key = "block:" .. blockId
-        if settingKey then key = key .. ":" .. settingKey end
+        local key = "block:" .. blockId .. ":" .. settingKey
         EllesmereUI:NavigateToElementSettings("EllesmereUIDataBars", PAGE_DATABARS, nil,
             function()
                 local p = Profile()
