@@ -1832,17 +1832,19 @@ local HEARTHSTONE_IDS = {
     -- Seasonal / Holiday
     163045, 162973, 165669, 165670, 165802, 166746, 166747,
     -- Legacy / Misc
-    6948, 64488, 28585, 93672, 142542, 142298, 168907, 54452, 556,
+    6948, 64488, 28585, 93672, 142542, 142298, 168907, 54452,
 }
 
--- Standalone travel-cooldown toys listed under the Hearthstone tooltip line
--- when collected (PlayerHasToy). Each has its own cooldown, separate from
--- the shared hearthstone one. Spell IDs (for a future clickable overlay):
--- Dalaran 222695, Arcantina 1255801, Garrison 171253.
+-- Standalone travel-cooldown entries listed under the Hearthstone tooltip line
+-- when owned. Each has its own cooldown, separate from the shared hearthstone
+-- one -- which is why Astral Recall belongs here and not in the pool above,
+-- even though it also returns to the bind point. Spell IDs (for a future
+-- clickable overlay): Dalaran 222695, Arcantina 1255801, Garrison 171253.
 local TRAVEL_TOYS = {
     140192,  -- Dalaran Hearthstone
     253629,  -- Key to the Arcantina
     110560,  -- Garrison Hearthstone
+    556,     -- Astral Recall (shaman spell, not a toy)
 }
 
 -- Hearthstones share one cooldown, so polling a single owned one suffices.
@@ -2008,21 +2010,30 @@ ns.BlockFactories.travel = function(blockCfg, slot, content, barCtx)
             ns.Tip_PadRow()
         end
 
-        -- Collected travel toys ride the same section; each has its own
-        -- cooldown. Name lookups can be nil on a cold cache -- the row just
-        -- appears on the next tooltip refresh.
+        -- Collected travel entries ride the same section; each has its own
+        -- cooldown. Astral Recall is a spell, not a toy: IsPlayerSpell both
+        -- gates the row to shamans and selects the spell-side name, cooldown
+        -- and click overlay. Name lookups can be nil on a cold cache -- the
+        -- row just appears on the next tooltip refresh.
         for _, toyId in ipairs(TRAVEL_TOYS) do
-            if PlayerHasToy(toyId) then
+            local isToy   = PlayerHasToy(toyId)
+            local isSpell = not isToy and IsPlayerSpell(toyId)
+            if isToy or isSpell then
                 local toyName
-                if C_ToyBox and C_ToyBox.GetToyInfo then
-                    local _, tn = C_ToyBox.GetToyInfo(toyId)
-                    toyName = tn
-                end
-                if not toyName and C_Item and C_Item.GetItemInfo then
-                    toyName = C_Item.GetItemInfo(toyId)
+                if isSpell then
+                    local sInfo = C_Spell.GetSpellInfo(toyId)
+                    toyName = sInfo and sInfo.name
+                else
+                    if C_ToyBox and C_ToyBox.GetToyInfo then
+                        local _, tn = C_ToyBox.GetToyInfo(toyId)
+                        toyName = tn
+                    end
+                    if not toyName and C_Item and C_Item.GetItemInfo then
+                        toyName = C_Item.GetItemInfo(toyId)
+                    end
                 end
                 if toyName then
-                    local tcd = TravelGetRemainingCooldown(toyId, false)
+                    local tcd = TravelGetRemainingCooldown(toyId, isSpell)
                     local tstr = ns.FormatCooldown(tcd)
                     if not tstr then tstr = L["READY"] end
                     local tr, tg, tb = 0.5, 0.5, 0.5
@@ -2032,7 +2043,11 @@ ns.BlockFactories.travel = function(blockCfg, slot, content, barCtx)
                         -- as the M+ teleport rows (degrades to text in
                         -- combat). White while ready; the row wash + accent
                         -- recolor carry the hover affordance.
-                        ns.Tip_AddToyActionDouble(toyName, tstr, toyId, 1, 1, 1, tr, tg, tb)
+                        if isSpell then
+                            ns.Tip_AddActionDouble(toyName, tstr, toyId, 1, 1, 1, tr, tg, tb)
+                        else
+                            ns.Tip_AddToyActionDouble(toyName, tstr, toyId, 1, 1, 1, tr, tg, tb)
+                        end
                     else
                         -- On cooldown: the same gray as the M+ "On Cooldown"
                         -- label.
@@ -2103,6 +2118,7 @@ ns.BlockFactories.travel = function(blockCfg, slot, content, barCtx)
         end
         ns.Tip_AddLine(" ")
         ns.Tip_AddDouble(L["LEFT_CLICK"], L["USE_HEARTHSTONE"], 1, 1, 1, ar, ag, ab)
+        ns.Tip_AddDouble(L["RIGHT_CLICK"], L["RANDOM_HEARTHSTONE"], 1, 1, 1, ar, ag, ab)
         ns.Tip_Show()
     end
 
@@ -2112,15 +2128,20 @@ ns.BlockFactories.travel = function(blockCfg, slot, content, barCtx)
         if placeholder then placeholder:Hide() end
 
         hearthButton = CreateFrame("Button", "EllesmereUIDataBarsHearth_" .. inst.key, content, "SecureActionButtonTemplate")
-        -- AnyUp only + useOnKeyDown=false: registering both Up and Down lets
+        -- Up only + useOnKeyDown=false: registering both Up and Down lets
         -- the ActionButtonUseKeyDown CVar fire the macro twice (the second
-        -- /use cancels the hearth cast the first one started).
+        -- /use cancels the hearth cast the first one started). Middle click
+        -- is deliberately left unregistered so it does nothing.
         hearthButton:SetAllPoints()
         hearthButton:EnableMouse(true)
-        hearthButton:RegisterForClicks("AnyUp")
+        hearthButton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         hearthButton:SetAttribute("useOnKeyDown", false)
-        hearthButton:SetAttribute("type", "macro")
-        hearthButton:SetAttribute("macrotext", "")
+        -- One explicit pair per button rather than an unsuffixed fallback:
+        -- 1 = the chosen hearthstone, 2 = always a random one.
+        hearthButton:SetAttribute("*type1", "macro")
+        hearthButton:SetAttribute("*macrotext1", "")
+        hearthButton:SetAttribute("*type2", "macro")
+        hearthButton:SetAttribute("*macrotext2", "")
 
         hearthIcon   = hearthButton:CreateTexture(nil, "OVERLAY"); hearthIcon:SetTexture(HEARTH_TEX)
         hearthText   = hearthButton:CreateFontString(nil, "OVERLAY")
@@ -2144,7 +2165,11 @@ ns.BlockFactories.travel = function(blockCfg, slot, content, barCtx)
                 -- no longer owned/usable.
                 id = TravelPickHearthstone(choice == "random")
             end
-            if id then hearthButton:SetAttribute("macrotext", TravelBuildMacro(id)) end
+            if id then hearthButton:SetAttribute("*macrotext1", TravelBuildMacro(id)) end
+            -- Right click ignores the choice and always rolls a fresh random
+            -- one, reseeded per click like the left one.
+            local rid = TravelPickHearthstone(true)
+            if rid then hearthButton:SetAttribute("*macrotext2", TravelBuildMacro(rid)) end
         end
 
         -- Reseed on every PreClick (out of combat only) so the button always
