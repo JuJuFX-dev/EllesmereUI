@@ -2291,7 +2291,7 @@ end
 --  one enabled bar exists. Mouseover reveal goes through per-bar plain-table
 --  poll proxies (never EnableMouse on the real bar).
 -------------------------------------------------------------------------------
-ns.EDB_VIS_CAPS = { partyIncludesRaid = true, luaDragonriding = true }
+ns.EDB_VIS_CAPS = { partyIncludesRaid = false, luaDragonriding = true }
 
 -- Bar visibility = ALPHA ONLY, applied directly. A bar hosting a secure
 -- block (micromenu passthrough buttons, travel hearth) is an IMPLICITLY
@@ -2387,7 +2387,7 @@ do
     }
 
     -- Legacy scalar evaluation for the modes the multi engine declines.
-    -- in_party matches party-or-raid (caps.partyIncludesRaid semantics).
+    -- in_party and in_raid are disjoint: a raid group only matches in_raid.
     local function LegacyScalar(mode)
         mode = mode or "always"
         if mode == "always" then return true end
@@ -2398,7 +2398,7 @@ do
         local inRaid = IsInRaid()
         local inGroup = IsInGroup()
         if mode == "in_raid" then return inRaid end
-        if mode == "in_party" then return inGroup end
+        if mode == "in_party" then return inGroup and not inRaid end
         if mode == "solo" then return not inGroup end
         return true
     end

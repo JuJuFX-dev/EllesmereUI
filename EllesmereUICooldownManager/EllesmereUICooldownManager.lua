@@ -6576,7 +6576,7 @@ _CDMApplyVisibility = function()
             elseif vis == "in_raid" then
                 shouldHide = not inRaid
             elseif vis == "in_party" then
-                shouldHide = not (inParty or inRaid)
+                shouldHide = not inParty
             elseif vis == "solo" then
                 shouldHide = inRaid or inParty
             end

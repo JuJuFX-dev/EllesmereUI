@@ -12358,7 +12358,7 @@ function EllesmereUI.CheckVisibilityMode(mode, state)
     if mode == "in_combat" then return state.inCombat end
     if mode == "out_of_combat" then return not state.inCombat end
     if mode == "in_raid" then return state.inRaid end
-    if mode == "in_party" then return state.inParty or state.inRaid end
+    if mode == "in_party" then return state.inParty end
     if mode == "solo" then return not state.inRaid and not state.inParty end
     if mode == "show_dragonriding" then
         -- Approximates the secure-macro [advflyable,flying] driver: show only

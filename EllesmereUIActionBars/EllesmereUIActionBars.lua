@@ -6145,7 +6145,7 @@ local function BuildVisibilityString(info, s, visOverride)
     elseif vis == "in_raid" then
         return hidePrefix .. "[group:raid] show; hide"
     elseif vis == "in_party" then
-        return hidePrefix .. "[group:party] show; [group:raid] show; hide"
+        return hidePrefix .. "[group:party] show; hide"
     elseif vis == "solo" then
         return hidePrefix .. "[nogroup] show; hide"
     elseif vis == "show_dragonriding" then
