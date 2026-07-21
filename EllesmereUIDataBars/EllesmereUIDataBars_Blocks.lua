@@ -4365,7 +4365,11 @@ ns.BlockFactories.currency = function(blockCfg, slot, content, barCtx)
         local info = GetInfo()
         local text
         if not s.currencyId then
-            text = L["SELECT_CURRENCY"]
+            -- Bar text is drawn straight through SetText, which does not route
+            -- through the locale the way the Tip_* helpers do -- so this is the
+            -- one place the module's English table needs translating by hand,
+            -- exactly as the Great Vault block does for its own label.
+            text = EllesmereUI.L(L["SELECT_CURRENCY"])
         elseif info then
             if BreakUpLargeNumbers then
                 text = BreakUpLargeNumbers(info.quantity or 0)
