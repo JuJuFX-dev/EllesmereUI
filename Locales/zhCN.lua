@@ -5854,6 +5854,7 @@ L["Show the Mythic+ teleport section in the tooltip. Ready rows are click-to-tel
 L["Which audio channel the block's volume bar adjusts."] = "该模块的音量条所调节的音频通道。"
 L["Shows a clickable list of online friends and guildmates in the Social and Guild button tooltips."] = "在社交和公会按钮的提示中显示可点击的在线好友及公会成员列表。"
 L["Uses Blizzard's coin textures instead of the letter suffixes."] = "使用暴雪的金币纹理代替字母后缀。"
+["Which hearthstone the left click uses. Random Hearthstone picks a random owned variant each cast. Right click always rolls a random one."] = "左键点击使用的炉石。随机炉石每次施放会随机选择你所拥有的炉石。右键点击总是随机选择。",
 
 -- == Restored entries ====================================================
 -- The 8.5.2 retranslation (PR #888) dropped these keys; 109 are still live
