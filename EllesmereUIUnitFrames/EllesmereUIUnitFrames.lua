@@ -11669,12 +11669,32 @@ function InitializeFrames()
     -- Not fixable without reparenting/overriding a secure frame in combat, so it's
     -- surfaced in the mini-frame "Frame Source" tooltip (see BuildFoTToTOptions), which
     -- recommends matching the parent's source instead of mixing them.
-    local _suppressedChildren, _suppressWatcher
+    local _suppressedChildren, _suppressWatcher, _rehidePending
+    -- Deferred re-hide: OnShow fires inside whatever secure execution showed
+    -- the parent (target swaps, Edit Mode's preview pass on a Blizzard-source
+    -- TargetFrame/FocusFrame); hiding inline there taints the remainder of
+    -- that execution (same mechanism as the DisableBlizzard override at the
+    -- top of this file). While the Edit Mode manager is open the re-hide
+    -- waits for it to close.
+    local _DeferredRehide
+    _DeferredRehide = function(frame)
+        _rehidePending[frame] = nil
+        if not frame:IsShown() then return end
+        if EditModeManagerFrame and EditModeManagerFrame:IsShown() then
+            _rehidePending[frame] = true
+            C_Timer.After(0.25, function() _DeferredRehide(frame) end)
+        elseif InCombatLockdown() then
+            _suppressWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+        else
+            frame:Hide()
+        end
+    end
     local function SuppressBlizzardChildFrame(frame)
         if not frame then return end
         frame:UnregisterAllEvents()
         if not InCombatLockdown() then frame:Hide() end
         _suppressedChildren = _suppressedChildren or {}
+        _rehidePending = _rehidePending or {}
         if not _suppressWatcher then
             _suppressWatcher = CreateFrame("Frame")
             _suppressWatcher:SetScript("OnEvent", function(self)
@@ -11686,10 +11706,9 @@ function InitializeFrames()
         if not _suppressedChildren[frame] then
             _suppressedChildren[frame] = true
             frame:HookScript("OnShow", function(self)
-                if InCombatLockdown() then
-                    _suppressWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
-                else
-                    self:Hide()
+                if not _rehidePending[self] then
+                    _rehidePending[self] = true
+                    C_Timer.After(0, function() _DeferredRehide(self) end)
                 end
             end)
         end
