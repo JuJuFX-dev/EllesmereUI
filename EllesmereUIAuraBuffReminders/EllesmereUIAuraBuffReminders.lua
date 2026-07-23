@@ -26,6 +26,34 @@ local AURA_SCAN_LIMIT = 255  -- Midnight supports more than the legacy 40 buff l
 local DEFAULT_GLOW_COLOR = {r=1, g=0.776, b=0.376}
 local DEFAULT_TEXT_COLOR = {r=1, g=1, b=1}
 
+-- Live migration: glowColorMode replaced "glowColor always being set". Runs
+-- at the read path (not only OnInitialize) because profile swaps repoint
+-- db.profile without re-running init -- an unmigrated profile activated
+-- mid-session must still honor its stored custom color. Idempotent: writes
+-- the mode key once per profile, never touches the stored color.
+local function EnsureGlowModeMigrated(p)
+    if not p or p.glowColorMode then return end
+    local c = p.glowColor
+    if c and not (c.r == 1 and c.g == 0.776 and c.b == 0.376) then
+        p.glowColorMode = "custom"
+    else
+        p.glowColorMode = "default"
+    end
+end
+
+local function ResolveGlowTint(p)
+    if not p then return nil end
+    EnsureGlowModeMigrated(p)
+    if p.glowColorMode == "class" then
+        local cc = EllesmereUI.GetClassColor(EllesmereUI._playerClass)
+        return cc.r, cc.g, cc.b
+    end
+    if p.glowColorMode ~= "custom" then return nil end
+    local c = p.glowColor
+    if not c then return nil end
+    return c.r or 1, c.g or 0.776, c.b or 0.376
+end
+
 local TEXT_ANCHOR_POINTS = {
     BOTTOM = { "TOP",    "BOTTOM" },
     TOP    = { "BOTTOM", "TOP"    },
@@ -838,6 +866,24 @@ _G._EABR_SpellName = function(spellID, fallback)
     return n or fallback
 end
 
+-- Weapon enchant summary in the legacy GetWeaponEnchantInfo tuple shape:
+-- hasMH, mhExpireMs, mhCharges, mhEnchantID, hasOH, ohExpireMs, ohCharges,
+-- ohEnchantID. Prefers C_PaperDollInfo.GetTemporaryEnchantmentInfo where it
+-- exists (12.1: GetWeaponEnchantInfo is a deprecation-CVar shim there);
+-- remainingTimeMs matches the legacy ms expiration values one to one.
+-- Stored on EABR, not a file local (this file runs at the 200-local cap).
+EABR.WeaponEnchants = function()
+    if C_PaperDollInfo and C_PaperDollInfo.GetTemporaryEnchantmentInfo then
+        local mh = C_PaperDollInfo.GetTemporaryEnchantmentInfo(INVSLOT_MAINHAND)
+        local oh = C_PaperDollInfo.GetTemporaryEnchantmentInfo(INVSLOT_OFFHAND)
+        return (mh and true or false), mh and mh.remainingTimeMs,
+            mh and mh.chargesRemaining, mh and mh.enchantID,
+            (oh and true or false), oh and oh.remainingTimeMs,
+            oh and oh.chargesRemaining, oh and oh.enchantID
+    end
+    return GetWeaponEnchantInfo()
+end
+
 local RAID_BUFFS = {
     { key="motw",   class="DRUID",   name="Mark of the Wild",       castSpell=1126,   buffIDs={1126,432661},    check="raid" },
     { key="bshout", class="WARRIOR", name="Battle Shout",           castSpell=6673,   buffIDs={6673},    check="raid", benefit="attackPower" },
@@ -1534,7 +1580,6 @@ local defaults = {
         display = {
             remindersEnabled = true,
             glowType = 0,
-            glowColor = {r=1, g=0.776, b=0.376},
             scale = 1.0,
             xOffset = 0,
             yOffset = 200,
@@ -1809,6 +1854,9 @@ end
 local function ApplyGlow(btn, glowType, cr, cg, cb, overrideSz)
     if glowType == 0 then return end
     local entry = GLOW_TYPES[glowType]; if not entry then return end
+    if cr == nil and (entry.procedural or entry.buttonGlow or entry.autocast) then
+        cr, cg, cb = 1.0, 0.788, 0.137
+    end
     if not btn._eabrGlowWrapper then
         local w = CreateFrame("Frame", nil, btn); w:SetAllPoints(btn); w:SetFrameLevel(btn:GetFrameLevel()+4)
         btn._eabrGlowWrapper = w
@@ -2029,11 +2077,11 @@ local function ShowIcon(iconIdx, m)
     ApplySetup(btn, m)
     local p = db.profile.display
     local glowType = p.glowType or 0
-    local gc = p.glowColor or DEFAULT_GLOW_COLOR
+    local gr, gg, gb = ResolveGlowTint(p)
     local baseScale = p.scale or 1.0
     local sz = floor(ICON_SIZE * baseScale + 0.5)
     RemoveGlow(btn)
-    ApplyGlow(btn, glowType, gc.r, gc.g, gc.b, sz)
+    ApplyGlow(btn, glowType, gr, gg, gb, sz)
     if p.showText then
         local tc = p.textColor or DEFAULT_TEXT_COLOR
         local fontPath = ResolveFontPath(p.textFont)
@@ -2251,7 +2299,7 @@ local specialsActive = inInstance or co.showSpecialsNonInstanced
             if playerClass == "PALADIN" then
                 for _, rite in ipairs(PALADIN_RITES) do
                     if co.enabled[rite.key] and Known(rite.castSpell) then
-                        local hasMH, mhExpire = GetWeaponEnchantInfo()
+                        local hasMH, mhExpire = EABR.WeaponEnchants()
                         local show = false
                         if not hasMH then
                             show = true
@@ -2272,10 +2320,10 @@ local specialsActive = inInstance or co.showSpecialsNonInstanced
             end
 
             -- Shaman Imbues: match each imbue by its wepEnchID against
-            -- both weapon slots. GetWeaponEnchantInfo returns the specific
+            -- both weapon slots. The enchant summary carries the specific
             -- enchant ID on each hand (4th and 8th return values).
             if playerClass == "SHAMAN" then
-                local hasMH, mhExpire, _, mhEnchID, hasOH, ohExpire, _, ohEnchID = GetWeaponEnchantInfo()
+                local hasMH, mhExpire, _, mhEnchID, hasOH, ohExpire, _, ohEnchID = EABR.WeaponEnchants()
                 for _, imbue in ipairs(SHAMAN_IMBUES) do
                     if co.enabled[imbue.key] and Known(imbue.castSpell) then
                         local found = false
@@ -2373,13 +2421,13 @@ local specialsActive = inInstance or co.showSpecialsNonInstanced
         -- Weapon Enchants (temp weapon enchant items)
         -- Skip if the player knows any imbue spell (Shaman imbues, Paladin rites).
         -- Rogues and DKs are NOT excluded: rogue poisons are temp enchants
-        -- (detected by GetWeaponEnchantInfo), and DKs can use oils alongside runeforges.
+        -- (visible in the enchant summary), and DKs can use oils alongside runeforges.
         local _hasImbueSpell = false
         for _, sid in ipairs(_IMBUE_EXCLUDE_SPELLS) do
             if IsSpellKnown(sid) then _hasImbueSpell = true; break end
         end
         if co.enabled.weapon_enchant and not _hasImbueSpell then
-            local hasMH, mhExpire, _, _, hasOH, ohExpire = GetWeaponEnchantInfo()
+            local hasMH, mhExpire, _, _, hasOH, ohExpire = EABR.WeaponEnchants()
 
             -- Check each weapon slot independently (both can show at once).
             -- Remind if: no enchant, OR enchant is under the duration threshold.
@@ -2819,10 +2867,10 @@ local function Refresh()
                         if f then
                             RemoveGlow(f)
                             local p = db.profile.display
-                            local gc = p.glowColor or DEFAULT_GLOW_COLOR
+                            local gr, gg, gb = ResolveGlowTint(p)
                             local baseScale = p.scale or 1.0
                             local sz = floor(ICON_SIZE * baseScale + 0.5)
-                            ApplyGlow(f, p.glowType or 0, gc.r, gc.g, gc.b, sz)
+                            ApplyGlow(f, p.glowType or 0, gr, gg, gb, sz)
                         end
                     end
                 end
@@ -2860,10 +2908,10 @@ local function Refresh()
                     if f then
                         RemoveGlow(f)
                         local p = db.profile.display
-                        local gc = p.glowColor or DEFAULT_GLOW_COLOR
+                        local gr, gg, gb = ResolveGlowTint(p)
                         local baseScale = p.scale or 1.0
                         local sz = floor(ICON_SIZE * baseScale + 0.5)
-                        ApplyGlow(f, p.glowType or 0, gc.r, gc.g, gc.b, sz)
+                        ApplyGlow(f, p.glowType or 0, gr, gg, gb, sz)
                     end
                 else
                     iconIdx = iconIdx + 1
@@ -3220,10 +3268,10 @@ local function BeaconApplyGlow(f, show)
         local p = db and db.profile.display
         local glowType = p and p.glowType or 0
         if glowType > 0 then
-            local gc = p and p.glowColor or DEFAULT_GLOW_COLOR
+            local gr, gg, gb = ResolveGlowTint(p)
             local baseScale = p and p.scale or 1.0
             local sz = floor(ICON_SIZE * baseScale + 0.5)
-            ApplyGlow(f, glowType, gc.r, gc.g, gc.b, sz)
+            ApplyGlow(f, glowType, gr, gg, gb, sz)
         end
         _B.glowState[f._spellID] = true
     else
@@ -3415,6 +3463,10 @@ end
 -------------------------------------------------------------------------------
 function EABR:OnInitialize()
     db = EllesmereUI.Lite.NewDB("EllesmereUIAuraBuffRemindersDB", defaults, true)
+
+    -- Migrate the login-active profile eagerly; profiles activated later are
+    -- covered by the read-path call in ResolveGlowTint.
+    EnsureGlowModeMigrated(db.profile.display)
 end
 
 -------------------------------------------------------------------------------
@@ -3437,6 +3489,8 @@ function EABR:OnEnable()
     _G._EABR_StartAutoCastShine = StartAutoCastShine
     _G._EABR_StartFlipBookGlow = StartFlipBookGlow
     _G._EABR_StopAllGlows = StopAllGlows
+    _G._EABR_ResolveGlowTint = ResolveGlowTint
+    _G._EABR_EnsureGlowModeMigrated = EnsureGlowModeMigrated
     _G._EABR_RegisterUnlock = RegisterUnlockElements
     _G._EABR_ApplyUnlockPos = ApplyUnlockPos
     _G._EABR_RAID_BUFFS = RAID_BUFFS

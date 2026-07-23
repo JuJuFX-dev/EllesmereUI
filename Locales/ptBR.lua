@@ -5,6 +5,7 @@
 
 local L = EllesmereUI.RegisterLocale("ptBR")
 if not L then return end
+L["Behind Unit Frame"] = "Atrás do quadro de unidade"
 
 -- == Common labels =========================================================
 L["Size"]              = "Tamanho"
@@ -51,6 +52,11 @@ L["Offset Y"]          = "Deslocamento Y"
 L["Shift X"]           = "Deslocamento X"
 L["Shift Y"]           = "Deslocamento Y"
 L["None"]              = "Nenhum"
+L["Border Offset"]     = "Deslocamento da borda"
+L["Thin"]              = "Fina"
+L["Normal"]            = "Normal"
+L["Heavy"]             = "Pesada"
+L["Strong"]            = "Forte"
 L["All"]               = "Tudo"
 L["Multiple"]          = "Múltiplo"
 L["Left"]              = "Esquerda"
@@ -133,7 +139,14 @@ L["Quest Tracker"]     = "Rastreador de missões"
 L["Minimap"]           = "Minimapa"
 L["Chat"]              = true
 L["Damage Meters"]     = "Medidor de dano"
+L["Fade-Out Time"] = "Tempo de desaparecimento"
 L["Colon (5:32)"] = "Dois-pontos (5:32)"
 L["Duration Format"] = "Formato de duração"
 L["Seconds (152)"] = "Segundos (152)"
 L["Standard (5m / 32)"] = "Padrão curto (5m / 32)"
+L["Header Bottom Border"] = "Borda inferior do cabeçalho"
+L["Include Headerbar"] = "Incluir barra de cabeçalho"
+L["Show Behind"] = "Mostrar atrás"
+L["Show Expand Button"] = "Mostrar botão de expansão"
+L["Button Background"] = "Fundo do botão"
+L["Button Border Style"] = "Estilo da borda do botão"

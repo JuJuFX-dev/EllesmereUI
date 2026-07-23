@@ -428,28 +428,38 @@ lifecycleFrame:SetScript("OnEvent", function(self, event, arg1)
         tinsert(enableQueue, addon)
     end
 
-    -- Process enable queue once logged in
-    if IsLoggedIn() then
-        -- Ensure PP.mult is current before any addon's OnEnable runs.
-        -- PP is defined in EllesmereUI.lua (loaded after this file) so it
-        -- exists by the time PLAYER_LOGIN fires.
-        if EllesmereUI and EllesmereUI.PP and EllesmereUI.PP.UpdateMult then
-            EllesmereUI.PP.UpdateMult()
-        end
-        -- Apply spec-assigned profile data into each child SV before any
-        -- OnEnable runs. The spec API is available here (after OnInitialize,
-        -- before OnEnable) so we can resolve the current spec and inject the
-        -- correct profile snapshot. This is the earliest safe point to do
-        -- this -- ADDON_LOADED is too early (spec API not ready yet).
-        if EllesmereUI and EllesmereUI.PreSeedSpecProfile then
-            EllesmereUI.PreSeedSpecProfile()
-        end
-        while #enableQueue > 0 do
-            local addon = tremove(enableQueue, 1)
-            if addon.enabledState then
-                statuses[addon.name] = true
-                safecall(addon.OnEnable, addon)
+    -- Process enable queue once logged in. Deferred one tick: ADDON_LOADED
+    -- can be dispatched from inside Blizzard's own SECURE executions (e.g.
+    -- UIParent demand-loading Blizzard_CombatLog during login), and running
+    -- module OnEnable bodies synchronously there stamps every value they
+    -- write with addon taint born mid-secure-chain -- fields Edit Mode's
+    -- enter/exit passes later read, erroring on 12.x secret values. A timer
+    -- callback is always a fresh, purely addon-owned execution.
+    if IsLoggedIn() and #enableQueue > 0 and not lifecycleFrame._enableFlushQueued then
+        lifecycleFrame._enableFlushQueued = true
+        C_Timer.After(0, function()
+            lifecycleFrame._enableFlushQueued = false
+            -- Ensure PP.mult is current before any addon's OnEnable runs.
+            -- PP is defined in EllesmereUI.lua (loaded after this file) so it
+            -- exists by the time PLAYER_LOGIN fires.
+            if EllesmereUI and EllesmereUI.PP and EllesmereUI.PP.UpdateMult then
+                EllesmereUI.PP.UpdateMult()
             end
-        end
+            -- Apply spec-assigned profile data into each child SV before any
+            -- OnEnable runs. The spec API is available here (after OnInitialize,
+            -- before OnEnable) so we can resolve the current spec and inject the
+            -- correct profile snapshot. This is the earliest safe point to do
+            -- this -- ADDON_LOADED is too early (spec API not ready yet).
+            if EllesmereUI and EllesmereUI.PreSeedSpecProfile then
+                EllesmereUI.PreSeedSpecProfile()
+            end
+            while #enableQueue > 0 do
+                local addon = tremove(enableQueue, 1)
+                if addon.enabledState then
+                    statuses[addon.name] = true
+                    safecall(addon.OnEnable, addon)
+                end
+            end
+        end)
     end
 end)

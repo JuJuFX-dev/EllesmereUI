@@ -152,6 +152,7 @@ function ns._appendDisplayPresetKeys(t)
         "showCastLockoutAsCrowdControl",
         "castIconOffsetX", "castIconOffsetY",
         "targetGlowEllesmereUI", "targetGlowBorderColor", "targetGlowHighlight", "targetBorderColor",
+        "targetGlowBorderSize", "targetBorderSizeValue",
     }) do t[#t + 1] = k end
 end
 
@@ -390,7 +391,14 @@ local defaults = {
     enemyNameWidthPct = 100,
     enemyNameWrap = false,
     targetScale = 100,
+    nonTargetKeepFocus = true,
     showAllDebuffs = false,
+    -- Distance to Target Text (range bucket on the target's nameplate)
+    rangeTextEnabled = false,
+    rangeTextSize = 11,
+    rangeTextOffsetX = 0,
+    rangeTextOffsetY = 0,
+    rangeTextColor = { r = 0.816, g = 0.357, b = 0.220 },  -- #D05B38
     maxDebuffs = 5,
     showBorder = true,
     borderSize = 1,
@@ -536,11 +544,14 @@ function ns.IsCustomBorderEnabled()
     if v == nil then return defaults.customBorderEnabled end
     return v
 end
-function ns.ApplyCustomBorderStyle(plate)
+-- szOverride: optional size override used by the "Border Size" target effect
+-- (the targeted plate rebuilds its custom border at the override size). All
+-- existing callers pass one arg and are unchanged.
+function ns.ApplyCustomBorderStyle(plate, szOverride)
     if not plate or not plate.health then return end
     if not (EllesmereUI and EllesmereUI.ApplyBorderStyle) then return end
     local tex    = (p and p.customBorderTexture) or defaults.customBorderTexture
-    local sz     = (p and p.customBorderSize) or defaults.customBorderSize
+    local sz     = szOverride or (p and p.customBorderSize) or defaults.customBorderSize
     local col    = (p and p.customBorderColor) or defaults.customBorderColor
     local a      = (p and p.customBorderAlpha) or defaults.customBorderAlpha or 1
     local behind = p and p.customBorderBehind
@@ -1323,6 +1334,17 @@ end
 function ns.GetTargetGlowHighlight()
     if p and p.targetGlowHighlight ~= nil then return p.targetGlowHighlight end
     return false  -- no legacy equivalent
+end
+function ns.GetTargetGlowBorderSize()
+    if p and p.targetGlowBorderSize ~= nil then return p.targetGlowBorderSize end
+    return false  -- no legacy equivalent
+end
+-- The target border size value is nil until the effect's first enable
+-- snapshots the user's then-current border size (options side); nil = the
+-- effect applies nothing (fail-safe for imported partial profiles).
+function ns.GetTargetBorderSizeValue()
+    local v = p and p.targetBorderSizeValue
+    return v
 end
 function ns.GetTargetBorderColor()
     return (p and p.targetBorderColor) or defaults.targetBorderColor
@@ -3422,6 +3444,7 @@ end
 --  Blizzard nameplate), so Blizzard's own occlusion fade still multiplies in.
 -------------------------------------------------------------------------------
 ns._ntAlpha = 1   -- cached 0..1 from the profile; 1 = inert
+ns._ntKeepFocus = true   -- cached "Keep Focus Full Opacity" (default on)
 
 -- Applies the correct root alpha to ONE plate. Value-guarded via
 -- _ntCurAlpha so redundant SetAlpha calls are skipped and pooled frames
@@ -3433,7 +3456,7 @@ function ns.NT_Apply(plate)
     local nt = ns._ntAlpha
     if nt < 1 and UnitExists("target")
        and not UnitIsUnit(unit, "target")
-       and not UnitIsUnit(unit, "focus")
+       and not (ns._ntKeepFocus and UnitIsUnit(unit, "focus"))
        and not UnitIsUnit(unit, "player") then
         a = nt
     end
@@ -3457,6 +3480,7 @@ function ns.NT_RefreshSetting()
     local v = tonumber(p and p.nonTargetAlpha) or 100
     if v < 0 then v = 0 elseif v > 100 then v = 100 end
     ns._ntAlpha = v / 100
+    ns._ntKeepFocus = not (p and p.nonTargetKeepFocus == false)
     ns.NT_ApplyAll()
 end
 
@@ -5004,14 +5028,19 @@ local function GetReactionColor(unit)
     -- (step 10c), so their has-aggro / caster / mob-type colors still win on trash.
     if miniColorScope
        and (classification == "normal" or classification == "minus" or classification == "trivial") then
-        -- Neutral + mini-enemy: neutral coloring wins over the trash color, for
-        -- ALL viewers. Placed above the tank-role gate, the DPS carve-out, and the
-        -- Mini Enemies return below, so a neutral mini beats them (and Caster too,
-        -- since 7b already sits above step 8). Non-trash neutral units are not
-        -- caught here and still defer to step 10d.
-        if isNeutral then return ResolveNeutralColor(unit) end
         local thae = defaults.tankHasAggroEnabled
         if db.tankHasAggroEnabled ~= nil then thae = db.tankHasAggroEnabled end
+        -- Neutral + mini-enemy: neutral coloring wins over the trash color --
+        -- EXCEPT for a tank holding aggro with the Tank Has Aggro color enabled.
+        -- That viewer falls through here (same as hostile trash does via the
+        -- role gate below) so step 9 paints the has-aggro color; without this
+        -- exception the in-combat neutral return blocked threat coloring and
+        -- neutral mobs stayed enemy-red for tanks. All other viewers: neutral
+        -- beats the trash color, the DPS carve-out, and Caster (7b sits above
+        -- step 8). Non-trash neutral units are not caught here and still defer
+        -- to step 10d.
+        local tankAggroPending = isThreatUnit and _isTankRole and threatStatus >= 3 and thae
+        if isNeutral and not tankAggroPending then return ResolveNeutralColor(unit) end
         if not (_isTankRole and thae) then
             -- DPS "No Aggro" still wins over the promoted Mini Enemies color, so a
             -- DPS/healer without aggro sees the no-aggro warning on trash instead
@@ -6521,10 +6550,14 @@ function NameplateFrame:UpdateNameWidth()
     -- Width % scales the computed (bar-derived) width; 100 = historical behaviour.
     local pct = (p and p.enemyNameWidthPct) or defaults.enemyNameWidthPct
     local nameSlot = FindSlotForElement("enemyName")
-    local nameMarkerReserve = (self.nameRaidFrame and self.nameRaidFrame:IsShown()) and (((p and p.nameRaidMarkerSize) or defaults.nameRaidMarkerSize or 14) + 3) or 0
+    -- Auto-size marked names so the client can position the marker without exposing secret text width.
+    if self._nameRaidMarkerShown == true then
+        self.name:SetWidth(0)
+        return
+    end
     if nameSlot == "textSlotTop" then
-        -- Above the bar: full bar width minus raid marker if shown
-        local nameW = barW - nameMarkerReserve
+        -- Above the bar: full bar width
+        local nameW = barW
         local rmPos = GetRaidMarkerPos()
         if rmPos ~= "none" and self.raidFrame:IsShown() then
             nameW = nameW - 2 * (GetRaidMarkerSize() - 2) - 7
@@ -6547,7 +6580,7 @@ function NameplateFrame:UpdateNameWidth()
                 end
             end
         end
-        local nameW = barW - usedWidth - nameMarkerReserve
+        local nameW = barW - usedWidth
         PP.Width(self.name, math.max(nameW * pct / 100, 20))
     else
         -- Name not in any slot, use minimal width
@@ -6651,18 +6684,7 @@ function NameplateFrame:RefreshNamePosition(localOnly)
         nameRaid:SetFrameStrata("MEDIUM")
         nameRaid:SetFrameLevel(901)
         nameRaid:ClearAllPoints()
-        local textW = self.name:GetWidth() or 0
-        local ok, renderedW = pcall(self.name.GetStringWidth, self.name)
-        if ok and type(renderedW) == "number" and not (issecretvalue and issecretvalue(renderedW)) then
-            textW = math.min(renderedW, textW)
-        end
-        if nameSlot == "textSlotLeft" then
-            nameRaid:SetPoint("RIGHT", self.name, "LEFT", -3, 0)
-        elseif nameSlot == "textSlotRight" then
-            nameRaid:SetPoint("RIGHT", self.name, "RIGHT", -textW - 3, 0)
-        else
-            nameRaid:SetPoint("RIGHT", self.name, "CENTER", -(textW * 0.5) - 3, 0)
-        end
+        nameRaid:SetPoint("RIGHT", self.name, "LEFT", -3, 0)
         nameRaid:Show()
     elseif nameRaid then
         nameRaid:Hide()
@@ -6735,6 +6757,26 @@ function NameplateFrame:ApplyTarget()
         self.glow:Show()
     elseif self.glow then
         self.glow:Hide()
+    end
+    -- Border Size: resize the health border while targeted (Border Size
+    -- target effect). tbsz stays nil unless the effect is on AND a size was
+    -- snapshotted, so everyone else runs the original paths untouched. Runs
+    -- BEFORE the Border Color block so a rebuilt custom border gets its
+    -- target tint re-applied right after. Restore is one-shot via
+    -- self._targetBorderSized (ApplyBorder re-derives the normal size), so
+    -- untargeted plates never pay a re-apply.
+    local tbsz
+    if isTarget and ns.GetTargetGlowBorderSize() then tbsz = ns.GetTargetBorderSizeValue() end
+    if tbsz then
+        if ns.IsCustomBorderEnabled() then
+            ns.ApplyCustomBorderStyle(self, tbsz)
+        elseif PP and IsBorderEnabled() then
+            PP.SetBorderSize(self.health, tbsz)
+        end
+        self._targetBorderSized = true
+    elseif self._targetBorderSized then
+        self._targetBorderSized = nil
+        self:ApplyBorder()
     end
     -- Border Color: recolor the health bar border with the custom target color
     if isTarget and ns.GetTargetGlowBorderColor() then
@@ -7008,7 +7050,11 @@ function NameplateFrame:UpdateAuras(updateInfo)
             for _, aura in ipairs(updateInfo.addedAuras) do
                 if aura.isFromPlayerOrPlayerPet then rebuildD = true; rebuildC = true end
                 if aura.isHelpful then rebuildB = true end
-                if aura.dispelName and aura.isHarmful then rebuildC = true end
+                if aura.dispelName and aura.isHarmful then
+                    rebuildC = true
+                    -- "Debuffs + CC": foreign CC can enter the debuff row too
+                    if p and p.debuffIncludeCC then rebuildD = true end
+                end
             end
         end
         if mask then
@@ -7079,6 +7125,26 @@ function NameplateFrame:UpdateAuras(updateInfo)
     if debuffSlotVal ~= "none" then
     local maxDbfSlots = #self.debuffs
     local showAll = p and p.showAllDebuffs
+    -- "Debuffs + CC" core position: the debuff row leads with up to 2
+    -- crowd-control debuffs (any caster, same filter as the CC row), then
+    -- the normal debuff logic below fills the remaining slots. The
+    -- selection loops dedupe against the lead-in -- a player-cast CC
+    -- passes both filters. Zero cost when the option is off.
+    local ccLead = 0
+    if p and p.debuffIncludeCC and C_UnitAuras and C_UnitAuras.GetUnitAuras then
+        local ccAuras = C_UnitAuras.GetUnitAuras(unit, "HARMFUL|CROWD_CONTROL")
+        if ccAuras then
+            for _, aura in ipairs(ccAuras) do
+                if ccLead >= 2 or dIdx > maxDbfSlots then break end
+                if aura and aura.auraInstanceID and aura.icon then
+                    skipIDs[dIdx] = aura.auraInstanceID
+                    skipAuras[dIdx] = aura
+                    dIdx = dIdx + 1
+                    ccLead = ccLead + 1
+                end
+            end
+        end
+    end
     if showAll then
         -- showAll mode: must scan all player debuffs
         if C_UnitAuras and C_UnitAuras.GetUnitAuras then
@@ -7088,9 +7154,15 @@ function NameplateFrame:UpdateAuras(updateInfo)
                     if dIdx > maxDbfSlots then break end
                     local id = aura and aura.auraInstanceID
                     if id and aura.icon then
-                        skipIDs[dIdx] = id
-                        skipAuras[dIdx] = aura
-                        dIdx = dIdx + 1
+                        local dup = false
+                        for ci = 1, ccLead do
+                            if skipIDs[ci] == id then dup = true; break end
+                        end
+                        if not dup then
+                            skipIDs[dIdx] = id
+                            skipAuras[dIdx] = aura
+                            dIdx = dIdx + 1
+                        end
                     end
                 end
             end
@@ -7120,9 +7192,15 @@ function NameplateFrame:UpdateAuras(updateInfo)
                         if dIdx > maxDbfSlots then break end
                         local id = aura and aura.auraInstanceID
                         if id and aura.icon and importantSet[id] then
-                            skipIDs[dIdx] = id
-                            skipAuras[dIdx] = aura
-                            dIdx = dIdx + 1
+                            local dup = false
+                            for ci = 1, ccLead do
+                                if skipIDs[ci] == id then dup = true; break end
+                            end
+                            if not dup then
+                                skipIDs[dIdx] = id
+                                skipAuras[dIdx] = aura
+                                dIdx = dIdx + 1
+                            end
                         end
                     end
                 end
@@ -9120,4 +9198,173 @@ function npAddon:OnEnable()
     ApplyClassPowerSetting()
     -- Apply spec-assigned preset on login (before UI is opened)
     if ns._ApplySpecPresetFromDB then ns._ApplySpecPresetFromDB() end
+    if ns.RangeText_Apply then ns.RangeText_Apply() end
+end
+
+-------------------------------------------------------------------------------
+--  Distance to Target Text (EXTRAS): shows a range BUCKET on the current
+--  target's nameplate -- "15+" means the target is beyond the 15yd rung and
+--  inside the next longer one. Exact enemy distance is not exposed by the
+--  API; the lower bound comes from the shared range engine's spell ladder
+--  (EllesmereUI_Range.lua), activated only while this feature is enabled.
+--  Anchoring: 5px left of whatever text occupies
+--  the Right Text core slot, else just outside the health bar's right edge.
+--  Zero cost while disabled (nothing is created until first enabled); while
+--  enabled a single OnUpdate driver ticks 5x/s and hides when toggled off.
+--  Range results are skipped when secret (combat contexts) -- fail-open to
+--  no text, never an error.
+-------------------------------------------------------------------------------
+do
+    -- Single-table state: this file sits at Lua 5.1's 200-local chunk cap,
+    -- so the whole feature uses ONE chunk local (RT) with everything else
+    -- as table fields.
+    local RT = { acc = 0 }
+
+    function RT.Anchor(plate)
+        RT.fs:ClearAllPoints()
+        local offX = (p and p.rangeTextOffsetX) or 0
+        local offY = (p and p.rangeTextOffsetY) or 0
+        local rightEl = GetTextSlot("textSlotRight")
+        local anchorTo
+        if rightEl == "enemyName" then
+            anchorTo = plate.name
+        elseif rightEl and rightEl ~= "none" then
+            local ca = plate._cachedHealthSlots
+            if ca then
+                for i = 1, ca._count or 0 do
+                    local e = ca[i]
+                    if e and e.slotKey == "textSlotRight" and e.fs then
+                        anchorTo = e.fs
+                        break
+                    end
+                end
+            end
+        end
+        if anchorTo and anchorTo.IsShown and anchorTo:IsShown() then
+            RT.fs:SetPoint("RIGHT", anchorTo, "LEFT", -5 + offX, offY)
+        else
+            RT.fs:SetPoint("LEFT", plate.health or plate, "RIGHT", 5 + offX, offY)
+        end
+    end
+
+    function RT.Appearance()
+        SetFSFont(RT.fs, (p and p.rangeTextSize) or defaults.rangeTextSize, GetNPOutline())
+        local c = (p and p.rangeTextColor) or defaults.rangeTextColor
+        RT.fs:SetTextColor(c.r, c.g, c.b, 1)
+    end
+
+    function RT.Detach()
+        RT.plate = nil
+        if RT.carrier then
+            RT.carrier:Hide()
+            RT.carrier:SetParent(nil)
+        end
+    end
+
+    function RT.Tick()
+        local plate = ns._cachedTargetPlate
+        if not plate or not plate.unit or not plate:IsShown() then
+            if RT.plate then RT.Detach() end
+            return
+        end
+        if plate ~= RT.plate then
+            if not RT.carrier then
+                RT.carrier = CreateFrame("Frame")
+                RT.carrier:SetSize(2, 2)
+                RT.fs = RT.carrier:CreateFontString(nil, "OVERLAY")
+            end
+            RT.carrier:SetParent(plate)
+            RT.carrier:SetPoint("CENTER", plate, "CENTER", 0, 0)
+            -- Well above the health bar / text frames: when the Right Text
+            -- slot is occupied the text sits ON the bar, and a low frame
+            -- level draws it underneath the bar fill.
+            RT.carrier:SetFrameLevel(plate:GetFrameLevel() + 30)
+            RT.plate = plate
+            RT.Appearance()
+            RT.Anchor(plate)
+            RT.carrier:Show()
+        end
+        -- "0+" (inside the shortest rung, i.e. basically melee) shows
+        -- nothing -- the indicator only matters when there is distance.
+        -- Queried as "target" rather than plate.unit: this is the target's
+        -- plate by definition, and the token lets the shared engine serve
+        -- the QoL distance text from the same cached walk.
+        local lower = EllesmereUI.Range_LowerBound("target")
+        if lower and lower > 0 then
+            RT.fs:SetText(lower .. "+")
+            RT.fs:Show()
+        else
+            RT.fs:Hide()
+        end
+    end
+
+    -- Options: re-apply font/color/anchor on the live attachment.
+    ns.RangeText_Refresh = function()
+        if RT.plate and RT.fs then
+            RT.Appearance()
+            RT.Anchor(RT.plate)
+        end
+    end
+
+    ns.RangeText_Apply = function()
+        if p and p.rangeTextEnabled then
+            if not RT.drv then
+                RT.drv = CreateFrame("Frame")
+                RT.drv:Hide()
+                RT.drv:SetScript("OnUpdate", function(_, dt)
+                    RT.acc = RT.acc + dt
+                    if RT.acc < 0.2 then return end
+                    RT.acc = 0
+                    RT.Tick()
+                end)
+            end
+            -- Ladder builds and invalidation live in the shared range engine.
+            EllesmereUI.Range_SetActive("npRangeText", true)
+            RT.drv:Show()
+        elseif RT.drv then
+            EllesmereUI.Range_SetActive("npRangeText", false)
+            RT.drv:Hide()
+            RT.Detach()
+        end
+    end
+
+    -- /euirangedbg: user-invoked one-shot diagnostic (same role as
+    -- /cdmdbg). Prints every link in the chain so a single paste names the
+    -- failure: setting, driver, target plate, ladder rungs, and each
+    -- rung's live IsSpellInRange answer (SECRET called out explicitly).
+    SLASH_EUIRANGEDBG1 = "/euirangedbg"
+    SlashCmdList.EUIRANGEDBG = function()
+        local function out(msg) print("|cffD05B38[RangeText]|r " .. msg) end
+        out("enabled=" .. tostring(p and p.rangeTextEnabled)
+            .. " driver=" .. tostring(RT.drv and RT.drv:IsShown() or false)
+            .. " targetPlate=" .. tostring(ns._cachedTargetPlate ~= nil)
+            .. " attached=" .. tostring(RT.plate ~= nil)
+            .. " text=" .. tostring(RT.fs and RT.fs:IsShown() and RT.fs:GetText() or "hidden"))
+        if RT.fs then
+            -- Geometry/visibility chain: IsVisible false with IsShown true
+            -- means a hidden ancestor; a nil rect means the anchor never
+            -- resolved; width 0 means the font never applied.
+            out(("fs visible=%s rect=%s,%s strW=%s alpha=%s")
+                :format(tostring(RT.fs:IsVisible()),
+                    tostring(RT.fs:GetLeft()), tostring(RT.fs:GetBottom()),
+                    tostring(RT.fs:GetStringWidth()),
+                    tostring(RT.fs:GetAlpha())))
+        end
+        if RT.carrier then
+            out(("carrier visible=%s level=%s strata=%s scale=%s")
+                :format(tostring(RT.carrier:IsVisible()),
+                    tostring(RT.carrier:GetFrameLevel()),
+                    tostring(RT.carrier:GetFrameStrata()),
+                    tostring(RT.carrier:GetEffectiveScale())))
+        end
+        local tp = ns._cachedTargetPlate
+        if tp then
+            out(("plate level=%s strata=%s healthLevel=%s rightSlot=%s")
+                :format(tostring(tp:GetFrameLevel()), tostring(tp:GetFrameStrata()),
+                    tostring(tp.health and tp.health:GetFrameLevel()),
+                    tostring(GetTextSlot("textSlotRight"))))
+        end
+        local unit = ns._cachedTargetPlate and ns._cachedTargetPlate.unit
+        EllesmereUI.Range_DebugDump(unit, out)
+    end
 end

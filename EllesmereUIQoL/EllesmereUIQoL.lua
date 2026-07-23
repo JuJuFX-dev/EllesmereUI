@@ -176,6 +176,17 @@ qolFrame:SetScript("OnEvent", function(self)
         -- or re-opening the lingering one -- while that window is up strands it.
         -- Gate all opens on this and resume on LOOT_CLOSED.
         local _lootOpen = false
+        -- Attribution for loot windows our own opens spawn. _pendingOpen is
+        -- stamped just before UseContainerItem and cleared at that open's
+        -- 0.5s recheck; LOOT_OPENED captures it into _lootSource. When the
+        -- window closes, the source slot is re-read: a linger-until-looted
+        -- container still sitting there with an un-decremented count means
+        -- its loot could not be taken (bags full / unique item cap), and
+        -- re-opening it would just re-spawn the same un-lootable window in
+        -- an endless loop the user cannot escape. It is skipped for the
+        -- rest of the session instead (a reload retries it, so freed bag
+        -- space recovers naturally).
+        local _pendingOpen, _lootSource
         -- Global single-flight: only one open cycle runs at a time. This -- not
         -- the per-slot _openInProgress guard -- is what stops two overlapping
         -- passes from double-using a slow container. A payout container's server
@@ -184,6 +195,17 @@ qolFrame:SetScript("OnEvent", function(self)
         -- stranding it greyed. Only one chain ever exists now.
         local _openBusy = false
         local _scanScheduled = false
+        -- Cycle generation: bumped when a new cycle starts AND on disable.
+        -- Every deferred closure (step timers, the 0.5s open recheck, finish)
+        -- captures its own generation and self-aborts when stale. IsEnabled()
+        -- alone is not enough: a disable->re-enable inside the 0.5s recheck
+        -- window would otherwise resurrect the abandoned chain alongside a
+        -- freshly-started one -- two concurrent chains, the exact double-use
+        -- bug the single-flight design exists to prevent.
+        local _cycleGen = 0
+        -- A scan request arrived while a cycle was busy; finish() honors it
+        -- even when its own cycle made no progress.
+        local _missedScan = false
         -- Forward-declared: scanFrame's OnUpdate (created below) calls ScanAndOpen
         -- once the cache is built, so both must be upvalues in scope before that
         -- closure is defined. Assigned (not re-declared) further down.
@@ -305,11 +327,16 @@ qolFrame:SetScript("OnEvent", function(self)
                 containerFrame:UnregisterEvent("LOOT_OPENED")
                 containerFrame:UnregisterEvent("LOOT_CLOSED")
                 _lootOpen = false
+                _pendingOpen = nil
+                _lootSource = nil
                 -- Clear single-flight state so a mid-cycle disable can't strand
-                -- _openBusy true and block a later re-enable. In-flight timers
-                -- self-abort via their IsEnabled() checks.
+                -- _openBusy true and block a later re-enable. The generation
+                -- bump kills every in-flight timer of the old cycle outright,
+                -- so a quick re-enable cannot resurrect an abandoned chain.
                 _openBusy = false
                 _scanScheduled = false
+                _missedScan = false
+                _cycleGen = _cycleGen + 1
                 scanFrame:Hide()
             end
         end
@@ -360,20 +387,27 @@ qolFrame:SetScript("OnEvent", function(self)
             if #toOpen == 0 then return end
 
             _openBusy = true
+            _cycleGen = _cycleGen + 1
+            local myGen = _cycleGen
             local madeProgress = false
 
             -- The single place _openBusy is cleared. Every step() exit routes
             -- through here so the flag can never leak (a leak would freeze
-            -- auto-open until reload).
+            -- auto-open until reload). A stale generation must NOT clear the
+            -- flag -- it belongs to the newer cycle by then.
             local function finish()
+                if myGen ~= _cycleGen then return end
                 _openBusy = false
-                if madeProgress and IsEnabled() and not InCombatLockdown()
+                if (madeProgress or _missedScan) and IsEnabled()
+                    and not InCombatLockdown()
                     and not MerchantOpen() and not _lootOpen then
+                    _missedScan = false
                     C_Timer.After(0.3, function() ScanAndOpen(false) end)
                 end
             end
 
             local function step(idx)
+                if myGen ~= _cycleGen then return end
                 if idx > #toOpen then return finish() end
                 if not IsEnabled() or InCombatLockdown() or MerchantOpen() then return finish() end
                 -- Loot window opened mid-cycle: stop; LOOT_CLOSED restarts cleanly.
@@ -392,9 +426,24 @@ qolFrame:SetScript("OnEvent", function(self)
                         local prevID = info.itemID
                         local prevCount = info.stackCount or 1
                         _openInProgress[key] = true
+                        _pendingOpen = { bag = item.bag, slot = item.slot,
+                            itemID = prevID, count = prevCount }
                         C_Container.UseContainerItem(item.bag, item.slot)
                         C_Timer.After(0.5, function()
+                            -- Always release the slot flag (global bookkeeping),
+                            -- but a stale-generation chain goes no further: its
+                            -- progress/failure verdicts would race the cycle
+                            -- that replaced it.
                             _openInProgress[key] = nil
+                            -- The open resolved without spawning a loot window
+                            -- (LOOT_OPENED would have claimed it by now): drop
+                            -- the attribution so an unrelated later loot window
+                            -- (a mob, a chest) can't inherit it.
+                            if _pendingOpen and _pendingOpen.bag == item.bag
+                                and _pendingOpen.slot == item.slot then
+                                _pendingOpen = nil
+                            end
+                            if myGen ~= _cycleGen then return end
                             local after = C_Container.GetContainerItemInfo(item.bag, item.slot)
                             local progressed = (not after) or after.itemID ~= prevID
                                 or (after.stackCount or 1) < prevCount
@@ -422,7 +471,10 @@ qolFrame:SetScript("OnEvent", function(self)
         -- Coalesce a burst of BAG_UPDATE_DELAYED (a single open fires several)
         -- into one next-frame scan; skips entirely while a cycle is in flight.
         RequestScan = function()
-            if _scanScheduled or _openBusy then return end
+            -- Dropped because a cycle is mid-flight: remember it so finish()
+            -- reruns the scan even when its own cycle made no progress.
+            if _openBusy then _missedScan = true; return end
+            if _scanScheduled then return end
             _scanScheduled = true
             C_Timer.After(0, function()
                 _scanScheduled = false
@@ -433,13 +485,35 @@ qolFrame:SetScript("OnEvent", function(self)
         containerFrame:SetScript("OnEvent", function(_, event)
             if event == "LOOT_OPENED" then
                 _lootOpen = true
+                -- Claim the window for the container we just used (if any) so
+                -- the LOOT_CLOSED verdict knows which slot to re-examine.
+                _lootSource = _pendingOpen
+                _pendingOpen = nil
                 return
             end
             if event == "LOOT_CLOSED" then
                 _lootOpen = false
                 -- Resume opens that were deferred while the window was up. Delay
                 -- so the looted container has left the bag before we re-scan.
-                C_Timer.After(0.5, function() ScanAndOpen(false) end)
+                C_Timer.After(0.5, function()
+                    -- Verdict on the container whose open spawned that window:
+                    -- still in its slot with an un-decremented count means the
+                    -- loot could not be taken (bags full / unique item cap).
+                    -- Skip it for the session BEFORE the re-scan below, or the
+                    -- re-scan re-opens it and the window loops forever. A
+                    -- locked slot is still resolving server-side and gets no
+                    -- verdict -- the next window re-attributes it.
+                    local src = _lootSource
+                    _lootSource = nil
+                    if src then
+                        local now = C_Container.GetContainerItemInfo(src.bag, src.slot)
+                        if now and now.itemID == src.itemID and not now.isLocked
+                            and (now.stackCount or 1) >= src.count then
+                            _failedItems[src.itemID] = true
+                        end
+                    end
+                    ScanAndOpen(false)
+                end)
                 return
             end
             if event == "BAG_UPDATE_DELAYED" then
@@ -1328,6 +1402,7 @@ do
         end
 
         statsText:SetText(txt)
+        statsFrame:SetSize(statsText:GetStringWidth() + 2, statsText:GetStringHeight() + 2)
     end
 
     local function ApplySecondaryStats()
@@ -1970,22 +2045,6 @@ do
     end
     EllesmereUI.GetCrosshairValue = CrosshairGet
 
-    -- Item-based range detection for all specs
-    local checkItems = {
-        { range = 5,   id = 37727 }, -- Ruby Acorn
-        { range = 8,   id = 34368 }, -- Attuned Crystal Cores
-        { range = 10,  id = 10699 }, -- Handful of Snowflakes
-        { range = 15,  id = 31129 }, -- Blackwhelp Net
-        { range = 20,  id = 21519 }, -- Mistletoe
-        { range = 25,  id = 13289 }, -- Egan's Blaster
-        { range = 30,  id = 17202 }, -- Snowball
-        { range = 35,  id = 18904 }, -- Zorbin's Ultra-Shrinker
-        { range = 40,  ids = { 18640, 28767 } }, -- Happy Fun Rock / The Decapitator (either works)
-        { range = 45,  id = 32698 }, -- Wrangling Rope
-        { range = 60,  id = 32825 }, -- Soul Cannon
-        { range = 80,  id = 35278 }, -- Reinforced Net
-    }
-
     local DRUID_MELEE_FORMS = { [1] = true, [2] = true }  -- Bear, Cat
 
     local _, _chPlayerClass = UnitClass("player")
@@ -2064,6 +2123,9 @@ do
         else -- WARRIOR, ROGUE, DEATHKNIGHT
             _crosshairCutoffRange = 5
         end
+        -- Probe spells for the cutoff live in the shared range engine
+        -- (EllesmereUI_Range.lua); it rebuilds them itself on spec/talent
+        -- changes and whenever the cutoff value here moves.
     end
     RefreshCrosshairCutoffRange()
     -- Exposed so the crosshair options toggle can re-resolve the cutoff live.
@@ -2083,29 +2145,24 @@ do
             return false
         end
         local cutoff = EllesmereUI._getCrosshairCutoffRange()
-        
-        local maxRange = nil
-        for _, item in ipairs(checkItems) do
-            local inRange
-            if item.ids then
-                -- Either item satisfies the check: one may be invalid/removed on
-                -- some clients, so try each and take an in-range result.
-                for _, iid in ipairs(item.ids) do
-                    if C_Item.IsItemInRange(iid, "target") == true then inRange = true; break end
-                end
-            else
-                inRange = C_Item.IsItemInRange(item.id, "target")
-            end
-            if inRange == true then
-                maxRange = item.range
-                break
-            end
-            if item.range >= cutoff then
-                break
-            end
+
+        -- PRIMARY: probe the player's own top-range harmful spells (shared
+        -- range engine) -- exact, and talented range extensions are reflected
+        -- automatically. A nil answer (no probe could target right now)
+        -- cascades to the item ladder below. Melee cutoffs (5, including
+        -- druid melee forms via the effective getter) skip straight to the
+        -- ladder -- unchanged behavior.
+        if cutoff > 5 then
+            local beyond = EllesmereUI.Range_BeyondCutoff("target", cutoff)
+            if beyond ~= nil then return beyond end
         end
-        
-        return (maxRange == nil) or (maxRange > cutoff)
+
+        -- FALLBACK: shared item ladder, stopped at the cutoff -- the beyond/
+        -- within verdict never needs rungs past it. nil = nothing answered,
+        -- treated as out of range (unchanged).
+        local minY, maxY = EllesmereUI.Range_ItemBracket("target", cutoff)
+        if minY == nil then return true end
+        return (maxY == nil) or (maxY > cutoff)
     end
 
     local function CreateCrosshair()
@@ -2142,6 +2199,7 @@ do
             local nc = self._normalColor
             if not nc then return end
             if not CrosshairGet("crosshairMeleeColorEnabled") then
+                EllesmereUI.Range_SetActive("crosshair", false)
                 if self._meleeActive then
                     self._meleeActive = false
                     self._hBar:SetColorTexture(nc.r, nc.g, nc.b, nc.a)
@@ -2149,6 +2207,9 @@ do
                 end
                 return
             end
+            -- Cheap and idempotent: keeps the shared engine's activation in
+            -- step with this live toggle read on every path that checks range.
+            EllesmereUI.Range_SetActive("crosshair", true)
             local outOfRange = TargetOutOfRange()
             if outOfRange ~= self._meleeActive then
                 self._meleeActive = outOfRange
@@ -2205,10 +2266,14 @@ do
         local size = G("crosshairSize") or "None"
         if size == "None" then
             SyncVisWatch(false)
+            -- OnUpdate stops with the frame hidden, so it cannot release the
+            -- shared range engine itself -- release it here.
+            EllesmereUI.Range_SetActive("crosshair", false)
             if crosshairFrame then crosshairFrame:Hide() end
             return
         end
         SyncVisWatch(true)
+        EllesmereUI.Range_SetActive("crosshair", G("crosshairMeleeColorEnabled") and true or false)
 
         CreateCrosshair()
 
@@ -3237,6 +3302,298 @@ do
         if EllesmereUIDB and EllesmereUIDB.combatAlertEnabled then
             ApplyCombatAlert()
         end
+    end)
+end
+
+-------------------------------------------------------------------------------
+--  Target Distance Text
+--  Floating distance text for the current target, movable in Unlock Mode.
+--  Default format is the familiar item-ladder bracket ("30-35"); optional
+--  "30+" (spell-ladder lower bound) and "30" (minimum yards) formats.
+--  Range answers come from the shared engine (EllesmereUI_Range.lua), which
+--  this block activates only while the feature is enabled.
+--  Color is preconfigured by yard bracket. Off by default; zero cost while off.
+-------------------------------------------------------------------------------
+do
+    local distFrame
+    local drv
+    local evt
+    local installed = false
+    local acc = 0
+    local DEFAULT_TEXT_SIZE = 18
+    local DEFAULT_FORMAT = "range" -- "range" (30-35) | "plus" (30+) | "min" (30)
+    local DEFAULT_ALIGN = "CENTER" -- "LEFT" | "CENTER" | "RIGHT"
+    local DEFAULT_POS = { point = "CENTER", relPoint = "CENTER", x = 0, y = 120 }
+
+    local function GetFormat()
+        local f = EllesmereUIDB and EllesmereUIDB.targetDistanceFormat
+        if f == "plus" or f == "min" or f == "range" then return f end
+        return DEFAULT_FORMAT
+    end
+
+    local function GetAlign()
+        local a = EllesmereUIDB and EllesmereUIDB.targetDistanceAlign
+        if a == "LEFT" or a == "CENTER" or a == "RIGHT" then return a end
+        return DEFAULT_ALIGN
+    end
+
+    local function ColorForYards(yards)
+        if yards <= 8 then
+            return 0.30, 0.95, 0.40
+        elseif yards <= 15 then
+            return 0.85, 0.95, 0.25
+        elseif yards <= 25 then
+            return 1.00, 0.85, 0.20
+        elseif yards <= 40 then
+            return 1.00, 0.55, 0.15
+        end
+        return 0.95, 0.25, 0.20
+    end
+
+    local function FormatDistance(fmt, minY, maxY)
+        if fmt == "plus" then
+            if not minY or minY <= 0 then return nil end
+            return minY .. "+"
+        elseif fmt == "min" then
+            if not minY or minY <= 0 then return nil end
+            return tostring(minY)
+        end
+        -- range (default): "30-35", or "80+" beyond the last rung.
+        -- Inside the closest check, show "1-X" (familiar melee band) not "0-X".
+        if maxY then
+            local lo = (minY and minY > 0) and minY or 1
+            return lo .. "-" .. maxY
+        end
+        if minY and minY >= 80 then
+            return "80+"
+        end
+        if minY and minY > 0 then
+            return minY .. "+"
+        end
+        return nil
+    end
+
+    local function ResolveDisplay(unit)
+        local fmt = GetFormat()
+        if fmt == "plus" then
+            local lower = EllesmereUI.Range_LowerBound(unit)
+            if not lower or lower <= 0 then return nil end
+            return FormatDistance("plus", lower, nil), lower
+        end
+        local minY, maxY = EllesmereUI.Range_ItemBracket(unit)
+        if minY == nil then return nil end
+        local text = FormatDistance(fmt, minY, maxY)
+        if not text then return nil end
+        local colorY = maxY or minY
+        return text, colorY
+    end
+
+    local function SampleForFormat()
+        local fmt = GetFormat()
+        if fmt == "plus" then return "30+", 30 end
+        if fmt == "min" then return "30", 30 end
+        return "25-30", 25
+    end
+
+    local function ApplyFrameSettings()
+        if not distFrame then return end
+        local fontPath = (EllesmereUI.GetFontPath and EllesmereUI.GetFontPath("extras"))
+            or EllesmereUI.EXPRESSWAY or "Fonts\\FRIZQT__.TTF"
+        local outline = (EllesmereUI.GetFontOutlineFlag and EllesmereUI.GetFontOutlineFlag("extras")) or ""
+        if not outline:find("OUTLINE") then
+            outline = (outline == "") and "OUTLINE" or (outline .. ", OUTLINE")
+        end
+        local size = (EllesmereUIDB and EllesmereUIDB.targetDistanceTextSize) or DEFAULT_TEXT_SIZE
+        local align = GetAlign()
+        distFrame._text:SetFont(fontPath, size, outline)
+        distFrame._text:SetJustifyH(align)
+        distFrame._text:ClearAllPoints()
+        distFrame._text:SetPoint(align, distFrame, align, 0, 0)
+        distFrame:SetSize(size * 5, size + 10)
+
+        -- Unlock Mode owns anchors while dragging, or when Anchor-to is linked.
+        if EllesmereUI._unlockActive then return end
+        if EllesmereUIDB and EllesmereUIDB.unlockAnchors and EllesmereUIDB.unlockAnchors.EUI_TargetDistance then
+            return
+        end
+
+        distFrame:ClearAllPoints()
+        local pos = EllesmereUIDB and EllesmereUIDB.targetDistancePos
+        if pos and pos.point then
+            distFrame:SetPoint(pos.point, UIParent, pos.relPoint or pos.point, pos.x or 0, pos.y or 0)
+        else
+            distFrame:SetPoint(DEFAULT_POS.point, UIParent, DEFAULT_POS.relPoint, DEFAULT_POS.x, DEFAULT_POS.y)
+        end
+    end
+
+    local function CreateDistFrame()
+        if distFrame then return end
+        distFrame = CreateFrame("Frame", nil, UIParent)
+        distFrame:SetSize(100, 28)
+        distFrame:SetFrameStrata("HIGH")
+        distFrame:SetFrameLevel(55)
+        distFrame:EnableMouse(false)
+        distFrame:SetMouseClickEnabled(false)
+        local fs = distFrame:CreateFontString(nil, "OVERLAY")
+        fs:SetPoint("CENTER", distFrame, "CENTER", 0, 0)
+        fs:SetJustifyH("CENTER")
+        distFrame._text = fs
+        ApplyFrameSettings()
+        distFrame:Hide()
+    end
+
+    local function ShowSample()
+        CreateDistFrame()
+        ApplyFrameSettings()
+        local text, colorY = SampleForFormat()
+        distFrame._text:SetText(text)
+        distFrame._text:SetTextColor(ColorForYards(colorY))
+        distFrame:SetAlpha(1)
+        distFrame:Show()
+    end
+
+    local function IsEnabled()
+        return EllesmereUIDB and EllesmereUIDB.targetDistanceEnabled
+    end
+
+    local Tick -- forward decl for StartDriver closures
+
+    local function StopDriver()
+        EllesmereUI.Range_SetActive("qolTargetDistance", false)
+        if evt then evt:UnregisterAllEvents() end
+        if drv then
+            drv:SetScript("OnUpdate", nil)
+            drv:Hide()
+        end
+        installed = false
+        acc = 0
+        if distFrame then distFrame:Hide() end
+    end
+
+    local function StartDriver()
+        if not drv then
+            drv = CreateFrame("Frame")
+            drv:Hide()
+        end
+        if not evt then
+            evt = CreateFrame("Frame")
+            evt:SetScript("OnEvent", function()
+                if not IsEnabled() then return end
+                Tick()
+            end)
+        end
+        drv:SetScript("OnUpdate", function(_, dt)
+            if not IsEnabled() then return end
+            acc = acc + dt
+            if acc < 0.2 then return end
+            acc = 0
+            Tick()
+        end)
+        evt:RegisterEvent("PLAYER_TARGET_CHANGED")
+        -- Ladder builds and invalidation live in the shared range engine.
+        EllesmereUI.Range_SetActive("qolTargetDistance", true)
+        drv:Show()
+        installed = true
+    end
+
+    Tick = function()
+        if not IsEnabled() then return end
+        if EllesmereUI._unlockActive then
+            ShowSample()
+            return
+        end
+        if not UnitExists("target") then
+            if distFrame then distFrame:Hide() end
+            return
+        end
+        local text, colorY = ResolveDisplay("target")
+        if not text then
+            if distFrame then distFrame:Hide() end
+            return
+        end
+        CreateDistFrame()
+        ApplyFrameSettings()
+        distFrame._text:SetText(text)
+        distFrame._text:SetTextColor(ColorForYards(colorY))
+        distFrame:Show()
+    end
+
+    local function ApplyTargetDistance()
+        if IsEnabled() then
+            if not installed then StartDriver() end
+            Tick()
+            if distFrame then ApplyFrameSettings() end
+        else
+            StopDriver()
+        end
+    end
+    EllesmereUI._applyTargetDistance = ApplyTargetDistance
+
+    EllesmereUI._applyTargetDistanceFrame = function()
+        if not IsEnabled() then return end
+        CreateDistFrame()
+        ApplyFrameSettings()
+        Tick()
+    end
+
+    C_Timer.After(2, function()
+        if not (EllesmereUI and EllesmereUI.RegisterUnlockElements) then return end
+        local MK = EllesmereUI.MakeUnlockElement
+        if not MK then return end
+        EllesmereUI:RegisterUnlockElements({
+            MK({
+                key      = "EUI_TargetDistance",
+                label    = "Target Distance",
+                group    = "Quality of Life",
+                order    = 722,
+                noResize = true,
+                isHidden = function()
+                    return not IsEnabled()
+                end,
+                getFrame = function()
+                    if not IsEnabled() then return nil end
+                    CreateDistFrame()
+                    if EllesmereUI._unlockActive then ShowSample() end
+                    return distFrame
+                end,
+                getSize = function()
+                    local size = (EllesmereUIDB and EllesmereUIDB.targetDistanceTextSize) or DEFAULT_TEXT_SIZE
+                    return size * 5, size + 10
+                end,
+                savePos = function(_, point, relPoint, x, y)
+                    if not point then return end
+                    if not EllesmereUIDB then EllesmereUIDB = {} end
+                    EllesmereUIDB.targetDistancePos = { point = point, relPoint = relPoint, x = x, y = y }
+                    if distFrame and not EllesmereUI._unlockActive then
+                        ApplyFrameSettings()
+                    end
+                end,
+                loadPos = function()
+                    local pos = EllesmereUIDB and EllesmereUIDB.targetDistancePos
+                    if pos and pos.point then return pos end
+                    return { point = DEFAULT_POS.point, relPoint = DEFAULT_POS.relPoint, x = DEFAULT_POS.x, y = DEFAULT_POS.y }
+                end,
+                clearPos = function()
+                    if EllesmereUIDB then EllesmereUIDB.targetDistancePos = nil end
+                    if distFrame then ApplyFrameSettings() end
+                end,
+                applyPos = function()
+                    if not IsEnabled() then return end
+                    CreateDistFrame()
+                    ApplyFrameSettings()
+                    if EllesmereUI._unlockActive then ShowSample() end
+                end,
+            }),
+        })
+    end)
+
+    -- One-shot login: only starts the driver when the option is already on.
+    local boot = CreateFrame("Frame")
+    boot:RegisterEvent("PLAYER_LOGIN")
+    boot:SetScript("OnEvent", function(self)
+        self:UnregisterAllEvents()
+        self:SetScript("OnEvent", nil)
+        if IsEnabled() then ApplyTargetDistance() end
     end)
 end
 

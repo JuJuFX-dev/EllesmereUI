@@ -3240,9 +3240,16 @@ local function Skin_Guild()
         end
     end
     SkinRosterColumns()
-    if ml and ml.ColumnDisplay and not GetFFD(ml.ColumnDisplay).showHooked then
-        GetFFD(ml.ColumnDisplay).showHooked = true
-        ml.ColumnDisplay:HookScript("OnShow", WSkin.Debounce(SkinRosterColumns))
+    -- Re-skin roster columns when Blizzard rebuilds them (per club / view change)
+    -- via hooksecurefunc on the list refresh -- NOT a HookScript on the secure
+    -- ColumnDisplay. A HookScript OnShow/OnHide on ColumnDisplay fires INSIDE the
+    -- secure roster refresh that a protected guild action (SetNote /
+    -- SetGuildRankOrder) triggers, tainting that action -> ADDON_ACTION_FORBIDDEN
+    -- (root-caused by bisection; @Halt57/@woaw guild-note reports). hooksecurefunc
+    -- post-hooks are taint-safe by design -- the pattern ElvUI uses here.
+    if ml and ml.RefreshListDisplay and not GetFFD(ml).colRefreshHooked then
+        GetFFD(ml).colRefreshHooked = true
+        hooksecurefunc(ml, "RefreshListDisplay", WSkin.Debounce(SkinRosterColumns))
     end
     -- Member-name list rides up 2px (one-shot, every anchor preserved).
     local mlBox = ml and ml.ScrollBox
@@ -3266,127 +3273,16 @@ local function Skin_Guild()
         end
     end
 
-    -- Roster-view widening, applied ONLY while the roster is up. The
-    -- MemberList is SHARED with the chat view's narrow names column, where
-    -- an unconditional widen overflowed the scrollbar and covered the chat
-    -- input. The sort-header row exists only on the roster view, so its
-    -- visibility gates the swap between the stock and widened anchor sets.
-    local cd2 = ml and ml.ColumnDisplay
-    local box2 = ml and ml.ScrollBox
-    if cd2 and box2 and not GetFFD(cd2).widenGate then
-        GetFFD(cd2).widenGate = true
-        local function capturePts(part)
-            local n2 = part:GetNumPoints()
-            if not n2 or n2 == 0 then return nil end
-            local pts2 = {}
-            for i = 1, n2 do
-                local p, rel, rp, x, y = part:GetPoint(i)
-                if not p then return nil end
-                pts2[i] = { p, rel, rp, x or 0, y or 0 }
-            end
-            return pts2
-        end
-        local function widePts(pts2, dl, dr)
-            local w2 = {}
-            for i = 1, #pts2 do
-                local t = pts2[i]
-                local nx = t[4]
-                if t[1]:find("LEFT", 1, true) then
-                    nx = nx - dl
-                elseif t[1]:find("RIGHT", 1, true) then
-                    nx = nx + dr
-                end
-                w2[i] = { t[1], t[2], t[3], nx, t[5] }
-            end
-            return w2
-        end
-        local function applyPts(part, pts2)
-            if not pts2 then return end
-            part:ClearAllPoints()
-            for i = 1, #pts2 do
-                local t = pts2[i]
-                part:SetPoint(t[1], t[2], t[3], t[4], t[5])
-            end
-        end
-        local boxStock = capturePts(box2)
-        local cdStock = capturePts(cd2)
-        local boxWide = boxStock and widePts(boxStock, 23, 20)
-        local cdWide = cdStock and widePts(cdStock, 23, 23)
-        -- Also widen `ml` (MemberList) itself at the source, since Blizzard's
-        -- own row-sizing below (SetWidth(GetMemberList():GetWidth())) reads
-        -- ml's width directly. RefreshLayout only ever gives `ml` a single
-        -- positional anchor (not a LEFT+RIGHT pair like box2/cd2), so it's
-        -- resized with a plain SetWidth rather than the capturePts/widePts
-        -- anchor-nudge technique above. This works alongside the per-row
-        -- SetWidth override below, not instead of it: the two are
-        -- belt-and-braces, so rows stay correctly sized whether Blizzard's
-        -- layout picks up the widened ml on its own or not.
-        local mlStockWidth = ml:GetWidth()
-        local mlWideWidth = mlStockWidth + 23 + 20
-        -- Every roster row is sized by Blizzard to MemberList's own width
-        -- (CommunitiesMemberListEntryMixin:SetExpanded -> SetWidth(GetMemberList()
-        -- :GetWidth())), a frame this pass never touches -- only its ScrollBox
-        -- and ColumnDisplay children get widened above. Left alone, rows stay
-        -- stock width while the header grows, so each row's GuildInfo text
-        -- (RIGHT-anchored to the row, -4) sits in a box that ends well short of
-        -- the widened header -- the Achievement Points / M+ Rating value renders
-        -- under the Note column instead of the far-right stat column. Re-stamp
-        -- every live row to the ScrollBox's actual current width so it always
-        -- matches. GuildInfo is also LEFT-justified in that box by default, so
-        -- widening it alone never moves the visible text -- center it and nudge
-        -- it left while the roster is showing, and put both back to Blizzard's
-        -- stock LEFT/20/-4 layout when it's not, since MemberList/ScrollBox is
-        -- shared with the Chat tab's narrower names column and a row must not
-        -- stay stranded in the roster's styling after the swap.
-        local GUILD_INFO_NUDGE = 20
-        local function ApplyRowLayout(row)
-            if not row then return end
-            if row.SetWidth then row:SetWidth(box2:GetWidth()) end
-            local gi = row.GuildInfo
-            if gi and row.Note and gi.SetJustifyH and gi.ClearAllPoints then
-                gi:ClearAllPoints()
-                if cd2:IsShown() then
-                    gi:SetJustifyH("CENTER")
-                    gi:SetPoint("LEFT", row.Note, "RIGHT", 20 - GUILD_INFO_NUDGE, 0)
-                    gi:SetPoint("RIGHT", row, "RIGHT", -4 - GUILD_INFO_NUDGE, 0)
-                else
-                    gi:SetJustifyH("LEFT")
-                    gi:SetPoint("LEFT", row.Note, "RIGHT", 20, 0)
-                    gi:SetPoint("RIGHT", row, "RIGHT", -4, 0)
-                end
-            end
-        end
-        -- Same uninitialized-ScrollBox guard used for the AH summary/rail rows
-        -- elsewhere in this file: ForEachFrame errors inside Blizzard's code
-        -- if the view doesn't exist yet (e.g. this pass runs at ADDON_LOADED,
-        -- before the roster has ever been shown).
-        local function SyncRowWidths()
-            if box2.ForEachFrame and box2.GetView and box2:GetView() then
-                pcall(box2.ForEachFrame, box2, ApplyRowLayout)
-            end
-        end
-        hooksecurefunc(box2, "Update", WSkin.Debounce(SyncRowWidths))
-        cd2:HookScript("OnShow", function()
-            applyPts(box2, boxWide)
-            applyPts(cd2, cdWide)
-            ml:SetWidth(mlWideWidth)
-            SyncRowWidths()
-        end)
-        cd2:HookScript("OnHide", function()
-            applyPts(box2, boxStock)
-            ml:SetWidth(mlStockWidth)
-            SyncRowWidths()
-        end)
-        if cd2:IsShown() then
-            applyPts(box2, boxWide)
-            applyPts(cd2, cdWide)
-            ml:SetWidth(mlWideWidth)
-        else
-            applyPts(box2, boxStock)
-            ml:SetWidth(mlStockWidth)
-        end
-        SyncRowWidths()
-    end
+
+    -- No roster widening here (it used to live between the list lift and the
+    -- scrollbar nudge): re-stamping row/MemberList widths is inherently
+    -- taint-unsafe. Blizzard's CommunitiesMemberListEntryMixin:SetExpanded sizes
+    -- every row from GetMemberList():GetWidth() inside its own secure roster
+    -- refresh, so an addon-written width is read back there, taints the
+    -- execution, and blocks the protected roster actions that refresh triggers
+    -- (SetNote / SetGuildRankOrder / whisper -> ADDON_ACTION_FORBIDDEN;
+    -- root-caused by bisection). One-shot anchor nudges that Blizzard never
+    -- reads back (the list lift above, the scrollbar nudge below) are fine.
 
     -- Chat view's names-column scrollbar sits 5px right (one-shot, every
     -- anchor preserved).
@@ -4149,9 +4045,19 @@ local function AchAccentBar(bar)
             if not rd.lowered then
                 local p, rel, rp, x, y = fs:GetPoint(1)
                 if p then
+                    local offsetY = -3
+                    if bar and bar.GetParent then
+                        local parent = bar:GetParent()
+                        -- For AchievementFrameAchievementsObjectives, bar is the progress bar itself not the holder so retrieve the parent
+                        -- to match the parent name
+                        -- It does NOT need the offset
+                        if parent and parent.GetName and parent:GetName() == "AchievementFrameAchievementsObjectives" then
+                            offsetY = 0
+                        end
+                    end
                     rd.lowered = true
                     fs:ClearAllPoints()
-                    fs:SetPoint(p, rel, rp, x or 0, (y or 0) - 3)
+                    fs:SetPoint(p, rel, rp, x or 0, (y or 0) + offsetY)
                 end
             end
         end
@@ -7556,6 +7462,356 @@ WSkin.RegisterWindow({
 --  Shell + tabs + item tiles as flat cards (mail-row treatment). The repair /
 --  sell-junk icon buttons and the buyback money display stay stock content.
 -------------------------------------------------------------------------------
+-- Completely hide Blizzard's native pagination and 10-slot grid.
+-- Permanence via the achievements-pack Kill pattern: a reentry-safe
+-- hooksecurefunc that re-hides on every Blizzard Show (MerchantFrame_Update
+-- re-Shows the tiles each pass) -- never a method overwrite on a Blizzard
+-- frame table. Registry lives on WSkin so re-runs of Skin_Merchant cannot
+-- double-hook.
+local function KillFrameShow(frame)
+    if not frame then return end
+    local killed = WSkin._merchantKilledShow
+    if not killed then
+        killed = setmetatable({}, { __mode = "k" })
+        WSkin._merchantKilledShow = killed
+    end
+    if killed[frame] then frame:Hide() return end
+    killed[frame] = true
+    frame:Hide()
+    hooksecurefunc(frame, "Show", function(self) self:Hide() end)
+end
+
+local function HideNativeMerchantGrid()
+    for i = 1, 12 do
+        local item = _G["MerchantItem" .. i]
+        if item then
+            item:SetAlpha(0)
+            KillFrameShow(item)
+        end
+    end
+
+    local controls = {
+        _G.MerchantPrevPageButton,
+        _G.MerchantNextPageButton,
+        _G.MerchantPageText
+    }
+    for _, ctrl in ipairs(controls) do
+        KillFrameShow(ctrl)
+    end
+end
+
+-- Initialize the ScrollFrame (Run once)
+local function CreateMerchantScrollList(parent)
+    local sf = CreateFrame("ScrollFrame", "WSkinMerchantScrollFrame", parent, "UIPanelScrollFrameTemplate")
+    -- Anchor to fit within MerchantFrame, leaving room for repair/buyback... buttons
+    sf:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, -70)
+    sf:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -32, 80)
+
+    local child = CreateFrame("Frame", "WSkinMerchantScrollChild", sf)
+    child:SetPoint("TOPLEFT")
+    child:SetPoint("TOPRIGHT")
+    child:SetSize(1, 1)
+    sf:SetScrollChild(child)
+
+    sf.rows = {}
+    return sf, child
+end
+
+-- This is the same function as the default UI, only the frameName is changed to allow our custom buttons
+function EUI_MerchantFrame_UpdateAltCurrency(index, indexOnPage, canAfford)
+	local itemCount = GetMerchantItemCostInfo(index);
+	local frameName = "EUI_MerchantItem"..indexOnPage.."AltCurrencyFrame";
+	local usedCurrencies = 0;
+	local width = 0;
+
+	-- update Alt Currency Frame with itemValues
+	if ( itemCount > 0 ) then
+		for i=1, MAX_ITEM_COST do
+			local itemTexture, itemValue, itemLink = GetMerchantItemCostItem(index, i);
+			if ( itemTexture ) then
+				usedCurrencies = usedCurrencies + 1;
+				local button = _G[frameName.."Item"..usedCurrencies];
+				button.index = index;
+				button.item = i;
+				button.itemLink = itemLink;
+				AltCurrencyFrame_Update(frameName.."Item"..usedCurrencies, itemTexture, itemValue, canAfford);
+				width = width + button:GetWidth();
+				if ( usedCurrencies > 1 ) then
+					-- button spacing;
+					width = width + 4;
+				end
+				button:Show();
+			end
+		end
+		for i = usedCurrencies + 1, MAX_ITEM_COST do
+			_G[frameName.."Item"..i]:Hide();
+		end
+	else
+		for i=1, MAX_ITEM_COST do
+			_G[frameName.."Item"..i]:Hide();
+		end
+	end
+	return width;
+end
+
+local function SkinMerchantListItem(item)
+    if not item or item:IsForbidden() then return end
+
+    -- Background & Theme
+    item.bg = item.bg or item:CreateTexture(nil, "BACKGROUND", nil, -7)
+    item.bg:SetColorTexture(Theme.bgR, Theme.bgG, Theme.bgB, Theme.bgA)
+    item.bg:SetPoint("TOPLEFT", 0, 0)
+    item.bg:SetPoint("BOTTOMRIGHT", 0, 0)
+    WSkin.AddBorder(item)
+
+    -- Item Icon
+    item.SlotTexture:SetSize(item:GetHeight(), item:GetHeight()) --Square shape
+    item.SlotTexture:ClearAllPoints()
+    item.SlotTexture:SetPoint("LEFT", item, "LEFT", 0, 0)
+    item.SlotTexture:SetTexCoord(0, 1, 0, 1)
+
+    -- Highlight on hover
+    item.highlight = item.highlight or item.ItemButton:CreateTexture(nil, "HIGHLIGHT")
+    item.highlight:SetColorTexture(1, 1, 1, 0.1)
+    item.highlight:SetAllPoints(item.bg)
+
+    -- Buy button: As a list, this is the whole row
+    item.ItemButton:SetSize(item:GetWidth(), item:GetHeight())
+    item.ItemButton.PushedTexture:SetTexture(nil)
+    item.ItemButton.NormalTexture:SetTexture(nil)
+    item.ItemButton.HighlightTexture:SetTexture(item.highlight)
+
+    -- Borders: Quality border, azerite armor overlay...
+    -- Repositionned on the icon
+    item.ItemButton.IconBorder:ClearAllPoints()
+    item.ItemButton.IconBorder:SetPoint("CENTER", item.SlotTexture, "CENTER", 0, 0)
+    item.ItemButton.IconBorder:SetSize(item.SlotTexture:GetWidth(), item.SlotTexture:GetHeight())
+    item.ItemButton.IconOverlay:ClearAllPoints()
+    item.ItemButton.IconOverlay:SetPoint("CENTER", item.SlotTexture, "CENTER", 0, 0)
+    item.ItemButton.IconOverlay:SetSize(item.SlotTexture:GetWidth(), item.SlotTexture:GetHeight())
+
+    -- Quest item overlay
+    -- Repositionned on the icon
+    item.ItemButton.IconQuestTexture:SetTexture(TEXTURE_ITEM_QUEST_BANG);
+    item.ItemButton.IconQuestTexture:ClearAllPoints()
+    item.ItemButton.IconQuestTexture:SetPoint("CENTER", item.SlotTexture, "CENTER", 0, 0)
+    item.ItemButton.IconQuestTexture:SetSize(item.SlotTexture:GetWidth(), item.SlotTexture:GetHeight())
+
+    -- Item stack
+    -- Bottom right of the icon
+    item.ItemButton.Count:ClearAllPoints()
+    item.ItemButton.Count:SetPoint("BOTTOMRIGHT", item.SlotTexture, "BOTTOMRIGHT", -2, 2)
+
+    -- Item stock
+    -- Top left of the icon
+    item.ItemButton.Stock:ClearAllPoints()
+    item.ItemButton.Stock:SetPoint("TOPLEFT", item.SlotTexture, "TOPLEFT", 2, -2)
+
+    -- Item Name
+    -- Position is set dynamically in UpdateCustomMerchantList so that it never collides with
+    -- either the money frame or alt currency frame. If the text is too long, it will be cut (...)
+    _G[item:GetName().."NameFrame"]:Hide()
+    item.Name:ClearAllPoints()
+    item.Name:SetPoint("LEFT", item.SlotTexture, "RIGHT", 10, 0)
+    item.Name:SetMaxLines(1)
+    item.Name:SetJustifyH("LEFT")
+end
+
+-- Update loop to populate our custom scrolling list
+local function UpdateCustomMerchantList(sf, child)
+    local isBuyback = MerchantFrame.selectedTab == 2
+    local numItems = isBuyback and GetNumBuybackItems() or GetMerchantNumItems()
+
+    local rowHeight = (EllesmereUIDB and EllesmereUIDB.merchantListRowHeight) or 32
+    local rowSpacing = 4
+    local playerMoney = GetMoney()
+    local MAX_MONEY_DISPLAY_WIDTH = 120
+
+    for i = 1, numItems do
+        local row = sf.rows[i]
+        if not row then
+            row = CreateFrame("Button", "EUI_MerchantItem"..i, child, "MerchantItemTemplate")
+            row:SetSize(sf:GetWidth(), rowHeight)
+            if i == 1 then
+                row:SetPoint("TOPLEFT", child, "TOPLEFT", 0, 0)
+            else
+                row:SetPoint("TOPLEFT", sf.rows[i-1], "BOTTOMLEFT", 0, -rowSpacing)
+            end
+
+            SkinMerchantListItem(row)
+            sf.rows[i] = row
+        end
+
+        local name, texture, price, quantity, numAvailable, isPurchasable, isUsable, extendedCost, isBound, isQuestStartItem
+
+        if isBuyback then
+            name, texture, price, quantity, numAvailable, isUsable, isBound = GetBuybackItemInfo(i)
+            isPurchasable = true -- Buyback items are always implicitly purchasable
+        else
+            local info = C_MerchantFrame.GetItemInfo(i)
+            if info then
+                if info.currencyID then
+                    name, texture, numAvailable = CurrencyContainerUtil.GetCurrencyContainerInfo(info.currencyID, info.numAvailable, info.name, info.texture, nil);
+                else
+                    name, texture, numAvailable = info.name, info.texture, info.numAvailable
+                end
+
+                price, quantity, isPurchasable, isUsable, extendedCost, isQuestStartItem =
+                    info.price, info.stackCount, info.isPurchasable, info.isUsable, info.hasExtendedCost, info.isQuestStartItem
+            end
+        end
+
+        if name then
+            local itemLink = isBuyback and GetBuybackItemLink(i) or GetMerchantItemLink(i)
+
+            row.Name:SetText(name)
+            row.SlotTexture:SetTexture(texture)
+
+            row.ItemButton:SetID(i)
+            row.ItemButton.link = itemLink
+            row.ItemButton.name = name
+            row.ItemButton.texture = texture
+            row.ItemButton.price = ((extendedCost and (price > 0)) or not extendedCost) and price or nil
+            row.ItemButton.extendedCost = (extendedCost and type(price) == "number") or nil
+            row.ItemButton.hasItem = true
+            row.ItemButton.showNonrefundablePrompt = not C_MerchantFrame.IsMerchantItemRefundable(i)
+
+            -- Text color and reagent quality overlay
+            MerchantFrameItem_UpdateQuality(row, row.ItemButton.link, isBound)
+
+            -- Stack & Stock
+            SetItemButtonCount(row.ItemButton, quantity)
+            SetItemButtonStock(row.ItemButton, numAvailable)
+
+            -- Quest item overlay
+            if isQuestStartItem then
+				row.ItemButton.IconQuestTexture:Show();
+			else
+				row.ItemButton.IconQuestTexture:Hide();
+			end
+
+            -- Money & currency cost
+            local moneyFrame = _G["EUI_MerchantItem"..i.."MoneyFrame"]
+            local altCurrencyFrame = _G["EUI_MerchantItem"..i.."AltCurrencyFrame"]
+            local canAfford = true
+            if isBuyback then
+                canAfford = playerMoney >= price
+            else
+                canAfford = CanAffordMerchantItem(i)
+            end
+
+            -- Reset all dynamic anchors to prevent layout conflicts
+            row.Name:ClearAllPoints()
+            row.Name:SetPoint("LEFT", row.SlotTexture, "RIGHT", 10, 0)
+            moneyFrame:ClearAllPoints()
+            altCurrencyFrame:ClearAllPoints()
+
+            if (extendedCost and (price <= 0)) then
+                -- Case 1: Alt currency only
+                local altCurrencyWidth = EUI_MerchantFrame_UpdateAltCurrency(i, i, canAfford)
+                altCurrencyFrame:SetWidth(altCurrencyWidth)
+
+                altCurrencyFrame:SetPoint("RIGHT", row, "RIGHT", -10, 0)
+
+                altCurrencyFrame:Show()
+                moneyFrame:Hide()
+
+                row.Name:SetPoint("RIGHT", altCurrencyFrame, "LEFT", -10, 0)
+            elseif (extendedCost and (price > 0)) then
+                -- Case 2: Both Money and Alt currency
+                local altCurrencyWidth = EUI_MerchantFrame_UpdateAltCurrency(i, i, canAfford)
+                altCurrencyFrame:SetWidth(altCurrencyWidth)
+
+                MoneyFrame_SetMaxDisplayWidth(moneyFrame, MAX_MONEY_DISPLAY_WIDTH - altCurrencyWidth)
+                MoneyFrame_Update(moneyFrame:GetName(), price)
+
+                local color = (canAfford == false) and "gray" or nil
+                SetMoneyFrameColor(moneyFrame:GetName(), color)
+
+                -- Sometimes, altCurrencyWidth can be 0, indicating no alt currency cost even though hasExtendedCost is true
+                -- When this happen, fallback to the anchors we do in case 3
+                if altCurrencyWidth > 0 then
+                    -- Both exist: Anchor money to alt currency
+                    altCurrencyFrame:SetPoint("RIGHT", row, "RIGHT", -10, 0)
+                    moneyFrame:SetPoint("RIGHT", altCurrencyFrame, "LEFT", -5, 0)
+                    row.Name:SetPoint("RIGHT", altCurrencyFrame, "LEFT", -10, 0)
+                    altCurrencyFrame:Show()
+                else
+                    -- Only money exists: fallback to case 3
+                    moneyFrame:SetPoint("RIGHT", row, "RIGHT", 3, 0)
+                    row.Name:SetPoint("RIGHT", moneyFrame, "LEFT", -10, 0)
+                    altCurrencyFrame:Hide()
+                end
+                moneyFrame:Show()
+            else
+                -- Case 3: Money only
+                MoneyFrame_SetMaxDisplayWidth(moneyFrame, MAX_MONEY_DISPLAY_WIDTH)
+                MoneyFrame_Update(moneyFrame:GetName(), price)
+
+                local color = (canAfford == false) and "gray" or nil
+                SetMoneyFrameColor(moneyFrame:GetName(), color)
+
+                moneyFrame:SetPoint("RIGHT", row, "RIGHT", 3, 0)
+
+                altCurrencyFrame:Hide()
+                moneyFrame:Show()
+
+                row.Name:SetPoint("RIGHT", moneyFrame, "LEFT", -10, 0)
+            end
+
+            local merchantItemID = GetMerchantItemID(i)
+            local isHeirloom = merchantItemID and C_Heirloom.IsItemHeirloom(merchantItemID)
+			local isKnownHeirloom = isHeirloom and C_Heirloom.PlayerHasHeirloom(merchantItemID)
+
+            local redTint = (not isUsable and not isHeirloom) or (not isBuyback and not isPurchasable)
+
+            -- Fade if not usable/affordable/already known heirloom
+            row.SlotTexture:SetDesaturated(not isBuyback and isKnownHeirloom)
+            if not isBuyback and (numAvailable == 0 or isKnownHeirloom) then
+                -- If not available and not usable
+                if redTint then
+                    row.SlotTexture:SetVertexColor(0.5, 0, 0)
+                else
+                    row.SlotTexture:SetVertexColor(0.5, 0.5, 0.5)
+                end
+            elseif redTint then
+                row.SlotTexture:SetVertexColor(1, 0, 0)
+            else
+                row.SlotTexture:SetVertexColor(1, 1, 1)
+            end
+
+            row:Show()
+        else
+            row:Hide()
+        end
+    end
+
+    -- Hide unused rows
+    for i = numItems + 1, #sf.rows do
+        sf.rows[i]:Hide()
+    end
+end
+
+-- Options toggle entry point: re-sync height
+EllesmereUI._Merchant_RefreshRowHeight = function()
+    local f = _G.MerchantFrame
+    if not f then return end
+    if not EllesmereUIDB.merchantShowAsList or not (f.wSkinScrollFrame and f.wSkinScrollChild) then return end
+
+    local rowHeight = (EllesmereUIDB and EllesmereUIDB.merchantListRowHeight) or 32
+    -- Rows are cached so update manually each existing rows
+    -- New rows created after will have the correct height by default.
+    for _, row in ipairs(f.wSkinScrollFrame.rows or {}) do
+        row:SetHeight(rowHeight)
+        SkinMerchantListItem(row)
+    end
+
+    -- Force a full update if change is done while merchant frame is open
+    if f:IsVisible() then
+        UpdateCustomMerchantList(f.wSkinScrollFrame, f.wSkinScrollChild)
+    end
+end
+
 -- Vendor item tile: parchment gone, flat card, white name, squared icon.
 local function SkinMerchantTile(item)
     if not item or item:IsForbidden() then return end
@@ -7676,36 +7932,46 @@ local function Skin_Merchant()
         if el then WSkin.FadeRegions(el); WSkin.Register(el, true) end
     end
 
-    -- Item tiles (10 merchant + the buyback page reuses up to 12) and the
-    -- most-recent-buyback slot on the merchant tab.
-    for i = 1, 12 do SkinMerchantTile(_G["MerchantItem" .. i]) end
-    SkinMerchantTile(_G.MerchantBuyBackItem)
-    -- Main grid 3px lower: MerchantItem1 is the chain root (the other tiles
-    -- anchor off it), so one shift moves the grid. MerchantBuyBackItem anchors
-    -- to the frame separately and stays put. One-shot, all points preserved.
-    local it1 = _G.MerchantItem1
-    if it1 and not GetFFD(it1).shifted then
-        local np = it1:GetNumPoints() or 0
-        local pts, ok = {}, np > 0
-        for i = 1, np do
-            local p, rel, rp, x, y = it1:GetPoint(i)
-            if not p then ok = false break end
-            pts[i] = { p, rel, rp, x or 0, (y or 0) - 3 }
-        end
-        if ok then
-            GetFFD(it1).shifted = true
-            it1:ClearAllPoints()
-            for i = 1, #pts do local t = pts[i]; it1:SetPoint(t[1], t[2], t[3], t[4], t[5]) end
-        end
-    end
-    -- Currency text/icons ride 10px higher on every tile (not the buyback slot).
-    for i = 1, 12 do
-        LiftMerchantCurrency(_G["MerchantItem" .. i .. "MoneyFrame"])
-        LiftMerchantCurrency(_G["MerchantItem" .. i .. "AltCurrencyFrame"])
-    end
+    if EllesmereUIDB.merchantShowAsList then
+        HideNativeMerchantGrid()
 
-    SkinLabeledPageButton(_G.MerchantPrevPageButton, "<")
-    SkinLabeledPageButton(_G.MerchantNextPageButton, ">", 2)
+        if not f.wSkinScrollFrame then
+            local sf, child = CreateMerchantScrollList(f)
+            f.wSkinScrollFrame = sf
+            f.wSkinScrollChild = child
+        end
+    else
+        -- Item tiles (10 merchant + the buyback page reuses up to 12) and the
+        -- most-recent-buyback slot on the merchant tab.
+        for i = 1, 12 do SkinMerchantTile(_G["MerchantItem" .. i]) end
+        SkinMerchantTile(_G.MerchantBuyBackItem)
+        -- Main grid 3px lower: MerchantItem1 is the chain root (the other tiles
+        -- anchor off it), so one shift moves the grid. MerchantBuyBackItem anchors
+        -- to the frame separately and stays put. One-shot, all points preserved.
+        local it1 = _G.MerchantItem1
+        if it1 and not GetFFD(it1).shifted then
+            local np = it1:GetNumPoints() or 0
+            local pts, ok = {}, np > 0
+            for i = 1, np do
+                local p, rel, rp, x, y = it1:GetPoint(i)
+                if not p then ok = false break end
+                pts[i] = { p, rel, rp, x or 0, (y or 0) - 3 }
+            end
+            if ok then
+                GetFFD(it1).shifted = true
+                it1:ClearAllPoints()
+                for i = 1, #pts do local t = pts[i]; it1:SetPoint(t[1], t[2], t[3], t[4], t[5]) end
+            end
+        end
+        -- Currency text/icons ride 10px higher on every tile (not the buyback slot).
+        for i = 1, 12 do
+            LiftMerchantCurrency(_G["MerchantItem" .. i .. "MoneyFrame"])
+            LiftMerchantCurrency(_G["MerchantItem" .. i .. "AltCurrencyFrame"])
+        end
+
+        SkinLabeledPageButton(_G.MerchantPrevPageButton, "<")
+        SkinLabeledPageButton(_G.MerchantNextPageButton, ">", 2)
+    end
 
     -- Bottom-left icon buttons (guild repair only exists in a guild).
     for _, n in ipairs({ "MerchantRepairItemButton", "MerchantRepairAllButton",
@@ -7714,6 +7980,7 @@ local function Skin_Merchant()
     end
     if _G.MerchantPageText then WSkin.Font(_G.MerchantPageText); WSkin.White(_G.MerchantPageText) end
 
+    -- Tabs
     local mTabs = {}
     for i = 1, 2 do
         local tab = _G["MerchantFrameTab" .. i]
@@ -7728,8 +7995,12 @@ local function Skin_Merchant()
         if type(_G.MerchantFrame_Update) == "function" then
             hooksecurefunc("MerchantFrame_Update", WSkin.Debounce(function()
                 if f:IsVisible() then
-                    for i = 1, 12 do SkinMerchantTile(_G["MerchantItem" .. i]) end
-                    SkinMerchantTile(_G.MerchantBuyBackItem)
+                    if EllesmereUIDB.merchantShowAsList and f.wSkinScrollFrame then
+                        UpdateCustomMerchantList(f.wSkinScrollFrame, f.wSkinScrollChild)
+                    else
+                        for i = 1, 12 do SkinMerchantTile(_G["MerchantItem" .. i]) end
+                        SkinMerchantTile(_G.MerchantBuyBackItem)
+                    end
                 end
             end))
         end
@@ -7759,9 +8030,21 @@ local function UpdateMerchantItemLevels()
     if not f then return end
     local show = EllesmereUIDB and EllesmereUIDB.merchantShowItemLevel == true
     local onSellTab = (f.selectedTab or 1) == 1
+    local numItems
+    if EllesmereUIDB.merchantShowAsList then
+        -- No need to check GetNumBuybackItems as the text is only visible on the sell tab
+        numItems = GetMerchantNumItems()
+    else
+        numItems = 12
+    end
     local render = show and onSellTab and f:IsVisible()
-    for i = 1, 12 do
-        local btn = _G["MerchantItem" .. i .. "ItemButton"]
+    for i = 1, numItems do
+        local btn
+        if EllesmereUIDB.merchantShowAsList then
+            btn = _G["EUI_MerchantItem" .. i .. "ItemButton"]
+        else
+            btn = _G["MerchantItem" .. i .. "ItemButton"]
+        end
         if btn then
             -- FontString ref lives in the engine FFD, never on Blizzard's
             -- button table. Read without creating so the disabled path costs
@@ -7773,7 +8056,11 @@ local function UpdateMerchantItemLevels()
             else
                 if not fs then
                     fs = btn:CreateFontString(nil, "OVERLAY", nil, 7)
-                    fs:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+                    if EllesmereUIDB.merchantShowAsList then
+                        fs:SetPoint("TOPLEFT", _G["EUI_MerchantItem" .. i .. "SlotTexture"], "TOPLEFT", 1, -1)
+                    else
+                        fs:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+                    end
                     local path = (EllesmereUI.GetFontPath and EllesmereUI.GetFontPath()) or "Fonts\\FRIZQT__.TTF"
                     local flag = (EllesmereUI.SlugFlag and EllesmereUI.SlugFlag("OUTLINE, SLUG")) or "OUTLINE"
                     fs:SetFont(path, 12, flag)

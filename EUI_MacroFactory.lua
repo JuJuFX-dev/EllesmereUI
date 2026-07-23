@@ -501,7 +501,7 @@ function EllesmereUI.BuildMacroFactory(parent, startY, PP)
         [250] = mergeMacros(DK_BLOOD, DK_GEN),
         [251] = mergeMacros(DK_FROST, DK_GEN),
         [252] = mergeMacros(DK_UNHOLY, DK_GEN),
-        -- Demon Hunter (577=Havoc, 581=Vengeance, 1480=Devourer/噬滅 -- Midnight Void spec)
+        -- Demon Hunter (577=Havoc, 581=Vengeance, 1480=Devourer -- Midnight Void spec)
         [577] = mergeMacros(DH_HAVOC, DH_GEN),
         [581] = mergeMacros(DH_VENG, DH_GEN),
         [1480] = mergeMacros(DH_DEVOURER, DH_GEN),

@@ -2542,6 +2542,33 @@ EllesmereUI.RegisterMigration({
 })
 
 -------------------------------------------------------------------------------
+-- Replace the CDM "Anchor First Row" boolean with the rowGrowDirection enum.
+--
+-- anchorFirstRow pinned the leading perpendicular edge (TOP on horizontal
+-- bars, LEFT on vertical bars), i.e. extra rows grew downward/rightward.
+-- The equivalent enum values are "DOWN" (horizontal) / "RIGHT" (vertical);
+-- unset stays unset (centered growth, the default for both models).
+-------------------------------------------------------------------------------
+EllesmereUI.RegisterMigration({
+    id          = "cdm_row_grow_direction_v1",
+    scope       = "profile",
+    description = "Migrate CDM anchorFirstRow booleans to the rowGrowDirection enum.",
+    body = function(ctx)
+        local cdm = ctx.profile.addons and ctx.profile.addons.EllesmereUICooldownManager
+        local bars = cdm and cdm.cdmBars and cdm.cdmBars.bars
+        if not bars then return end
+        for _, bar in ipairs(bars) do
+            if bar.anchorFirstRow then
+                if bar.rowGrowDirection == nil then
+                    bar.rowGrowDirection = bar.verticalOrientation and "RIGHT" or "DOWN"
+                end
+                bar.anchorFirstRow = nil
+            end
+        end
+    end,
+})
+
+-------------------------------------------------------------------------------
 -- Migrate per-profile secondary threshold settings into the new thresholdSpecs
 -- array. If the user had thresholdEnabled, create an "All Specs" entry with
 -- their existing threshold and tick values. If disabled, leave empty.
@@ -3588,6 +3615,96 @@ EllesmereUI.RegisterMigration({
                 end
             end
         end
+    end,
+})
+
+EllesmereUI.RegisterMigration({
+    id          = "uf_clear_stale_attached_power_border_v1",
+    scope       = "profile",
+    description = "Zero stale powerBorderSize on attached power bars so the new attached divider does not appear uninvited for users who set a border size while detached and later reattached.",
+    body = function(ctx)
+        -- Before attached dividers existed, the Border Size slider was
+        -- disabled while the bar was attached, so a stored size > 0 with an
+        -- attached position is always a leftover from a detached phase --
+        -- never a divider the user asked for. Clearing it back to the
+        -- default (0 = off) keeps frames looking identical across the
+        -- update; opting into the divider is one slider drag.
+        -- Positions other than above/below are untouched: detached keeps
+        -- its full border, and "none" renders nothing either way.
+        local uf = ctx.profile.addons and ctx.profile.addons.EllesmereUIUnitFrames
+        if type(uf) ~= "table" then return end
+        -- Units whose powerPosition DEFAULT is attached ("below"); for them a
+        -- missing powerPosition key still means attached. The mini frames
+        -- default to "none", so a missing key there renders no border.
+        local attachedDefault = { player = true, target = true, focus = true, boss = true }
+        for unitKey, s in pairs(uf) do
+            if type(s) == "table"
+                and type(s.powerBorderSize) == "number" and s.powerBorderSize > 0 then
+                local pos = s.powerPosition
+                if pos == nil and attachedDefault[unitKey] then pos = "below" end
+                if pos == "above" or pos == "below" then
+                    s.powerBorderSize = nil
+                end
+            end
+        end
+    end,
+})
+
+-- Shared body: convert collided-buff cooldownID claims (bs.assignedBuffCdIDs,
+-- a side-table with no order) into cd-claim markers stored inside
+-- assignedSpells. Naturally idempotent: assignedBuffCdIDs is cleared after
+-- migrating, so a second run finds nothing per bar. Also called at
+-- profile-import time (EllesmereUI_Profiles.lua) so old export strings
+-- carrying the side-table keep their claims.
+--
+-- Mirrors ns.CD_CLAIM_MARKER_BASE / ns.CdClaimMarker in
+-- EllesmereUICooldownManager.lua (-(3000000000 + cooldownID)). Inlined
+-- rather than called: the CDM child addon loads AFTER the login migration
+-- runs, so its ns table isn't available yet.
+function EllesmereUI.MigrateCdmBuffCdClaims(specProf)
+    local CD_CLAIM_MARKER_BASE = 3000000000
+    local barSpells = type(specProf) == "table" and specProf.barSpells
+    if type(barSpells) ~= "table" then return end
+    for _, bs in pairs(barSpells) do
+        if type(bs) == "table" and type(bs.assignedBuffCdIDs) == "table"
+           and next(bs.assignedBuffCdIDs) then
+            if not bs.assignedSpells then bs.assignedSpells = {} end
+            -- Dedup against any marker already present (e.g. a prior
+            -- partial run interrupted by an error).
+            local present = {}
+            for _, id in ipairs(bs.assignedSpells) do
+                if type(id) == "number" and id <= -CD_CLAIM_MARKER_BASE then
+                    present[-id - CD_CLAIM_MARKER_BASE] = true
+                end
+            end
+            for cdID in pairs(bs.assignedBuffCdIDs) do
+                if type(cdID) == "number" and not present[cdID] then
+                    bs.assignedSpells[#bs.assignedSpells + 1] = -(CD_CLAIM_MARKER_BASE + cdID)
+                end
+            end
+            bs.assignedBuffCdIDs = nil
+        end
+    end
+end
+
+EllesmereUI.RegisterMigration({
+    id          = "cdm_buff_cd_claim_markers",
+    scope       = "specProfile",
+    description = "Convert collided-buff cooldownID claims (bs.assignedBuffCdIDs, a side-table with no order) into cd-claim markers stored inside assignedSpells, so a claimed slot gets a real position and can be drag-reordered like any other tracked buff.",
+    body = function(ctx)
+        EllesmereUI.MigrateCdmBuffCdClaims(ctx.specProfile)
+    end,
+})
+
+EllesmereUI.RegisterMigration({
+    id          = "qol_movement_alert_precision_normalize_v2",
+    scope       = "profile",
+    description = "Normalize Movement Alert precision to a clean 0 or 1. A legacy numeric-input control could leave a non-binary value -- the string \"1\", or a stored -0 -- that the Show Decimal toggle mishandled and that built an invalid \"%.-0f\" format string. Normalized unconditionally (no type guard) because -0 is a number, so the earlier number-only guard skipped it. Positive -> 1 (decimals on); zero/negative/garbage -> 0 (off).",
+    body = function(ctx)
+        local qol = ctx.profile.addons and ctx.profile.addons.EllesmereUIQoL
+        local ma = qol and qol.movementAlert
+        if type(ma) ~= "table" or ma.precision == nil then return end
+        ma.precision = (tonumber(ma.precision) or 1) > 0 and 1 or 0
     end,
 })
 
