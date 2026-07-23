@@ -41,7 +41,7 @@ local FALLBACK_FONT = "Interface\\AddOns\\EllesmereUI\\media\\fonts\\Expressway.
 
 local SATED_DEBUFFS = {
     [57723] = true, [57724] = true, [80354] = true, [95809] = true,
-    [160455] = true, [264689] = true, [390435] = true, [428628] = true,
+    [160455] = true, [264689] = true, [390435] = true,
 }
 local ALWAYS_HIDE_DEBUFFS = {
     [1254550] = true, -- Arcane Empowerment

@@ -4568,7 +4568,6 @@ local SATED_DEBUFFS = {
     [160455] = true,  -- Fatigued (Netherwinds)
     [264689] = true,  -- Fatigued (Primal Rage)
     [390435] = true,  -- Exhaustion (Fury of the Aspects)
-    [428628] = true,  -- Exhaustion (variant)
 }
 
 -- Debuff filter check based on user setting

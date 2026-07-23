@@ -3396,16 +3396,42 @@ function ns.BM_ApplyPreviewIndicators(f, index, s)
                             -- Running cursor (matches live render): each icon advances
                             -- the next by its own size so size offsets reflow neighbors.
                             local cursor = 0
+                            local pvSelfPoint = ind.position or "TOPLEFT"
                             if growDir == "CENTER" then
-                                local totalW = 0
+                                local totalW, firstSz = 0, nil
                                 for si2 = 1, previewTotal do
                                     local so2 = ind.sizeOffsets and ind.sizeOffsets[ind.spells[si2]] or 0
                                     local s2 = sz + so2 * iscale
                                     if s2 < 1 then s2 = 1 end
+                                    if not firstSz then firstSz = s2 end
                                     totalW = totalW + s2
                                 end
                                 if previewTotal > 1 then totalW = totalW + gap * (previewTotal - 1) end
                                 cursor = -totalW / 2
+                                if EllesmereUI.IS_121 then
+                                    -- 12.1 live parity: the container renderers
+                                    -- x-center the run ON the position point
+                                    -- (chains pin the container's x-center there,
+                                    -- slot mode uses symmetric offsets) while
+                                    -- keeping the legacy vertical seat. Anchoring
+                                    -- by the pos corner with the -totalW/2 start
+                                    -- skews the run by the corner's x-alignment
+                                    -- (half an icon at center-x positions), so on
+                                    -- 12.1 icons anchor by the pos's vertical
+                                    -- part + horizontal CENTER with a symmetric
+                                    -- start. The 12.0 branch below stays: the
+                                    -- legacy live renderer uses the pos-corner
+                                    -- math, and the preview must match it there.
+                                    local posU = string.upper(pvSelfPoint)
+                                    if posU:find("TOP", 1, true) then
+                                        pvSelfPoint = "TOP"
+                                    elseif posU:find("BOTTOM", 1, true) then
+                                        pvSelfPoint = "BOTTOM"
+                                    else
+                                        pvSelfPoint = "CENTER"
+                                    end
+                                    cursor = -totalW / 2 + (firstSz or sz) / 2
+                                end
                             end
                             for si, sid in ipairs(ind.spells) do
                                 if si > maxShow then break end
@@ -3433,7 +3459,7 @@ function ns.BM_ApplyPreviewIndicators(f, index, s)
                                     elseif growDir == "UP" then
                                         gy = cursor; cursor = cursor + iconSz + gap
                                     end
-                                    fr:SetPoint(ind.position or "TOPLEFT", health, ind.position or "TOPLEFT",
+                                    fr:SetPoint(pvSelfPoint, health, ind.position or "TOPLEFT",
                                                 (ind.offsetX or 0) * iscale + gx, (ind.offsetY or 0) * iscale + gy)
                                     -- "Hide Icons" (icon type only): keep the frame
                                     -- alpha (so the stack count still previews) but

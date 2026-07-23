@@ -744,6 +744,7 @@ L["Show In Instances"] = "인스턴스에서도 표시"
 L["ADDITIONAL SETTINGS"] = "추가 설정"
 L["BUFFS AND DEBUFFS"] = "강화 및 약화 효과"
 L["Show Expand Button"] = "확장 버튼 표시"
+L["Behind Unit Frame"] = "유닛 프레임 뒤에 표시"
 L["Enable External Defensives Frame"] = "외부 생존기 프레임 사용"
 L["EXTERNAL DEFENSIVES FRAME"] = "외부 생존기 프레임"
 -- add RaidFrames (공격대 프레임)
@@ -1520,8 +1521,6 @@ L["Select which specs you want %1$s to be assigned to"] = "%1$s에 할당할 전
 L["Snap Target: %1$s"] = "스냅 대상: %1$s"
 L["Snap to: %1$s"] = "스냅 위치: %1$s"
 L["This will overwrite %1$s settings on the selected profiles with your current settings. Continue?"] = "선택한 프로필의 %1$s 설정을 현재 설정으로 덮어씁니다. 계속하시겠습니까?"
-L["Select which specs you want %s to be assigned to"] = "%s에 할당할 전문화를 선택하세요"
-L["Quick Keybind Mode"] = "단축키 빠른 설정 모드"
 
 L["'%s' is now customized for %s."] = "'%s' 이(가) %s 에 맞게 사용자 지정되었습니다."
 L["After anchoring, drag to an edge and choose a grow direction to maintain its corner spot as bars change size."] = "고정 후 가장자리로 끌어다 놓고 확장 방향을 고르면, 바 크기가 바뀌어도 모서리 자리를 유지합니다."
@@ -2128,10 +2127,8 @@ L["Widens the clickable hitbox of enemy nameplates. 100% = matches bar width. In
 -- add Nameplates Popup (이름표 팝업)
 L["Changing Max Debuffs requires a UI reload to take effect."] = "'최대 약화 효과 개수' 변경은 UI 리로드 후 적용됩니다."
 -- add Nameplates Format (이름표 포맷)
-L["%1$s Slot Settings"] = "%s 슬롯 설정"   -- core concats slotLabel.." Slot Settings" ("Top Slot Settings") -> needs %s key so reverse-format compiles and re-translates the "Top" capture; %1$s/exact = dead key (본체가 slotLabel.." Slot Settings" 영문 concat, %s 키라야 역포맷으로 "Top" 캡처 재번역, %1$s/exact면 죽은 키)
+L["%1$s Slot Settings"] = "%s 슬롯 설정"   -- live key: core calls Lf("%1$s Slot Settings", L(slotLabel)) (본체가 Lf로 호출하는 살아있는 키)
 L["Level %d"] = "%d레벨"
-L["%s Slot Settings"] = "%s 슬롯 설정"   -- core concats slotLabel.." Slot Settings" ("Top Slot Settings") -> needs %s key so reverse-format compiles and re-translates the "Top" capture; %1$s/exact = dead key (본체가 slotLabel.." Slot Settings" 영문 concat, %s 키라야 역포맷으로 "Top" 캡처 재번역, %1$s/exact면 죽은 키)
-L["%s Text Settings"] = "%s 글자 설정"   -- text gear: slotLabel.." Settings" ("Top Text Settings") -> re-translates "Top" capture; no overlap with "Slot Settings" pattern (글자 톱니: slotLabel.." Settings", "Top" 캡처 재번역, "Slot Settings" 패턴과 미겹침)
 
 L["Colors the full-size spell icon border with your target border color while the cast bar wrap border is active."] = "시전 바 감싸기 테두리가 활성일 때, 큰 주문 아이콘 테두리를 대상 테두리 색으로 칠합니다."
 L["Disable Show All Enemy Buffs"] = "모든 적 강화 효과 표시 끄기"
@@ -2953,7 +2950,6 @@ L["Hide In Combat"]       = "전투 중 숨김"
 L["Icon Glow"]            = "아이콘 효과"
 L["Re-sync %1$s?"] = "%1$s 다시 동기화하시겠습니까?"
 L["(no spells on bar)"] = "(바에 주문 없음)"
-L["Missing Spells?\nAdd in Blizzard CDM"] = "누락된 주문이 있나요?\n블리자드 CDM에 추가"
 
 L["+ Show Less Common Indicator Options"] = "+ 자주 안 쓰는 표시기 옵션 보기"
 L["Combat Icon"] = "전투 아이콘"
@@ -5086,7 +5082,6 @@ L["Reagent Bag (%d)"] = "재료 가방 (%d)"
 L["The Armory (%d)"] = "장비 (%d)"
 L["Warbank %s"] = "전투부대 은행 %s"
 L["Warbank Tab %d"] = "전투부대 은행 탭 %d"
-L["공제"] = "제나스"   -- bag keystone Korean cut -> short name (가방 한글컷 -> 단축명)
 
 L["Bag %d"] = "가방 %d"
 L["Bank Tab %s"] = "은행 탭 %s"
@@ -5808,54 +5803,7 @@ L["Shows a clickable list of online friends and guildmates in the Social and Gui
 L["Shows the spec icon next to the text."] = "글자 옆에 전문화 아이콘을 표시합니다."
 L["Social & Guild Tooltip"] = "친구 및 길드 툴팁"
 L["Top/Bottom Info Bar"] = "위/아래 정보 바"
-
--- 2026-07-21 추가번역
-L["BAR BACKGROUND"] = "바 배경"
-L["Text: Name Duration"] = "텍스트: 이름 남은시간"
-L["Text: Duration Name"] = "텍스트: 남은시간 이름"
-L["TTS Voice"] = "TTS 음성"
-L["Combat Only"] = "전투 중에만"
-L["MOVEMENT COOLDOWN ALERT"] = "이동기 쿨다운 경고"
-L["Display Mode"] = "표시 모드"
-L["Activate Movement Preview"] = "이동기 미리보기 활성화"
-L["Deactivate Movement Preview"] = "이동기 미리보기 비활성화"
-L["Right-Click to set custom alert text."] = "우클릭하여 사용자 지정 경고 텍스트를 설정합니다."
-L["Enable Movement Alerts"] = "이동기 경고 활성화"
-L["TRACKED SPELLS"] = "추적 중인 주문"
-L["+ Add Spell"] = "+ 주문 추가"
-L["EXTRA TRACKING"] = "추가 추적"
-L["Enable Time Spiral Tracker"] = "시간의 나선 추적 활성화"
-L["Enable Gateway Shard Alert"] = "관문 파편 경고 활성화"
-L["Movement Alerts"] = "이동기 경고"
-L["Target Distance Text"] = "대상 거리 텍스트"
-L["EXTERNAL DEFENSIVES FRAME"] = "외부 생존기 창"
-L["Enable External Defensives Frame"] = "외부 생존기 창 활성화"
-L["Pandemic Glow Color"] = "팬데믹 반짝임 색상"
-L["Swap Light/Reckless Pots When Missing"] = "물약이 없을 때 가벼운/무모한 물약으로 교체"
-L["Requires Bar display mode"] = "바 표시 모드가 필요합니다"
-L["Only show the alert while in combat."] = "전투 중일 때만 경고를 표시합니다."
-L["Enable this class above"] = "위의 이 직업 활성화"
-L["Resurrect Accept Glow"] = "부활 수락 버튼 반짝임"
-L["Button Border Size"] = "버튼 테두리 크기"
-L["Element & Text Color"] = "요소 및 텍스트 색상"
-L["Enable Blizzard Pause Menu"] = "블리자드 일시정지 메뉴 활성화"
-L["Sidebar"] = "사이드바"
-L["IDLE FADE"] = "대기 시 투명도"
-L["Enable Idle Fade"] = "대기 시 투명도 활성화"
-L["Fade Delay"] = "투명도 전환 지연 시간"
-L["Fade Strength"] = "투명도 강도"
-L["Separate Sidebar"] = "사이드바 분리"
-L["External Defensives"] = "외부 방어기"
-
-L["Separates the sidebar from the chat panel and gives it its own background and border."] = "사이드바를 대화창 패널에서 분리하여 독자적인 배경과 테두리를 부여합니다."
-L["Forces which way the default screen-anchored tooltip expands as lines are added. Default lets Blizzard decide from the tooltip's screen position."] = "줄이 추가될 때 화면 고정 기본 툴팁이 어느 방향으로 확장될지 강제로 지정합니다. 기본값은 툴팁의 화면 위치에 따라 블리자드 기본 설정으로 결정됩니다."
-L["Makes the game tooltip follow your mouse cursor instead of showing at its fixed screen position (drag the Tooltip box in Unlock Mode to change that). Use the arrows icon to pick the position relative to the cursor and fine-tune the X/Y offset."] = "게임 툴팁이 화면의 고정된 위치 대신 마우스 커서를 따라다니도록 합니다 (고정 위치를 바꾸려면 잠금 해제 모드에서 툴팁 상자를 드래그하세요). 화살표 아이콘을 사용해 커서 기준 위치를 선택하고 X/Y 좌표 오프셋을 미세 조정할 수 있습니다."
-L["Adds a glowing, pulsating border around the Accept button of resurrection popups so a pending resurrect is hard to miss. Follows the Element & Text Color setting. Applies instantly, no reload needed."] = "부활 창의 수락 버튼 테두리에 펄스 형태의 반짝임 효과를 추가하여 대기 중인 부활을 쉽게 알아채도록 합니다. 요소 및 텍스트 색상 설정을 따릅니다. UI 재시작  없이 즉시 적용됩니다."
-L["Flashes a banner whenever a tracked mobility spell's cooldown is proc-reset. Use Unlock Mode to reposition/resize."] = "추적 중인 이동기의 쿨다운이 발동 효과로 초기화될 때마다 배너를 반짝입니다. 위치나 크기를 변경하려면 잠금 해제 모드를 사용하세요."
-L["Warlock only. Alerts when your Gateway Control Shard is usable. Use Unlock Mode to reposition/resize."] = "흑마법사 전용. 관문 조종 파편을 사용할 수 있을 때 경고합니다. 위치나 크기를 변경하려면 잠금 해제 모드를 사용하세요."
-L["Shows the approximate distance to your current target as movable on-screen text (default 30-35). Use the cog for format, alignment, and text size; use Unlock Mode to position or Anchor to your Player Frame."] = "현재 대상과의 대략적인 거리를 화면에 이동 가능한 텍스트로 표시합니다 (기본값 30-35). 톱니바퀴 아이콘을 사용해 형식, 정렬, 텍스트 크기를 설정할 수 있으며, 잠금 해제 모드로 위치를 이동하거나 플레이어 프레임에 고정할 수 있습니다."
-L["Speaks the ability name once, right when it comes off cooldown -- not a running countdown. None = no speech."] = "기술의 재사용 대기시간(쿨다운)이 완료되는 순간 기술 이름을 한 번 읽어줍니다. (카운트다운 방식 아님). 없음 = 음성 끄기."
-L["Shows the checked classes' mobility spell(s) counting down on cooldown. Nothing checked = feature disabled. Use Unlock Mode to reposition/resize."] = "체크한 직업의 이동기 쿨다운을 카운트다운 형태로 표시합니다. 아무것도 체크하지 않으면 기능이 비활성화됩니다. 위치나 크기를 변경하려면 잠금 해제 모드를 사용하세요."
+L["External Defensives"] = "외부 생존기"
 
 -- == M+ keystone dungeon abbreviations (신화+ 던전 약어 -> 한글 단축명) ==
 -- Minimap portal table (spellID -> code) + bag keystone display produce these English codes;

@@ -734,13 +734,19 @@ local function BuildFxEffects(frame, sy, fxOwner)
             UpdateFxGlowState()
         end
 
-        -- Row 2: Border (+ swatch, the DISPLAY-section Border style) | blank
+        -- Row 2: Border (+ swatch, the DISPLAY-section Border style) | Size
+        -- (icon size for the matched filters; 0 = the grid's own size).
         local bRow
         bRow, hh = W:DualRow(frame, sy,
             { type = "slider", text = "Border", min = 0, max = 4, step = 1, trackWidth = 120,
               getValue = function() return e.borderSize or 0 end,
               setValue = function(v) e.borderSize = v; DmApply() end },
-            { type = "label", text = "" }); sy = sy - hh
+            { type = "slider", text = "Size", min = 0, max = 40, step = 1, trackWidth = 120,
+              getValue = function() return e.size or 0 end,
+              setValue = function(v)
+                  e.size = (v and v > 0) and v or nil
+                  DmApply()
+              end }); sy = sy - hh
         do
             local rgn = bRow._leftRegion
             local swatch = EllesmereUI.BuildColorSwatch(rgn, bRow:GetFrameLevel() + 3,
@@ -2014,6 +2020,7 @@ function ns.DMP_BuildPage(pageName, parent, yOffset)
     outerRoot:SetFrameLevel(scrollFrame:GetFrameLevel() + 5)
     if ns._dmRoot then ns._dmRoot:Hide(); ns._dmRoot:SetParent(nil) end
     if ns._dmAddPopup then ns._dmAddPopup:Hide() end
+    if ns._dmExcludePopup then ns._dmExcludePopup:Hide(); ns._dmExcludePopup = nil end
     ns._dmRoot = outerRoot
 
     local dm = DmTable()
@@ -2387,28 +2394,28 @@ function ns.DMP_BuildPage(pageName, parent, yOffset)
         end)
     end
 
-    -- Dismissible helper subtitle under the preview (BM parity)
-    if not (EllesmereUIDB and EllesmereUIDB.dmIconHintDismissed) then
-        local hintBtn = CreateFrame("Button", nil, leftFixed)
-        hintBtn:SetPoint("TOP", pvFrame, "BOTTOM", 0, -8)
-        local hintFS = hintBtn:CreateFontString(nil, "OVERLAY")
-        hintFS:SetFont(fontPath, 11, "")
-        hintFS:SetAllPoints(hintBtn)
-        hintFS:SetJustifyH("CENTER")
-        hintFS:SetWordWrap(false)
-        hintFS:SetTextColor(0.75, 0.75, 0.75, 0.65)
-        hintFS:SetText(L("Left click any preview element to edit it"))
-        hintBtn:SetSize(hintFS:GetStringWidth() + 8, 14)
-        hintBtn:SetScript("OnEnter", function() hintFS:SetTextColor(1, 1, 1, 0.85) end)
-        hintBtn:SetScript("OnLeave", function() hintFS:SetTextColor(0.75, 0.75, 0.75, 0.65) end)
-        hintBtn:SetScript("OnClick", function()
-            if not EllesmereUIDB then EllesmereUIDB = {} end
-            EllesmereUIDB.dmIconHintDismissed = true
-            EllesmereUI:RefreshPage(true)
+    -- "Edit Excluded Debuffs" accent link under the preview (replaced the
+    -- dismissible click-hint): opens the spellID blacklist popup.
+    do
+        local xBtn = CreateFrame("Button", nil, leftFixed)
+        xBtn:SetPoint("TOP", pvFrame, "BOTTOM", 0, -8)
+        local xar, xag, xab = 1, 0.82, 0.30
+        if EllesmereUI.GetAccentColor then xar, xag, xab = EllesmereUI.GetAccentColor() end
+        local xFS = xBtn:CreateFontString(nil, "OVERLAY")
+        xFS:SetFont(fontPath, 14, "")
+        xFS:SetAllPoints(xBtn)
+        xFS:SetJustifyH("CENTER")
+        xFS:SetWordWrap(false)
+        xFS:SetTextColor(xar, xag, xab)
+        xFS:SetAlpha(0.85)
+        xFS:SetText(L("Edit Excluded Debuffs"))
+        xBtn:SetSize(xFS:GetStringWidth() + 8, 16)
+        xBtn:SetScript("OnEnter", function() xFS:SetAlpha(1) end)
+        xBtn:SetScript("OnLeave", function() xFS:SetAlpha(0.85) end)
+        xBtn:SetScript("OnClick", function()
+            if ns.DMP_ShowExcludePopup then ns.DMP_ShowExcludePopup() end
         end)
         ly = ly - sectionH - 10
-    else
-        ly = ly - sectionH
     end
 
     -------------------------------------------------------------------
@@ -2603,6 +2610,256 @@ local fdScrollPos = 0 -- preserved spell-list scroll across editor rebuilds
 -- standard input popup + delete via the standard confirm popup); left =
 -- the selected filter's spells as checkbox rows using the checkbox-
 -- dropdown widget's exact visuals, grouped by class.
+-- ---------------------------------------------------------------------------
+--  Excluded Debuffs popup (DM): user-managed spellID blacklist merged into
+--  every debuff record's excludeSpellIDs by the runtime. 68824's
+--  never-secret identity-gate exemption makes these excludes work on
+--  friendly units for never-secret spells (Sated et al -- the seed);
+--  secret-flagged entries are accepted but inert, so their rows dim with
+--  an explanatory tooltip. Standard popup chrome (Filter Editor pattern).
+-- ---------------------------------------------------------------------------
+function ns.DMP_ShowExcludePopup()
+    if ns._dmExcludePopup then ns._dmExcludePopup:Hide(); ns._dmExcludePopup = nil end
+    local list = ns.DM_ExcludeList and ns.DM_ExcludeList()
+    if not list then return end
+    local ar, ag, ab = 1, 0.82, 0.30
+    if EllesmereUI.GetAccentColor then ar, ag, ab = EllesmereUI.GetAccentColor() end
+
+    local POPUP_W, POPUP_H = 400, 480
+
+    local dimmer = CreateFrame("Frame", nil, UIParent)
+    dimmer:SetFrameStrata("FULLSCREEN_DIALOG")
+    dimmer:SetAllPoints(UIParent)
+    dimmer:EnableMouse(true)
+    dimmer:EnableMouseWheel(true)
+    dimmer:SetScript("OnMouseWheel", function() end)
+    dimmer:SetScript("OnMouseDown", function()
+        dimmer:Hide()
+        ns._dmExcludePopup = nil
+    end)
+    local dimTex = EllesmereUI.SolidTex(dimmer, "BACKGROUND", 0, 0, 0, 0.25)
+    dimTex:SetAllPoints()
+    ns._dmExcludePopup = dimmer
+
+    local popup = CreateFrame("Frame", nil, dimmer)
+    popup:SetSize(POPUP_W, POPUP_H)
+    popup:SetPoint("CENTER", UIParent, "CENTER", 0, 20)
+    popup:SetFrameStrata("FULLSCREEN_DIALOG")
+    popup:SetFrameLevel(dimmer:GetFrameLevel() + 10)
+    popup:EnableMouse(true)
+    local popBg = EllesmereUI.SolidTex(popup, "BACKGROUND", 0.06, 0.08, 0.10, 1)
+    popBg:SetAllPoints()
+    EllesmereUI.MakeBorder(popup, 1, 1, 1, 0.15)
+    local ppScale = EllesmereUI.GetPopupScale and EllesmereUI.GetPopupScale() or 1
+    popup:SetScale(ppScale)
+
+    local title = EllesmereUI.MakeFont(popup, 16, "", 1, 1, 1)
+    title:SetPoint("TOP", popup, "TOP", 0, -18)
+    title:SetText(EllesmereUI.L("Excluded Debuffs"))
+
+    local sub = EllesmereUI.MakeFont(popup, 11, nil, 0.65, 0.65, 0.65)
+    sub:SetPoint("TOP", title, "BOTTOM", 0, -6)
+    sub:SetWidth(POPUP_W - 40)
+    sub:SetJustifyH("CENTER")
+    sub:SetWordWrap(true)
+    sub:SetText(EllesmereUI.L("Debuffs on this list never display on the raid frames."))
+
+    -- Close X (borderless, editor style)
+    do
+        local close = CreateFrame("Button", nil, popup)
+        close:SetSize(19, 19)
+        close:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -13, -8)
+        close:SetFrameLevel(popup:GetFrameLevel() + 5)
+        local closeIcon = close:CreateTexture(nil, "ARTWORK")
+        closeIcon:SetAllPoints()
+        closeIcon:SetTexture("Interface\\AddOns\\EllesmereUI\\media\\icons\\eui-close.png")
+        closeIcon:SetAlpha(0.40)
+        closeIcon:SetSnapToPixelGrid(false)
+        closeIcon:SetTexelSnappingBias(0)
+        close:SetScript("OnEnter", function() closeIcon:SetAlpha(0.50) end)
+        close:SetScript("OnLeave", function() closeIcon:SetAlpha(0.40) end)
+        close:SetScript("OnClick", function()
+            dimmer:Hide()
+            ns._dmExcludePopup = nil
+        end)
+    end
+
+    local function Rebuild()
+        ns.DMP_ShowExcludePopup()
+    end
+
+    -- "Add Spell ID" button (standard popup-button styling). The input
+    -- popup singleton predates this popup, so raise it above us on open.
+    do
+        local btn = CreateFrame("Button", nil, popup)
+        btn:SetSize(120, 24)
+        btn:SetPoint("TOP", sub, "BOTTOM", 0, -10)
+        btn:SetFrameLevel(popup:GetFrameLevel() + 2)
+        local bg = EllesmereUI.SolidTex(btn, "BACKGROUND", 0, 0, 0, 0.5)
+        bg:SetAllPoints()
+        local brd = EllesmereUI.MakeBorder(btn, 1, 1, 1, 0.25)
+        local lbl = EllesmereUI.MakeFont(btn, 12, nil, 1, 1, 1)
+        lbl:SetAlpha(0.6)
+        lbl:SetPoint("CENTER")
+        lbl:SetText(EllesmereUI.L("Add Spell ID"))
+        btn:SetScript("OnEnter", function()
+            lbl:SetAlpha(0.9)
+            if brd and brd.SetColor then brd:SetColor(ar, ag, ab, 0.6) end
+        end)
+        btn:SetScript("OnLeave", function()
+            lbl:SetAlpha(0.6)
+            if brd and brd.SetColor then brd:SetColor(1, 1, 1, 0.25) end
+        end)
+        btn:SetScript("OnClick", function()
+            EllesmereUI:ShowInputPopup({
+                title = "Add Excluded Debuff",
+                message = "Enter the debuff's spell ID.",
+                placeholder = "Spell ID",
+                confirmText = "Add",
+                cancelText = "Cancel",
+                onConfirm = function(text)
+                    local id = tonumber(text and text:match("%d+"))
+                    if id and id > 0 then
+                        list[id] = true
+                        DmApply()
+                        Rebuild()
+                    end
+                end,
+            })
+            local d = _G.EUIInputDimmer
+            if d and ns._dmExcludePopup then
+                d:SetFrameLevel(popup:GetFrameLevel() + 40)
+                local p2 = _G.EUIInputPopup
+                if p2 then p2:SetFrameLevel(d:GetFrameLevel() + 10) end
+            end
+        end)
+        popup._addBtn = btn
+    end
+
+    -- Scrollable entry list: icon + name (+ gray id) + remove X per row.
+    local scroll = CreateFrame("ScrollFrame", nil, popup)
+    scroll:SetPoint("TOPLEFT", popup, "TOPLEFT", 14, -110)
+    scroll:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -14, 12)
+    local child = CreateFrame("Frame", nil, scroll)
+    child:SetWidth(POPUP_W - 28)
+    scroll:SetScrollChild(child)
+    scroll:EnableMouseWheel(true)
+    scroll:SetScript("OnMouseWheel", function(self, delta)
+        local ms = math.max(0, child:GetHeight() - self:GetHeight())
+        if ms <= 0 then return end
+        self:SetVerticalScroll(math.max(0, math.min(ms,
+            (self:GetVerticalScroll() or 0) - delta * 58)))
+    end)
+
+    -- Sorted by name (unresolved ids sort by number at the end).
+    local ids = {}
+    for id in pairs(list) do ids[#ids + 1] = id end
+    local names = {}
+    for i = 1, #ids do
+        names[ids[i]] = (C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(ids[i])) or nil
+    end
+    table.sort(ids, function(a, b)
+        local na, nb = names[a], names[b]
+        if na and nb then
+            if na ~= nb then return na < nb end
+            return a < b
+        end
+        if na then return true end
+        if nb then return false end
+        return a < b
+    end)
+
+    local ROW_H = 29
+    local ry = 0
+    for i = 1, #ids do
+        local id = ids[i]
+        local row = CreateFrame("Frame", nil, child)
+        row:SetSize(POPUP_W - 28, ROW_H)
+        row:SetPoint("TOPLEFT", child, "TOPLEFT", 0, ry)
+
+        local icon = row:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(22, 22)
+        icon:SetPoint("LEFT", row, "LEFT", 4, 0)
+        local tex = C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(id)
+        icon:SetTexture(tex or "Interface\\Icons\\INV_Misc_QuestionMark")
+        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+        local nameFS = EllesmereUI.MakeFont(row, 13, nil, 1, 1, 1)
+        nameFS:SetPoint("LEFT", icon, "RIGHT", 8, 0)
+        nameFS:SetPoint("RIGHT", row, "RIGHT", -92, 0)
+        nameFS:SetJustifyH("LEFT")
+        nameFS:SetWordWrap(false)
+        nameFS:SetText(names[id] or ("Spell " .. id))
+
+        local idFS = EllesmereUI.MakeFont(row, 10, nil, 0.5, 0.5, 0.5)
+        idFS:SetPoint("RIGHT", row, "RIGHT", -28, 0)
+        idFS:SetJustifyH("RIGHT")
+        idFS:SetText(tostring(id))
+
+        -- Never-secret probe: a secret-flagged spell is legal to LIST but
+        -- the engine ignores its exclude on friendlies -- dim + explain.
+        -- The query namespace may be privileged; degrade silently.
+        local inert = false
+        if C_Secrets and C_Secrets.GetSpellAuraSecrecy and Enum and Enum.SecrecyLevel then
+            local ok, lvl = pcall(C_Secrets.GetSpellAuraSecrecy, id)
+            if ok and lvl ~= nil and lvl ~= Enum.SecrecyLevel.NeverSecret then
+                inert = true
+            end
+        end
+        if inert then
+            icon:SetDesaturated(true)
+            icon:SetAlpha(0.45)
+            nameFS:SetAlpha(0.45)
+            idFS:SetAlpha(0.45)
+            row:EnableMouse(true)
+            row:SetScript("OnEnter", function(self)
+                EllesmereUI.ShowWidgetTooltip(self, EllesmereUI.L(
+                    "Secret-flagged spell: the game only honors excludes for never-secret debuffs, so this entry has no effect."))
+            end)
+            row:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+        end
+
+        local del = CreateFrame("Button", nil, row)
+        del:SetSize(14, 14)
+        del:SetPoint("RIGHT", row, "RIGHT", -6, 0)
+        del:SetFrameLevel(row:GetFrameLevel() + 2)
+        del:SetAlpha(0.5)
+        local dx = del:CreateTexture(nil, "OVERLAY")
+        dx:SetAllPoints()
+        dx:SetTexture("Interface\\AddOns\\EllesmereUI\\media\\icons\\eui-close.png")
+        dx:SetSnapToPixelGrid(false)
+        dx:SetTexelSnappingBias(0)
+        del:SetScript("OnEnter", function(self)
+            self:SetAlpha(0.9)
+            EllesmereUI.ShowWidgetTooltip(self, EllesmereUI.L("Remove"))
+        end)
+        del:SetScript("OnLeave", function(self)
+            self:SetAlpha(0.5)
+            EllesmereUI.HideWidgetTooltip()
+        end)
+        del:SetScript("OnClick", function()
+            list[id] = nil
+            DmApply()
+            Rebuild()
+        end)
+
+        local sep = row:CreateTexture(nil, "ARTWORK")
+        sep:SetHeight(1)
+        sep:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 2, 0)
+        sep:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -2, 0)
+        sep:SetColorTexture(1, 1, 1, 0.04)
+
+        ry = ry - ROW_H
+    end
+    if #ids == 0 then
+        local none = EllesmereUI.MakeFont(child, 12, nil, 0.55, 0.55, 0.55)
+        none:SetPoint("TOP", child, "TOP", 0, -16)
+        none:SetText(EllesmereUI.L("No excluded debuffs."))
+        ry = -48
+    end
+    child:SetHeight(math.max(-ry, 1))
+end
+
 function ns.BMP_ShowFilterEditor()
     if ns._bm2FilterEditor then ns._bm2FilterEditor:Hide(); ns._bm2FilterEditor = nil end
     local filters = ns.BM2_Filters and ns.BM2_Filters()

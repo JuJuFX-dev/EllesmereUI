@@ -56,7 +56,7 @@ end
 
 local SATED_DEBUFFS = {
     [57723] = true, [57724] = true, [80354] = true, [95809] = true,
-    [160455] = true, [264689] = true, [390435] = true, [428628] = true,
+    [160455] = true, [264689] = true, [390435] = true,
 }
 local ALWAYS_HIDE_DEBUFFS = { [1254550] = true, [308312] = true }
 -- Shared with the Debuff Manager file (same exclude semantics there).
@@ -182,13 +182,13 @@ end
 -- text bottom-right, both through the shared icon-text font pipeline.
 -- DM EFFECTS: per-filter effect BLOCKS (style.fxList). Buttons know their
 -- record category via d.dmCat (stamped at group declare); cc-group buttons
--- identify through the cc style (its ccGlowType field is always set
--- there). The combined boss/role record matches either check; the FIRST
--- matching block wins. Each block carries an optional Icon Glow (CC-glow
--- overlay mechanics: child rides button visibility, driver styles remap to
--- FlipBook under restriction, params cached) and an optional Border
--- override (own PP border host one level over the style border -- equal or
--- larger size covers it).
+-- identify through the cc style's ccGroup marker (the legacy cc group has
+-- no stamping extraInit). The combined boss/role record matches either
+-- check; the FIRST matching block wins. Each block carries an optional
+-- Icon Glow (overlay mechanics: child rides button visibility, driver
+-- styles remap to FlipBook under restriction, params cached) and an
+-- optional Border override (own PP border host one level over the style
+-- border -- equal or larger size covers it).
 local function DmFxBlockFor(list, cat)
     if not (list and cat) then return nil end
     for i = 1, #list do
@@ -201,7 +201,7 @@ end
 
 local function ApplyDmFx(button, d, style)
     local cat = d.dmCat
-    if not cat and style.ccGlowType ~= nil then cat = "cc" end
+    if not cat and style.ccGroup then cat = "cc" end
     local e = style.fxList and DmFxBlockFor(style.fxList, cat) or nil
 
     -- Icon Glow
@@ -215,15 +215,17 @@ local function ApplyDmFx(button, d, style)
         if not gov then
             gov = CreateFrame("Frame", nil, button)
             gov:SetAllPoints(button)
-            -- Above BOTH borders (style border at cooldown+1; the fx
-            -- border override rides one over it), below the text: the AK
-            -- text carrier sits only one level over the style border, so
-            -- lift it too -- final order is border < fx border < glow <
-            -- text. (Creation-window calls; our frames.)
+            -- Above BOTH borders (style border strips at borderHost+1;
+            -- the fx border override's container at +2), below the dispel
+            -- ring and text -- the engine dispel recolor ALWAYS wins over
+            -- borders and glows. Final order: border < fx border < glow <
+            -- dispel ring < text. The carrier write matches AuraKit's
+            -- ladder (ring +3, text +4) so this pass never drags the text
+            -- back down onto the ring. (Creation-window calls; our frames.)
             local base = (d.borderHost and d.borderHost:GetFrameLevel())
                 or (button:GetFrameLevel() + 1)
             gov:SetFrameLevel(base + 2)
-            if d.stackCarrier then d.stackCarrier:SetFrameLevel(base + 3) end
+            if d.stackCarrier then d.stackCarrier:SetFrameLevel(base + 4) end
             gov:EnableMouse(false)
             d.dmFxgHost = gov
         end
@@ -411,6 +413,16 @@ end
 local function BuildDebuffStyle(s, sizeOverride)
     local br, bg, bb = ColorParts(s.debuffBorderColor, 0, 0, 0)
     local size = sizeOverride or s.debuffSize or 18
+    -- Engine dispel-border extras: the ring's thickness in PHYSICAL pixels
+    -- (Dispels section cog) and the user dispel palette as the engine's
+    -- tint map (AuraKit registers both; helper is declared below, resolved
+    -- at call time). -1 = follow the icon's own Border thickness (tile
+    -- styles resolve their override through the style view passed in);
+    -- 0 disables the recolor (AuraKit's registration gate).
+    local dpx = s.dispelIconBorderSize or 2
+    if dpx == -1 then dpx = s.debuffBorderSize or 1 end
+    local dcMap, dcFP
+    if ns.RFC_DispelBorderColorMap then dcMap, dcFP = ns.RFC_DispelBorderColorMap(s) end
     return {
         width = size,
         height = size,
@@ -420,6 +432,9 @@ local function BuildDebuffStyle(s, sizeOverride)
         -- Dispellable debuffs get the engine dispel-type border over the
         -- static one (dispelName is secret in 12.1; see AuraKit).
         dispelBorder = true,
+        dispelBorderPx = dpx,
+        dispelColorMap = dcMap,
+        dispelColorFP = dcFP,
         cooldownReverse = true,
         hideSwipe = (s.debuffShowSwipe == false),
         noDefaultFonts = true,
@@ -441,88 +456,23 @@ local function BuildDebuffStyle(s, sizeOverride)
     }
 end
 
--- CC debuff decoration: the normal debuff pass plus the CC glow overlay.
--- The engine routes crowd-control auras to this group's buttons, so a
--- visible button IS a CC debuff -- the glow simply rides its visibility
--- (pixel-glow OnUpdate lives on our overlay child and only runs while the
--- button is shown). Glow restarts only when a parameter actually changed
--- (params cached on the overlay -- our frame, custom fields allowed) so a
--- steady glow never resets on restyles.
-local function ApplyRFDebuffCC(button, dd, style)
-    ApplyRFDebuffText(button, dd, style)
-    local Glows = EllesmereUI.Glows
-    if not Glows then return end
-    local gType = style.ccGlowType or 0
-    -- Engine-button glows must animate identically in and out of
-    -- restricted content: remap driver-based styles to their FlipBook
-    -- (C-side AnimationGroup) equivalents.
-    if gType > 0 and Glows.RestrictionSafeStyle then
-        gType = Glows.RestrictionSafeStyle(gType)
-    end
-    if gType > 0 and Glows.StartGlow then
-        local gov = dd.ccGlow
-        if not gov then
-            gov = CreateFrame("Frame", nil, button)
-            gov:SetAllPoints(button)
-            -- Just above the border, below the duration/stack text (the
-            -- text carrier is one level over the border host; equal level
-            -- with the border host still draws on top -- created later).
-            if dd.stackCarrier then
-                gov:SetFrameLevel(dd.stackCarrier:GetFrameLevel() - 1)
-            else
-                gov:SetFrameLevel(button:GetFrameLevel() + 1)
-            end
-            gov:EnableMouse(false)
-            dd.ccGlow = gov
-        end
-        local cr, cg, cb = style.ccGlowR or 1.0, style.ccGlowG or 0.776, style.ccGlowB or 0.376
-        if style.ccGlowClassColor then
-            local _, classFile = UnitClass("player")
-            local cc = classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
-            if cc then cr, cg, cb = cc.r, cc.g, cc.b end
-        end
-        local sz = style.width or 18
-        local oN, oTh, oPer, oBgR, oBgG, oBgB
-        if gType == 1 then -- Pixel Glow consumes the Lines/Thickness/Speed params
-            oN, oTh, oPer = style.ccGlowLines or 8, style.ccGlowThickness or 2, style.ccGlowSpeed or 4
-            if style.ccGlowBackground then
-                oBgR, oBgG, oBgB = style.ccGlowBgR or 0, style.ccGlowBgG or 0, style.ccGlowBgB or 0
-            end
-        end
-        if (not gov._euiGlowActive) or gov._ccStyle ~= gType or gov._ccW ~= sz
-           or gov._ccCR ~= cr or gov._ccCG ~= cg or gov._ccCB ~= cb
-           or gov._ccN ~= oN or gov._ccTh ~= oTh or gov._ccPer ~= oPer
-           or gov._ccBgR ~= oBgR or gov._ccBgG ~= oBgG or gov._ccBgB ~= oBgB then
-            Glows.StartGlow(gov, gType, sz, cr, cg, cb,
-                oN and { N = oN, th = oTh, period = oPer, bg = oBgR and { r = oBgR, g = oBgG, b = oBgB } or nil } or nil)
-            gov._ccStyle, gov._ccW = gType, sz
-            gov._ccCR, gov._ccCG, gov._ccCB = cr, cg, cb
-            gov._ccN, gov._ccTh, gov._ccPer = oN, oTh, oPer
-            gov._ccBgR, gov._ccBgG, gov._ccBgB = oBgR, oBgG, oBgB
-        end
-    elseif dd.ccGlow and dd.ccGlow._euiGlowActive and Glows.StopGlow then
-        Glows.StopGlow(dd.ccGlow)
-    end
-end
-
+-- Crowd-control group style: the plain debuff style plus a marker the DM
+-- per-filter Icon Effects use to identify cc-group buttons (the legacy cc
+-- group declares no category-stamping extraInit). The dedicated CC Debuff
+-- Glow is RETIRED on 12.1: the Debuff Manager's per-filter Icon Effects
+-- glow supersedes it (glow any category, user-configured), so the old
+-- debuffCCGlow* keys are orphaned here (the frozen 12.0 path keeps them).
 local function BuildDebuffCCStyle(s, sizeOverride)
     local st = BuildDebuffStyle(s, sizeOverride)
-    st.applyExtra = ApplyRFDebuffCC
-    st.ccGlowType = s.debuffCCGlowType or 0
-    st.ccGlowClassColor = s.debuffCCGlowClassColor
-    st.ccGlowR, st.ccGlowG, st.ccGlowB = s.debuffCCGlowR, s.debuffCCGlowG, s.debuffCCGlowB
-    st.ccGlowLines = s.debuffCCGlowLines
-    st.ccGlowThickness = s.debuffCCGlowThickness
-    st.ccGlowSpeed = s.debuffCCGlowSpeed
-    st.ccGlowBackground = s.debuffCCGlowBackground
-    st.ccGlowBgR = s.debuffCCGlowBackgroundR
-    st.ccGlowBgG = s.debuffCCGlowBackgroundG
-    st.ccGlowBgB = s.debuffCCGlowBackgroundB
+    st.ccGroup = true
     return st
 end
 -- Shared with the Debuff Manager file: custom tiles render with the debuff
 -- style at their own size (same derivation the dispellable split uses).
 ns.RFC_BuildDebuffStyle = BuildDebuffStyle
+-- CC flavor too: a per-filter Icon Effects Size moves crowd control onto a
+-- sized record variant, which must keep the CC glow style fields.
+ns.RFC_BuildDebuffCCStyle = BuildDebuffCCStyle
 
 -- Container anchoring that mirrors DebuffGridPoint: the flow's start corner
 -- sits on the same corner of the health bar; CENTER growth anchors the
@@ -735,6 +685,25 @@ local DISPEL_SLOTS = {
     { key = "poison",  token = "Poison",  colorKey = "dispelColorPoison",  atlas = "RaidFrame-Icon-DebuffPoison",  fallback = { 0.0, 0.706, 0.286 },   level = 2 },
     { key = "bleed",   token = "Bleed",   colorKey = "dispelColorBleed",   atlas = "RaidFrame-Icon-DebuffBleed",   fallback = { 0.75, 0.15, 0.15 },    level = 1 },
 }
+
+-- User dispel palette as a SetAuraBorder customDispelColorMap (the engine
+-- tints our debuff-icon ring with THESE colors; C-side option validation
+-- reconstructs the color objects) plus a fingerprint string so a palette
+-- edit re-registers the border options. Resolved via ns at call time --
+-- BuildDebuffStyle is declared above this table.
+function ns.RFC_DispelBorderColorMap(s)
+    local map, fp = {}, {}
+    for i = 1, #DISPEL_SLOTS do
+        local def = DISPEL_SLOTS[i]
+        local c = s[def.colorKey]
+        local r = (c and c.r) or def.fallback[1]
+        local g = (c and c.g) or def.fallback[2]
+        local b = (c and c.b) or def.fallback[3]
+        map[def.token] = CreateColor(r, g, b, 1)
+        fp[#fp + 1] = string.format("%.3f,%.3f,%.3f", r, g, b)
+    end
+    return map, table.concat(fp, ";")
+end
 local GRADIENT_TEXTURE = "Interface\\AddOns\\EllesmereUI\\media\\textures\\gradient-tb.tga"
 local GRADIENT_SHARP_TEXTURE = "Interface\\AddOns\\EllesmereUI\\media\\textures\\gradient-sharp.tga"
 
@@ -887,11 +856,12 @@ local function DebuffStyleFP(s, font)
         s.debuffShowSwipe, s.debuffShowDurText, s.debuffDurTextSize, CK(s.debuffDurTextColor),
         s.debuffDurTextOffsetX, s.debuffDurTextOffsetY, s.debuffShowStacks, s.debuffStacksTextSize,
         CK(s.debuffStacksTextColor), s.debuffStacksOffsetX, s.debuffStacksOffsetY, s.debuffHideTooltips,
-        s.debuffCCGlowType, s.debuffCCGlowClassColor, s.debuffCCGlowR, s.debuffCCGlowG, s.debuffCCGlowB,
-        s.debuffCCGlowLines, s.debuffCCGlowThickness, s.debuffCCGlowSpeed, s.debuffCCGlowBackground,
-        s.debuffCCGlowBackgroundR, s.debuffCCGlowBackgroundG, s.debuffCCGlowBackgroundB,
+        -- Dispel icon ring: thickness + the user palette the engine tints with.
+        s.dispelIconBorderSize, CK(s.dispelColorMagic), CK(s.dispelColorCurse),
+        CK(s.dispelColorDisease), CK(s.dispelColorPoison), CK(s.dispelColorBleed),
         -- Base DM Effects ride the debuff style (BuildDebuffStyle injects
-        -- them), so their config is part of this fingerprint.
+        -- them), so their config is part of this fingerprint. (The old
+        -- debuffCCGlow* keys left with the retired CC Debuff Glow.)
         (ns.DM_FxFP and ns.DM_FxFP()) or "")
 end
 -- Shared with the Debuff Manager file: tile styles derive from the debuff
@@ -3226,6 +3196,9 @@ local function ComputeClassFlags(styleKey, s)
         local ccStyleKey = styleKey:gsub("debuff", "debuffcc")
         AK.styles[ccStyleKey] = BuildDebuffCCStyle(s)
         AK.RestyleSoon(ccStyleKey)
+        -- DM per-filter sized styles derive from these; a pure style edit
+        -- does not flip the config fingerprint, so refresh them here.
+        if ns.DM_RefreshSizedStyles then ns.DM_RefreshSizedStyles(styleKey, s) end
     end
     v = DebuffCfgFP(s)
     if st.debuffCfg ~= v then st.debuffCfg = v; flags.debuffCfg = true end

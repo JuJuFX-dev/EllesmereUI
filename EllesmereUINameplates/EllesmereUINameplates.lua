@@ -4662,22 +4662,52 @@ local questMobCache = {}
 -- exact invalidation lifecycle as questMobCache. Stored on ns (not a new
 -- file-scope local) because this file is near the Lua 5.1 local cap.
 ns._questObjText = ns._questObjText or {}
-local QUEST_LINE_TYPES
-if Enum and Enum.TooltipDataLineType then
-    QUEST_LINE_TYPES = {
-        [Enum.TooltipDataLineType.QuestObjective] = true,
-        [Enum.TooltipDataLineType.QuestTitle] = true,
-        [Enum.TooltipDataLineType.QuestPlayer] = true,
-    }
+-- Detect whether a unit is one of the local player's active quest objectives
+-- with progress still incomplete, by reading its unit tooltip. The client tags
+-- quest lines with QuestTitle / QuestPlayer / QuestObjective types; in a group
+-- the tooltip lists each member's objectives beneath a QuestPlayer header, so
+-- only objectives under the local player's header are scored (solo, every
+-- objective is the player's). All tooltip text is treated as potentially secret
+-- (12.1): reads run behind pcall and any value surfaced to the UI is
+-- issecretvalue-checked and shape-validated first. Cached per unit; the cache
+-- clears on QUEST_LOG_UPDATE and plate removal.
+
+-- Evaluate one objective line's progress. Returns a clean "n/m" or "p%" string
+-- for an INCOMPLETE objective when wantText is set, true for an incomplete
+-- objective whose string is unreadable/secret, or nil when the objective is
+-- complete or carries no progress. A string is only ever returned once it is
+-- issecretvalue-clean and matches its expected shape, so a secret value can
+-- never leak out.
+local function EvalObjective(text, wantText)
+    text = text or ""
+    local have, need = text:match("(%d+)/(%d+)")
+    if have and have ~= need then
+        if not wantText then return true end
+        local s = have .. "/" .. need
+        if (not issecretvalue or not issecretvalue(s)) and s:match("^%d+/%d+$") then
+            return s
+        end
+        return true
+    end
+    local pct = text:match("(%d+)%%")
+    if pct and pct ~= "100" then
+        if not wantText then return true end
+        local s = pct .. "%"
+        if (not issecretvalue or not issecretvalue(s)) and s:match("^%d+%%$") then
+            return s
+        end
+        return true
+    end
+    return nil
 end
 
 local function IsQuestMob(unit)
-    if not C_TooltipInfo or not QUEST_LINE_TYPES then return false end
-    if questMobCache[unit] ~= nil then return questMobCache[unit] end
-    -- Quest mobs are open-world only, unless the indicator's "Show In
-    -- Instances" opt-in lifts the gate (safe: every tooltip-line read below
-    -- is pcall'd and escape values are issecretvalue-verified, so instanced
-    -- combat cannot leak or error on secret text).
+    if not (C_TooltipInfo and Enum and Enum.TooltipDataLineType) then return false end
+    local cached = questMobCache[unit]
+    if cached ~= nil then return cached end
+
+    -- Open-world only, unless the indicator's "Show In Instances" opt-in lifts
+    -- the gate.
     if InRealInstancedContent() then
         local show = p and p.classificationShowInInstances
         if show == nil then show = defaults.classificationShowInInstances end
@@ -4686,85 +4716,53 @@ local function IsQuestMob(unit)
             return false
         end
     end
+
     local info = C_TooltipInfo.GetUnit(unit)
-    if not info then
+    if not (info and info.lines) then
         questMobCache[unit] = false
         return false
     end
+
+    local LT = Enum.TooltipDataLineType
     local playerName = UnitName("player")
-    local isInGroup = IsInGroup()
-    local ignoreUntilTitle = false
-    for _, line in ipairs(info.lines or {}) do
-        local lt = line.type
-        if not QUEST_LINE_TYPES[lt] then
-            -- skip non-quest lines
-        elseif lt == Enum.TooltipDataLineType.QuestPlayer then
-            -- In a group, only color for YOUR quests
-            -- Use pcall to safely compare leftText — it may be a tainted secret
-            -- string value in certain combat/nameplate contexts
-            if isInGroup then
-                local ok, result = pcall(function() return line.leftText ~= playerName end)
-                ignoreUntilTitle = ok and result or false
+    local grouped = IsInGroup()
+    local wantText = (p and p.replaceQuestIconWithObjective == true) or false
+    -- Whether objectives beneath the header we are currently inside count toward
+    -- the local player. A QuestTitle opens a new quest (scored by default); a
+    -- QuestPlayer header, in a group, narrows scoring to that one member.
+    local scoreForPlayer = true
+    local isQuest, objText = false, nil
+
+    for _, line in ipairs(info.lines) do
+        local kind = line.type
+        if kind == LT.QuestTitle then
+            scoreForPlayer = true
+        elseif kind == LT.QuestPlayer then
+            if grouped then
+                -- leftText may be a secret string; compare behind pcall and
+                -- fail open (unknown ownership is scored, so nothing is lost).
+                local ok, mine = pcall(function() return line.leftText == playerName end)
+                scoreForPlayer = (not ok) or mine
             end
-        elseif lt == Enum.TooltipDataLineType.QuestTitle then
-            ignoreUntilTitle = false
-        elseif lt == Enum.TooltipDataLineType.QuestObjective and not ignoreUntilTitle then
-            -- leftText may be a tainted secret string; wrap in pcall
-            local ok, isIncomplete = pcall(function()
-                local txt = line.leftText or ""
-                local c1, c2 = txt:match("(%d+)/(%d+)")
-                if c1 and c1 ~= c2 then return true end
-                local pct = txt:match("(%d+)%%")
-                if pct and pct ~= "100" then return true end
-                return false
-            end)
-            if ok and isIncomplete then
-                questMobCache[unit] = true
-                -- Optional progress extraction for the icon-replace feature.
-                -- Fully gated by the setting: nothing here runs when OFF.
-                -- Isolated in its own pcall so a secret/tainted leftText can
-                -- never disturb the boolean decision above. We never branch on
-                -- the (possibly secret) values; the count ("current/required")
-                -- or percentage string escapes only if it is clean (issecretvalue
-                -- + a strict digit pattern, both inside the pcall); otherwise
-                -- nothing is cached and the icon is used.
-                if p and p.replaceQuestIconWithObjective == true then
-                    local okN, rem = pcall(function()
-                        local txt = line.leftText or ""
-                        local c1, c2 = txt:match("(%d+)/(%d+)")
-                        if c1 and c2 and c1 ~= c2 then
-                            local s = c1 .. "/" .. c2
-                            if (not issecretvalue or not issecretvalue(s))
-                               and s:match("^%d+/%d+$") then
-                                return s
-                            end
-                        end
-                        -- Percent-based objective (e.g. "50%") has no
-                        -- current/required pair; show the percentage itself.
-                        -- Same clean-value gate as the count path: the string
-                        -- escapes only when verifiably non-secret.
-                        local pct = txt:match("(%d+)%%")
-                        if pct and pct ~= "100" then
-                            local s = pct .. "%"
-                            if (not issecretvalue or not issecretvalue(s))
-                               and s:match("^%d+%%$") then
-                                return s
-                            end
-                        end
-                        return nil
-                    end)
-                    if okN and type(rem) == "string" then
-                        ns._questObjText[unit] = rem
-                    else
-                        ns._questObjText[unit] = nil
-                    end
+        elseif kind == LT.QuestObjective and scoreForPlayer then
+            -- leftText may be secret; EvalObjective runs behind pcall and only
+            -- returns a value once it is verified clean.
+            local ok, remaining = pcall(EvalObjective, line.leftText, wantText)
+            if ok and remaining then
+                isQuest = true
+                if wantText and type(remaining) == "string" then
+                    objText = remaining
                 end
-                return true
+                break
             end
         end
     end
-    questMobCache[unit] = false
-    return false
+
+    questMobCache[unit] = isQuest
+    if wantText then
+        ns._questObjText[unit] = isQuest and objText or nil
+    end
+    return isQuest
 end
 ns.IsQuestMob = IsQuestMob
 
@@ -4953,22 +4951,23 @@ local function GetReactionColor(unit)
     local _isMiniBoss = false
     if not owBasic
        and (classification == "elite" or classification == "worldboss" or classification == "rareelite") then
-        -- Effective level (handles level scaling / Chromie time), not raw level.
+        -- Effective level (handles scaling / Chromie time), not raw level, so
+        -- the tier tracks how the game ranks the mob against the player.
         local level = UnitEffectiveLevel(unit)
-        local playerLevel = UnitEffectiveLevel("player")
         local lvlClean = level and not (issecretvalue and issecretvalue(level))
+        local isSkull = lvlClean and level == -1
+        local playerLevel = UnitEffectiveLevel("player")
         local plvlClean = playerLevel and not (issecretvalue and issecretvalue(playerLevel))
-        if lvlClean and (level == -1 or (plvlClean and level >= playerLevel + 1)) then
-            -- Tier by effective-level delta (how the game ranks instance mobs):
-            -- ?? (skull) or player+2 and up = boss; player+1 = mini-boss. World
-            -- bosses are always bosses; a flagged lieutenant is always a mini-boss.
-            local isBoss = (classification == "worldboss")
-                or (level == -1)
-                or (plvlClean and level >= playerLevel + 2)
-            if level ~= -1 and UnitIsLieutenant and UnitIsLieutenant(unit) then
-                isBoss = false
-            end
-            if isBoss then
+        -- A skull, or an elite ranked at least one effective level above the
+        -- player, gets a tier; ordinary same/lower-level elites are left alone.
+        local aboveOne = plvlClean and lvlClean and level >= playerLevel + 1
+        if isSkull or aboveOne then
+            -- Boss when it reads as boss-ranked: a skull, a world boss, or two+
+            -- effective levels up. UnitIsLieutenant is the client's own mini-boss
+            -- marker, so a non-skull lieutenant is pinned to mini-boss.
+            local aboveTwo = plvlClean and lvlClean and level >= playerLevel + 2
+            local lieutenant = (not isSkull) and UnitIsLieutenant and UnitIsLieutenant(unit)
+            if not lieutenant and (isSkull or aboveTwo or classification == "worldboss") then
                 _isBossUnit = true
             else
                 _isMiniBoss = true

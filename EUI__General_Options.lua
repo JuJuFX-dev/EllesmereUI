@@ -406,6 +406,57 @@ end
 -------------------------------------------------------------------------------
 EllesmereUI._WHATSNEW_PATCHES = {
     {
+        version = "8.5.4",
+        heroes = {
+            {
+                module = "PTR Raid Frames",
+                title  = "Debuff Blacklisting",
+                desc   = "The 12.1 Debuff Manager gains an Excluded Debuffs list, letting you permanently hide specific debuffs by spell ID so they never show on your raid frames.",
+            },
+        },
+        features = {
+            {
+                module = "Cooldown Manager",
+                title  = "Row Growth Direction",
+                desc   = "Choose which row stays put when a second row appears",
+                nav    = { module = "EllesmereUICooldownManager", page = "CDM Bars", section = "BAR LAYOUT", highlight = "Number of Rows",
+                    preSelect = function()
+                        if EllesmereUI._setCDMBar then EllesmereUI._setCDMBar("cooldowns") end
+                    end },
+            },
+            {
+                module = "PTR Raid Frames",
+                title  = "Dispel-Type Debuff Rings",
+                desc   = "Colored dispel-type rings on debuff icons, thickness adjustable",
+            },
+        },
+        fixes = {
+            { module = "Action Bars & Cooldown Manager", text = "The Caps Lock keybind now shows as the shorter Caps on action buttons and ability icons instead of the full CAPSLOCK, matching the abbreviations for other long key names." },
+            { module = "Action Bars", text = "Fixed holding a keybind on a Druid or Rogue form bar casting once and then stalling into auto-attack instead of repeat-casting, which also fixes Single Button Assistant and Assisted Combat on those bars." },
+            { module = "Action Bars", text = "Fixed the main action bar showing one ability but casting a different one when a Druid or Rogue manually paged to another bar while in a form or stance." },
+            { module = "Blizzard Skin", text = "Fixed the Achievement window's objectives progress text clipping when a taller custom font was set." },
+            { module = "Blizzard Skin", text = "Fixed Set Note, Set Officer Note, Set Rank, and Whisper on the guild roster throwing an action blocked error while the Guild and Communities skin was on." },
+            { module = "Blizzard Skin", text = "Fixed the quest greeting paragraph shown when an NPC offers multiple quests not picking up the skin's text color." },
+            { module = "Cooldown Manager", text = "Lowered the Base Row Icons slider maximum from 50 to 15, since a base row that wide never worked well with the two-row split layout." },
+            { module = "Cooldown Manager", text = "Reverse Swipe now also applies to Active State overlays, matching the direction used on the icon's normal cooldown swipe." },
+            { module = "Cooldown Manager", text = "Fixed per-spell settings and custom icons for split-identity buffs, like the Evoker's Starweaver, sometimes applying to the wrong form or a slot vanishing once Mythic+ combat starts." },
+            { module = "Cooldown Manager", text = "Fixed a custom spell icon occasionally staying visible after being turned off if the change happened right as bars rebuilt during login." },
+            { module = "Data Bars", text = "Fixed Bar Opacity not working when a custom Bar Texture was set on the Modern background style." },
+            { module = "Quality of Life", text = "Fixed the Movement Alert Show Decimal toggle not turning decimals off for profiles carrying an older saved value, so it now works immediately and stays off after a reload." },
+            { module = "Quality of Life", text = "The Secondary Stats overlay now sizes its Unlock Mode outline to match the actual text, so it lines up whether or not tertiary stats are shown and at any UI scale." },
+            { module = "Raid Frames", text = "The Targeted Spells icon on raid frames now sorts together with the other aura icons instead of sitting underneath the name and health text." },
+            { module = "Unit Frames", text = "Fixed toggling Blizzard's Edit Mode spamming secret value errors in instances and sometimes leaving party frames broken for the rest of the session." },
+            { module = "PTR Blizzard Skin", text = "Fixed a 12.1 forbidden-object error from the Window Skins tooltip skin when a spell tooltip was re-shown by Blizzard's own secure code." },
+            { module = "PTR Cooldown Manager", text = "Fixed the Ebon Might active-state glow and swipe on its Cooldown Manager icon for Augmentation Evokers on the 12.1 client, where the aura's data is hidden from addons." },
+            { module = "PTR Raid Frames", text = "Each Debuff Manager filter can now use its own icon size, independent of the base debuff icons." },
+            { module = "PTR Raid Frames", text = "Fixed the Buff Manager's live preview so center-growth icon groups line up the same way they render on your raid frames." },
+            { module = "PTR Raid Frames", text = "Spells removed from a filter's curated list no longer stick around as an undeletable leftover entry in the Filter Editor." },
+            { module = "PTR Resource Bars", text = "Fixed the Ebon Might power bar so it fills and counts down correctly for Augmentation Evokers on the 12.1 client, where it previously stayed empty because the buff is hidden from addons." },
+            { module = "PTR Unit Frames", text = "Fixed a 12.1 error that could hit Evoker, Monk, and Demon Hunter players from Blizzard's own hidden power bars still reacting to events behind the hidden default player frame." },
+            { module = "PTR Unit Frames", text = "Fixed the Dispel Type Borders toggle on unit frames so it shows your chosen dispel colors instead of default ones on the 12.1 client." },
+        },
+    },
+    {
         version = "8.5.3",
         heroes = {
             {
@@ -1440,80 +1491,6 @@ EllesmereUI._WHATSNEW_PATCHES = {
             { module = "Cooldown Manager", text = "The Tracking Bar spell picker now also shows tracked but untalented spells (desaturated but still selectable), so you can arrange bars without swapping talents." },
             { module = "Mythic Timer", text = "Fixed the Forces (Enemy) bar's Bar Texture and Background Texture settings overwriting the main timer bar's textures instead of using their own." },
             { module = "Unit Frames", text = "Fixed custom Unit Frame fonts not applying on Korean, Chinese, and Cyrillic clients, so they now match the font choice used everywhere else." },
-        },
-    },
-    {
-        version = "8.3.9",
-        heroes = {
-            {
-                module = "Cooldown Manager",
-                title  = "Mirror Key Presses",
-                desc   = "Cooldown Manager icons now show the same pressed-down look as your action buttons the moment you tap an ability's keybind, even while it is on cooldown, matched to your action bar's push effect.",
-                nav    = { module = "EllesmereUICooldownManager", page = "CDM Bars", section = "EXTRAS", highlight = "Mirror Key Presses",
-                    preSelect = function()
-                        if EllesmereUI._setCDMBar then EllesmereUI._setCDMBar("cooldowns") end
-                    end },
-            },
-            {
-                module = "Character Sheet",
-                title  = "Gear Flyout Item Levels",
-                desc   = "Hovering an equipped slot on the character sheet now shows each item's level in the swap flyout, colored by quality so you can spot upgrades at a glance.",
-                nav    = { module = "EllesmereUIBlizzardSkin", page = "Blizzard Window Skins", section = "CORE OPTIONS", highlight = "Gear Flyout Item Levels" },
-            },
-        },
-        features = {
-            {
-                module = "Cooldown Manager",
-                title  = "Exclude This Spec from Bar Apply",
-                desc   = "Opt your spec out of an Apply to Bar (All Specs) setting",
-                nav    = { module = "EllesmereUICooldownManager", page = "CDM Bars",
-                    preSelect = function()
-                        if EllesmereUI._setCDMBar then EllesmereUI._setCDMBar("cooldowns") end
-                    end },
-            },
-            {
-                module = "Damage Meters",
-                title  = "Sync Segments Across Windows",
-                desc   = "Share segment selection, auto-snap to Current in combat",
-            },
-            {
-                module = "Nameplates",
-                title  = "Raise Strata for Core Positions",
-                desc   = "Render a slot's icon above the rest of the nameplate",
-                nav    = { module = "EllesmereUINameplates", page = "Display", section = "CORE POSITIONS", highlight = "Top" },
-            },
-            {
-                module = "Raid Frames",
-                title  = "Vertical Absorb Bars",
-                desc   = "Anchor the Absorb and Heal Absorb bars on the frame edge",
-                nav    = { module = "EllesmereUIRaidFrames", page = "Frames", section = "ABSORBS", highlight = "Absorb Bar" },
-            },
-            {
-                module = "Unit Frames",
-                title  = "Boss Cast Bar Width and Offset",
-                desc   = "Resize boss cast bars and nudge them left or right",
-                nav    = { module = "EllesmereUIUnitFrames", page = "Boss Frames", section = "CAST BAR", highlight = "Cast Bar Width" },
-            },
-        },
-        fixes = {
-            { module = "Blizzard Skin", text = "Fixed the reskinned Reputation and Currency panel blanking currency column headers and blocking currency transfers between characters." },
-            { module = "Blizzard Skin", text = "Fixed boss ability rows in the reskinned Adventure Guide losing their spell icons." },
-            { module = "Blizzard Skin", text = "Fixed vendor names in the Merchant window and dialog text in the Gossip window showing in the wrong font." },
-            { module = "Cooldown Manager", text = "Added a Show Charges checkbox to the Add Custom Spell popup so manually added Cooldown and Utility spells can display a charge or cast count." },
-            { module = "Cooldown Manager", text = "Removing an untalented spell from Blizzard's Cooldown Manager tracking now also clears it from your assigned spells instead of leaving a phantom entry." },
-            { module = "Cooldown Manager", text = "Hide Swipe (Charges) and Hide Recharge Edge now take effect immediately on a spell that is already recharging." },
-            { module = "Cooldown Manager", text = "Equipped trinkets and tracked items no longer stay briefly desaturated after their cooldown finishes once the ready glow has lit." },
-            { module = "Damage Meters", text = "Added an Icon Zoom slider (in the cog next to Icon Style) to crop tighter on class and spec icons." },
-            { module = "Damage Meters", text = "Fixed the Class Color swatch always previewing Paladin's color regardless of your class." },
-            { module = "General", text = "Fixed accent color preview swatches across Damage Meters, Raid Frames, and Window Skins (and some Raid Frames Buff Manager and HoverCast buttons) not reflecting your custom or class-colored accent." },
-            { module = "Mythic Timer", text = "Fixed the title and Enemy Forces bars showing the plain theme color instead of your custom or class-colored accent." },
-            { module = "Nameplates", text = "Mini and neutral enemy coloring now applies everywhere by default, with a new Mini Coloring M+ Only toggle to limit it to dungeons." },
-            { module = "Nameplates", text = "Added two combined health text formats that separate percent and value with a dash (Health % - # and Health # - %)." },
-            { module = "Nameplates", text = "Fixed the Class Resource border color swatch and cog staying clickable when Border was turned off." },
-            { module = "Profiles", text = "Fixed importing a profile sometimes erasing your current profile's saved bar anchors and width-match layout after you switched back to it or deleted the imported profile." },
-            { module = "Quality of Life", text = "Holy Paladins get a new Show Melee Range for Hpal crosshair toggle that checks range at 5 yards instead of 40." },
-            { module = "Quality of Life", text = "The crosshair's 40 yard range check now also works from The Decapitator toy, fixing false out-of-range coloring for players without the Happy Fun Rock toy." },
-            { module = "Unit Frames", text = "The Buffs Max Count and Max Per Row sliders now go up to 40 (previously 20)." },
         },
     },
 }

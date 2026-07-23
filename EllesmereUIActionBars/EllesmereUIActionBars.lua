@@ -1916,21 +1916,26 @@ local function GetClassPagingConditions()
         conditions = conditions .. "[vehicleui][possessbar] " .. EAB_VTABLE.GetVehicleBarIndex() .. "; "
     end
 
-    -- Class-specific paging
-    if class == "DRUID" then
-        conditions = conditions .. "[bonusbar:1,stealth] 7; [bonusbar:1] 7; [bonusbar:3] 9; [bonusbar:4] 10; "
-    elseif class == "ROGUE" then
-        conditions = conditions .. "[bonusbar:1] 7; "
-    end
-
     -- Dragonriding (all classes)
     conditions = conditions .. "[bonusbar:5] 11; "
 
     -- Manual page switching (pages 2-6)
     -- [bar:N] responds to WoW's internal page set by ChangeActionBarPage().
     -- The built-in keybinds and our paging arrows trigger this securely.
+    -- Listed BEFORE the class form conditions to match the engine's native
+    -- resolution order (a manual page beats the form bonusbar, which only
+    -- applies on page 1). MainBar keybinds are native ACTIONBUTTONn commands,
+    -- so the displayed page must resolve exactly like the engine's or a
+    -- form + manual-page combination shows one ability and fires another.
     for i = 2, NUM_AB_PAGES do
         conditions = conditions .. "[bar:" .. i .. "] " .. i .. "; "
+    end
+
+    -- Class-specific form paging (page 1 only, per the ordering above)
+    if class == "DRUID" then
+        conditions = conditions .. "[bonusbar:1,stealth] 7; [bonusbar:1] 7; [bonusbar:3] 9; [bonusbar:4] 10; "
+    elseif class == "ROGUE" then
+        conditions = conditions .. "[bonusbar:1] 7; "
     end
 
     -- Default: page 1

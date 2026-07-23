@@ -86,10 +86,41 @@ do
     end
 
     local origDisableBlizzard = oUF.DisableBlizzard
+    -- Standalone Midnight player alt-power bars. They live under
+    -- PlayerFrameAlternatePowerBarArea (a child of PlayerFrame), so once we
+    -- reparent PlayerFrame to our hidden holder they become descendants of an
+    -- insecure frame and their own event handlers run tainted. On 12.1 build
+    -- 68824 aura access became a hard-error API (RequiresUnitAuraAccess), so
+    -- when one of these bars fires (power/spec/PEW events it registers itself,
+    -- independent of PlayerFrame's now-unregistered events) it drives
+    -- AttachBarToUnitUI -> PlayerFrame_OnAlternatePowerBarEnabled ->
+    -- PlayerFrame_ToPlayerArt -> BuffFrame:Update() -> GetAuraSlots, which
+    -- throws "Auras cannot be accessed when secret while tainted by
+    -- EllesmereUIUnitFrames". PlayerFrame's own art events are already dead, so
+    -- these bars are the last live driver into that chain: unregister their
+    -- events to cut it. UnregisterAllEvents is taint-clean (the same operation
+    -- the override already does on PlayerFrame's other sub-bars) and combat-
+    -- legal. Do NOT reparent them (Edit-Mode-managed; reparenting risks the
+    -- layout-pass taint the override defers timers to avoid). 12.1-gated:
+    -- retail keeps them event-registered, harmless there since the player
+    -- frame is hidden. The bars' Blizzard globals may not exist on every
+    -- client, so Unreg nil-guards each.
+    local ALT_POWER_BARS = {
+        "AlternatePowerBar", "MonkStaggerBar",
+        "EvokerEbonMightBar", "DemonHunterSoulFragmentsBar",
+    }
+    local function DisableAltPowerBars()
+        if not EllesmereUI.IS_121 then return end
+        for i = 1, #ALT_POWER_BARS do
+            Unreg(_G[ALT_POWER_BARS[i]])
+        end
+    end
+
     function oUF:DisableBlizzard(unit)
         if not unit then return end
         if unit == "player" then
             HandleFrame(PlayerFrame)
+            DisableAltPowerBars()
         elseif unit == "pet" then
             HandleFrame(PetFrame)
         elseif unit == "target" then
@@ -6122,7 +6153,6 @@ local SATED_DEBUFFS = {
     [160455] = true,  -- Fatigued (Netherwinds)
     [264689] = true,  -- Fatigued (Primal Rage)
     [390435] = true,  -- Exhaustion (Fury of the Aspects)
-    [428628] = true,  -- Exhaustion (variant)
 }
 -- Debuffs permanently hidden from all unit frames (no toggle, ever). Blizzard
 -- keeps these spellIds readable, so spellId matching is safe. Mirrors the Raid

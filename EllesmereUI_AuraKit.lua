@@ -271,50 +271,83 @@ local function ApplyStyleToRegions(button, style)
     end
 
     -- Engine dispel-type border (style.dispelBorder): one texture the engine
-    -- shows only on typed (dispellable) auras and tints via AuraUtil's
-    -- dispel palette. Per-aura dispel data is secret, so the engine picks
-    -- the color (custom color maps exist since build 68824 but are not
-    -- wired here yet). The texture rides the text carrier: above the
-    -- static border strips (which it covers while shown), below the
-    -- duration/stack text. Registration state is guarded -- engine setters
-    -- are dirty marks -- and follows the static border: no border
-    -- configured, no dispel recolor (live parity). The style enum moved to
+    -- shows only on typed (dispellable) auras and tints per dispel type --
+    -- per-aura dispel data is secret, so show/hide and color are ENGINE
+    -- decisions. The Color style never assigns a texture file, only vertex-
+    -- tints: the ring ART is entirely ours (media/textures/square-ring.png,
+    -- a flat white band flush to a 64px canvas, 16 texels thick), registered
+    -- purely as a tint target, and the user's dispel palette rides in via
+    -- customDispelColorMap (68824). The ring lives on a dedicated holder one
+    -- frame level over the static border host so the recolor always draws ON
+    -- TOP of the border strips; the text carrier sits one more above.
+    -- Registration follows the static border: no border configured, no
+    -- dispel recolor (live parity). The style enum moved to
     -- Enum.CustomAuraButtonBorderStyle in 68824; the old global is only a
     -- deprecation-CVar shim, so resolve the enum first.
     local borderStyle = (Enum and Enum.CustomAuraButtonBorderStyle) or AuraButtonBorderStyle
-    if style.dispelBorder and not d.dispelBorder and d.stackCarrier
+    if style.dispelBorder and not d.dispelBorder and d.dispelHolder
         and button.SetAuraBorder and borderStyle then
-        d.dispelBorder = d.stackCarrier:CreateTexture(nil, "BACKGROUND")
-        d.dispelBorder:SetTexture("Interface\\AddOns\\EllesmereUI\\media\\portraits\\square_border.tga")
+        d.dispelBorder = d.dispelHolder:CreateTexture(nil, "OVERLAY")
+        d.dispelBorder:SetTexture("Interface\\AddOns\\EllesmereUI\\media\\textures\\square-ring.png")
+        if d.dispelBorder.SetSnapToPixelGrid then
+            d.dispelBorder:SetSnapToPixelGrid(false)
+            d.dispelBorder:SetTexelSnappingBias(0)
+        end
+        d.dispelBorder:SetAllPoints(d.dispelHolder)
     end
     if d.dispelBorder then
-        -- Ring geometry: square_border.tga draws its ring starting 10px into
-        -- a 128px canvas (margin fraction m = 0.078125). Expanding the
-        -- texture rect by e = m/(1-2m) of the button size per side pins the
-        -- ring's hard outer edge exactly ON the button edge, so it sits on
-        -- the same inner rim band as the PP border strips (which draw
-        -- inward) and reads as the border recoloring.
-        local w = style.width or 18
-        local h = style.height or w
-        -- Rect change-guarded (stamp after): the button is the relative
-        -- frame, policed under the 12.1 access restriction while secret.
-        local rectKey = w .. "|" .. h
-        if d.dispelBorderRect ~= rectKey then
-            d.dispelBorder:ClearAllPoints()
-            d.dispelBorder:SetPoint("TOPLEFT", button, "TOPLEFT", -0.0926 * w, 0.0926 * h)
-            d.dispelBorder:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 0.0926 * w, -0.0926 * h)
-            d.dispelBorderRect = rectKey
+        -- Level re-assert (change-guarded): a style can move the border
+        -- host's level; the ring stays THREE levels above it (PP strip
+        -- container at +1, DM fx border-override container at +2 -- the
+        -- dispel recolor always wins over every border), the text carrier
+        -- one more. All owned frames -- legal under restriction.
+        local bl = d.borderHost and d.borderHost:GetFrameLevel() or 0
+        if d.akDispelLvl ~= bl then
+            d.dispelHolder:SetFrameLevel(bl + 3)
+            if d.stackCarrier then d.stackCarrier:SetFrameLevel(bl + 4) end
+            d.akDispelLvl = bl
         end
-        local want = (style.dispelBorder and style.border) and true or false
-        if d.dispelBorderOn ~= want then
+        -- Physical-pixel thickness by SOURCE CROPPING, never stretching:
+        -- the art is a flush band of B = 16 texels on a C = 64 canvas
+        -- (B/C = 1/4). Shrinking the sampled window inward by fraction a
+        -- per side leaves (B - C*a) band texels over a C*(1-2a) span, so
+        -- the rendered thickness at drawn size s is
+        --   t = s*(B - C*a) / (C*(1-2a))   =>   a = (s - 4t) / (4*(s - 2t)).
+        -- t converts the user's physical-pixel setting into this frame's
+        -- units via the holder's effective scale (our frame -- readable);
+        -- s is the style size, never a rect read (button rects are
+        -- restricted). The cropped band stays solid at any icon size.
+        local sw = style.width or 18
+        local px = style.dispelBorderPx or 2
+        local t = px
+        local eff = d.dispelHolder:GetEffectiveScale()
+        if eff and eff > 0 then
+            local PPx = EllesmereUI.PP
+            t = px * ((PPx and PPx.perfect) or 0.75) / eff
+        end
+        local a = 0
+        if sw > 4 * t then a = (sw - 4 * t) / (4 * (sw - 2 * t)) end
+        local cropKey = string.format("%s|%.4f", tostring(sw), a)
+        if d.akDispelCrop ~= cropKey then
+            d.dispelBorder:SetTexCoord(a, 1 - a, a, 1 - a)
+            d.akDispelCrop = cropKey
+        end
+        -- Registration follows the static border AND a nonzero thickness
+        -- (0 = the user disabled the dispel recolor outright).
+        local want = (style.dispelBorder and style.border
+            and (style.dispelBorderPx or 2) > 0) and true or false
+        local mapFP = style.dispelColorFP or ""
+        if d.dispelBorderOn ~= want or (want and d.akDispelMapFP ~= mapFP) then
             -- Stamp only on SUCCESS: these are button calls, denied while
             -- auras are secret; a pre-stamped failure would strand the
             -- registration in the wrong state after the restriction lifts.
             -- A restricted failure defers this style key to the lift drain.
             if want then
                 if pcall(button.SetAuraBorder, button, d.dispelBorder,
-                    { style = borderStyle.Color, showWhenHarmful = true, showWhenHelpful = false }) then
+                    { style = borderStyle.Color, showWhenHarmful = true, showWhenHelpful = false,
+                      customDispelColorMap = style.dispelColorMap }) then
                     d.dispelBorderOn = want
+                    d.akDispelMapFP = mapFP
                 elseif d.styleKey and AK.AurasRestricted() then
                     deferredRestyles[d.styleKey] = true
                 end
@@ -399,11 +432,24 @@ function AK.MakeInitializer(styleKey, extra)
         d.borderHost:SetAllPoints(button)
         d.borderHost:SetFrameLevel(d.cooldown:GetFrameLevel() + 1)
 
-        -- Stack and duration text ride a carrier frame above the cooldown
-        -- and border so neither the swipe nor the border can cover them.
+        -- Dispel-ring holder: its own frame between the border host and the
+        -- text carrier so the engine-tinted ring ALWAYS WINS over every
+        -- border. +3, not +1: PP.CreateBorder parks its strips on a
+        -- CONTAINER child at borderHost+1, and the DM per-filter border
+        -- override's container lands at borderHost+2 -- the ring clears
+        -- both. Created UNCONDITIONALLY here -- this is the only
+        -- guaranteed-legal window for parenting a frame to the button, and
+        -- a style can gain dispelBorder later via a settings toggle (UF)
+        -- when the window is long closed.
+        d.dispelHolder = CreateFrame("Frame", nil, button)
+        d.dispelHolder:SetAllPoints(button)
+        d.dispelHolder:SetFrameLevel(d.borderHost:GetFrameLevel() + 3)
+
+        -- Stack and duration text ride a carrier frame above the cooldown,
+        -- borders and dispel ring so none of them can cover the text.
         d.stackCarrier = CreateFrame("Frame", nil, button)
         d.stackCarrier:SetAllPoints(button)
-        d.stackCarrier:SetFrameLevel(d.borderHost:GetFrameLevel() + 1)
+        d.stackCarrier:SetFrameLevel(d.borderHost:GetFrameLevel() + 4)
         d.stack = d.stackCarrier:CreateFontString(nil, "OVERLAY")
         d.duration = d.stackCarrier:CreateFontString(nil, "OVERLAY")
 

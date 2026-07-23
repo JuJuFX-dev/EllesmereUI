@@ -16916,7 +16916,7 @@ initFrame:SetScript("OnEvent", function(self)
                           ns.BuildAllCDMBars(); Refresh(); UpdateCDMPreviewAndResize()
                       end },
                     { type="slider", label="Base Row Icons",
-                      min=1, max=50, step=1,
+                      min=1, max=15, step=1,
                       tooltip="How many icons to show on the base row (the row that fills first and that Row Growth keeps in place). The rest go on the second row.",
                       disabled=function() return rowsNotTwo() or customTopOff() end,
                       disabledTooltip=function()

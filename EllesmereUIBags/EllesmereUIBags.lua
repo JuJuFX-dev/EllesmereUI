@@ -763,16 +763,30 @@ local function CreateHeader()
                 local merged = false
                 for _, partials in pairs(stacks) do
                     if #partials >= 2 then
-                        table.sort(partials, function(a, b) return a.count < b.count end)
-                        local src = partials[1]
-                        local dst = partials[#partials]
-                        local srcLoc = ItemLocation:CreateFromBagAndSlot(src.bag, src.slot)
-                        local dstLoc = ItemLocation:CreateFromBagAndSlot(dst.bag, dst.slot)
-                        if not C_Item.IsLocked(srcLoc) and not C_Item.IsLocked(dstLoc) then
-                            C_Container.PickupContainerItem(src.bag, src.slot)
-                            C_Container.PickupContainerItem(dst.bag, dst.slot)
-                            ClearCursor()
-                            merged = true
+                        -- Fold the emptiest partial into the fullest one, found
+                        -- in a single scan (no full sort). Blizzard's engine
+                        -- performs the combine and leaves any overflow for a
+                        -- later pass to pick up.
+                        local target = partials[1]
+                        for i = 2, #partials do
+                            if partials[i].count > target.count then target = partials[i] end
+                        end
+                        local source
+                        for i = 1, #partials do
+                            local pr = partials[i]
+                            if pr ~= target and (not source or pr.count < source.count) then
+                                source = pr
+                            end
+                        end
+                        if source then
+                            local srcLoc = ItemLocation:CreateFromBagAndSlot(source.bag, source.slot)
+                            local dstLoc = ItemLocation:CreateFromBagAndSlot(target.bag, target.slot)
+                            if not C_Item.IsLocked(srcLoc) and not C_Item.IsLocked(dstLoc) then
+                                C_Container.PickupContainerItem(source.bag, source.slot)
+                                C_Container.PickupContainerItem(target.bag, target.slot)
+                                ClearCursor()
+                                merged = true
+                            end
                         end
                     end
                 end

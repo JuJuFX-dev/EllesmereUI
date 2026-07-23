@@ -247,9 +247,16 @@ end
         -- Re-show so the frame recalculates size with the new fonts. Gated
         -- on the skin toggle: with it off the fonts above were never
         -- applied, and the hook (uninstallable) must stay zero-cost.
+        -- pcall'd: on 12.1 a tooltip rendering secret-capable content
+        -- (widget spell tooltips via SetSpellByID) enforces access
+        -- restrictions, and a tainted re-Show is denied as forbidden-object
+        -- access (field-hit via Blizzard_PTRFeedback's tooltip hook, which
+        -- Shows the tooltip from secure code with our OnShow hook behind
+        -- it). The recalc is optional polish -- skip it there; the font
+        -- writes above are region-level and stay legal.
         if _enabled() and not _ttRelaying[self] then
             _ttRelaying[self] = true
-            self:Show()
+            pcall(self.Show, self)
             _ttRelaying[self] = nil
         end
     end
