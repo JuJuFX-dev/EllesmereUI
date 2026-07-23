@@ -6007,7 +6007,13 @@ local function SkinOrderView(ov)
     end
     local od = ov.OrderDetails
     if od then
-        WSkin.FadeRegions(od)
+        -- Preserve the profession quality-tier icon (the pentagon next to the
+        -- recipe name showing the order's required quality). It's a direct
+        -- OVERLAY texture region of OrderDetails, so the blanket region fade
+        -- would otherwise alpha-zero it and the quality indicator vanishes
+        -- under the skin (reported: quality not visible on crafting orders).
+        local keep = od.MinimumQualityIcon and { [od.MinimumQualityIcon] = true } or nil
+        WSkin.FadeRegions(od, keep)
         WSkin.Register(od, true)
         if od.Background then od.Background:SetAlpha(0) end
         SkinSchematic(od.SchematicForm)
