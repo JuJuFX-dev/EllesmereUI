@@ -4192,9 +4192,19 @@ local function AchAccentBar(bar)
             if not rd.lowered then
                 local p, rel, rp, x, y = fs:GetPoint(1)
                 if p then
+                    local offsetY = -3
+                    if bar and bar.GetParent then
+                        local parent = bar:GetParent()
+                        -- For AchievementFrameAchievementsObjectives, bar is the progress bar itself not the holder so retrieve the parent
+                        -- to match the parent name
+                        -- It does NOT need the offset
+                        if parent and parent.GetName and parent:GetName() == "AchievementFrameAchievementsObjectives" then
+                            offsetY = 0
+                        end
+                    end
                     rd.lowered = true
                     fs:ClearAllPoints()
-                    fs:SetPoint(p, rel, rp, x or 0, (y or 0) - 3)
+                    fs:SetPoint(p, rel, rp, x or 0, (y or 0) + offsetY)
                 end
             end
         end
