@@ -324,6 +324,11 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
     pastePage:SetFrameLevel(root:GetFrameLevel())
     pastePage:Hide()
 
+    local backupsPage = CreateFrame("Frame", nil, root)
+    backupsPage:SetAllPoints(root)
+    backupsPage:SetFrameLevel(root:GetFrameLevel())
+    backupsPage:Hide()
+
     -- Use mainPage for all main content
     parent = mainPage
     y = -10
@@ -1382,6 +1387,7 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
         -- Hide every other page so the import page never overlaps the one it was opened from (the main paste flow).
         mainPage:Hide()
         pastePage:Hide()
+        backupsPage:Hide()
         importPage:Show()
     end
 
@@ -1564,7 +1570,9 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
                                 .. ((EllesmereUI.PayloadFromOtherClient(payload) and type(payload.data) == "table"
                                     and payload.data.spellAssignments ~= nil)
                                     and ("\n\n" .. EllesmereUI.L("Its Cooldown Manager spells come from the other game client and will not be imported.")) or ""),
-                            disclaimer = EllesmereUI.L("This cannot be undone. Export your own profile as a backup first."),
+                            disclaimer = EllesmereUI.ProfileBackup_Take
+                                and EllesmereUI.L("A backup of your current settings is kept on the Profiles page under Automatic Backups.")
+                                or EllesmereUI.L("This cannot be undone. Export your own profile as a backup first."),
                             typeToConfirm = "Confirm",
                             confirmText = EllesmereUI.L("Import & Reload"),
                             cancelText = EllesmereUI.L("Cancel"),
@@ -1593,6 +1601,224 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
         pasteBox:SetFocus()
     end
 
+    -------------------------------------------------------------------
+    --  BACKUPS PAGE (Automatic Backups: list, restore, copy, delete)
+    --  The entries are written by EllesmereUI.ProfileBackup_Take before
+    --  a reset or an overwriting import. Restore never overwrites: a
+    --  profile backup opens the normal import page under a new name, an
+    --  account backup goes through the full-account import as a new
+    --  profile.
+    -------------------------------------------------------------------
+    local ShowBackupsPage
+    do
+        local ROW_H, BTN_W, BTN_H, BTN_GAP = 64, 80, 26, 8
+        -- Resets whose onReset also clears account or character data that
+        -- no export carries (loadouts, sign up note, loot feed history).
+        local PARTIAL_RESET = {
+            EllesmereUIAuraBuffReminders = true,
+            EllesmereUIGroupFinder       = true,
+            EllesmereUIForeverEssentials = true,
+        }
+        local restoreRun
+
+        local function ReasonText(e)
+            if e.reason == "reset" then
+                local title = e.arg and EllesmereUI:GetModuleTitle(e.arg)
+                return EllesmereUI.Lf("Before reset: %1$s", title and EllesmereUI.L(title) or tostring(e.arg))
+            elseif e.reason == "resetAll" then
+                return EllesmereUI.L("Before Reset ALL")
+            elseif e.reason == "fullImport" then
+                return EllesmereUI.L("Before full account import")
+            elseif e.reason == "import" then
+                return EllesmereUI.L("Before import")
+            end
+            return EllesmereUI.L("Backup")
+        end
+
+        -- First "<profile> (Backup)" name no profile has yet: the account
+        -- restore has no name box, and a taken name would be replaced.
+        local function FreeBackupName(base)
+            local _, profiles = EllesmereUI.GetProfileList()
+            profiles = profiles or {}
+            local name = EllesmereUI.Lf("%1$s (Backup)", base)
+            local n = 2
+            while profiles[name] do
+                name = EllesmereUI.Lf("%1$s (Backup %2$d)", base, n)
+                n = n + 1
+            end
+            return name
+        end
+
+        local function RestoreBackup(entry)
+            if InCombatLockdown() then
+                EllesmereUI:ShowInfoPopup({ title = EllesmereUI.L("Restore"), content = EllesmereUI.L("Not available in combat.") })
+                return
+            end
+            if restoreRun then return end
+            local pageGen = PoolGen(backupsPage)
+            restoreRun = EllesmereUI.DecodeImportStringAsync(entry.str, function(payload, err)
+                restoreRun = nil
+                if not SameDress(backupsPage, pageGen) or not backupsPage:IsVisible() then return end
+                if not payload then
+                    EllesmereUI:ShowInfoPopup({ title = EllesmereUI.L("Import Failed"), content = err or EllesmereUI.L("Invalid import string.") })
+                    return
+                end
+                local base = entry.profile or payload.profileName or "Default"
+                if EllesmereUI.IsFullAccountPayload(payload) then
+                    if not EllesmereUI.ProfileBackup_RenameAccountPayload then return end
+                    local name = FreeBackupName(base)
+                    EllesmereUI:ShowConfirmPopup({
+                        title = EllesmereUI.L("Restore Backup"),
+                        message = EllesmereUI.Lf("This puts your account-wide settings back as they were in this backup, including Quality of Life, HoverCast bindings, Cooldown Manager spell setups, unlock anchors, UI scale, and spec assignments. Changes you made to them since then are lost. The profile comes back as a new profile named %1$s; your existing profiles are not changed.", name),
+                        disclaimer = EllesmereUI.L("A backup of your current settings is taken first."),
+                        typeToConfirm = "Confirm",
+                        confirmText = EllesmereUI.L("Restore & Reload"),
+                        cancelText = EllesmereUI.L("Cancel"),
+                        onConfirm = function()
+                            if InCombatLockdown() then return end
+                            EllesmereUI.ProfileBackup_RenameAccountPayload(payload, name)
+                            EllesmereUI.ImportFullAccountData(payload)
+                        end,
+                    })
+                    return
+                end
+                -- Profile backup: the normal import page (module picks,
+                -- include toggles, taken-name rule) under a new name.
+                backupsPage:Hide()
+                MaybeConfirmUIScale(payload, function(applyScale)
+                    if not SameDress(backupsPage, pageGen) then return end
+                    ShowImportPage(entry.str, payload, EllesmereUI.Lf("%1$s (Backup)", base), nil, nil, applyScale)
+                end)
+            end)
+        end
+
+        local function DeleteBackup(entry)
+            EllesmereUI:ShowConfirmPopup({
+                title = EllesmereUI.L("Delete Backup"),
+                message = EllesmereUI.L("Delete this backup?"),
+                confirmText = EllesmereUI.L("Delete"),
+                cancelText = EllesmereUI.L("Cancel"),
+                onConfirm = function()
+                    local list = EllesmereUI.ProfileBackup_List and EllesmereUI.ProfileBackup_List()
+                    if not list then return end
+                    for i, e in ipairs(list) do
+                        if e == entry then EllesmereUI.ProfileBackup_Delete(i); break end
+                    end
+                    if backupsPage:IsVisible() then ShowBackupsPage() end
+                end,
+            })
+        end
+
+        local function BuildBackupRow(listFrame, i, entry, totalW)
+            local rowFrame = CreateFrame("Frame", nil, listFrame)
+            PP.Size(rowFrame, totalW, ROW_H)
+            PP.Point(rowFrame, "TOPLEFT", listFrame, "TOPLEFT", 0, -(i - 1) * ROW_H)
+            local rowBg = rowFrame:CreateTexture(nil, "BACKGROUND")
+            rowBg:SetAllPoints()
+            rowBg:SetColorTexture(0, 0, 0, (i % 2 == 0) and 0.12 or 0.06)
+
+            local textRight = -(SIDE_PAD + BTN_W * 3 + BTN_GAP * 3)
+            local nameFs = EllesmereUI.MakeFont(rowFrame, 13, nil, 1, 1, 1, 0.9)
+            PP.Point(nameFs, "TOPLEFT", rowFrame, "TOPLEFT", SIDE_PAD, -10)
+            PP.Point(nameFs, "RIGHT", rowFrame, "RIGHT", textRight, 0)
+            nameFs:SetJustifyH("LEFT")
+            nameFs:SetWordWrap(false)
+            nameFs:SetText(ReasonText(entry))
+
+            local desc = (entry.profile or "Default") .. ", " .. date("%Y-%m-%d %H:%M", entry.t or 0)
+            if entry.kind == "account" then
+                desc = desc .. ", " .. EllesmereUI.L("profile and account settings")
+            end
+            local descFs = EllesmereUI.MakeFont(rowFrame, 11, nil, 1, 1, 1, 0.35)
+            PP.Point(descFs, "TOPLEFT", nameFs, "BOTTOMLEFT", 0, -5)
+            PP.Point(descFs, "RIGHT", nameFs, "RIGHT", 0, 0)
+            descFs:SetJustifyH("LEFT")
+            descFs:SetWordWrap(false)
+            descFs:SetText(desc)
+
+            local notes = {}
+            if entry.ver and entry.ver ~= EllesmereUI.VERSION then
+                notes[#notes + 1] = EllesmereUI.Lf("Made with version %1$s", tostring(entry.ver))
+            end
+            if entry.reason == "reset" and PARTIAL_RESET[entry.arg] then
+                notes[#notes + 1] = EllesmereUI.L("Account and character parts of this reset are not in the backup.")
+            end
+            local noteFs = EllesmereUI.MakeFont(rowFrame, 11, nil, 1, 0.82, 0.30, 0.75)
+            PP.Point(noteFs, "TOPLEFT", descFs, "BOTTOMLEFT", 0, -4)
+            PP.Point(noteFs, "RIGHT", nameFs, "RIGHT", 0, 0)
+            noteFs:SetJustifyH("LEFT")
+            noteFs:SetWordWrap(false)
+            noteFs:SetText(table.concat(notes, " "))
+
+            local defs = {
+                { EllesmereUI.L("Restore"), function() RestoreBackup(entry) end },
+                { EllesmereUI.L("Copy"), function() EllesmereUI:ShowCopyPopup(EllesmereUI.L("Backup"), ReasonText(entry), entry.str) end },
+                { EllesmereUI.L("Delete"), function() DeleteBackup(entry) end },
+            }
+            for b, def in ipairs(defs) do
+                local btn = EllesmereUI.BuildPopupButton(rowFrame, BTN_W, BTN_H, def[1], def[2])
+                PP.Point(btn, "RIGHT", rowFrame, "RIGHT", -(SIDE_PAD + (3 - b) * (BTN_W + BTN_GAP)), 0)
+            end
+        end
+
+        ShowBackupsPage = function()
+            if PoolManaged(backupsPage) then
+                PoolBegin(backupsPage)
+            else
+                for _, child in ipairs({ backupsPage:GetChildren() }) do
+                    child:Hide()
+                    child:SetParent(nil)
+                end
+            end
+            restoreRun = nil
+
+            local PAD = EllesmereUI.CONTENT_PAD
+            local totalW = backupsPage:GetWidth() - PAD * 2
+            local py = -30
+
+            local BACK_H = 32
+            local backBtn = EllesmereUI.BuildPopupButton(backupsPage, 80, BACK_H, EllesmereUI.L("Back"), function()
+                backupsPage:Hide()
+                mainPage:Show()
+            end)
+            PP.Point(backBtn, "TOPLEFT", backupsPage, "TOPLEFT", PAD, py)
+
+            local titleFs = EllesmereUI.MakeFont(backupsPage, 16, nil, 1, 1, 1, 0.95)
+            PP.Point(titleFs, "TOP", backupsPage, "TOP", 0, py - BACK_H / 2 + 8)
+            titleFs:SetText(EllesmereUI.L("Automatic Backups"))
+            titleFs:SetJustifyH("CENTER")
+            py = py - BACK_H - 20
+
+            local descFs = EllesmereUI.MakeFont(backupsPage, 11, nil, 1, 1, 1, 0.45)
+            PP.Point(descFs, "TOPLEFT", backupsPage, "TOPLEFT", PAD, py)
+            PP.Point(descFs, "RIGHT", backupsPage, "RIGHT", -PAD, 0)
+            descFs:SetJustifyH("LEFT")
+            descFs:SetWordWrap(true)
+            descFs:SetText(EllesmereUI.L("EllesmereUI keeps your last 3 profile states from before an import or a reset. Restore adds the backup as a new profile; nothing you have now is overwritten."))
+            py = py - 40
+
+            local list = EllesmereUI.ProfileBackup_List and EllesmereUI.ProfileBackup_List() or {}
+            local listFrame = CreateFrame("Frame", nil, backupsPage)
+            PP.Size(listFrame, totalW, math.max(#list, 1) * ROW_H)
+            PP.Point(listFrame, "TOPLEFT", backupsPage, "TOPLEFT", PAD, py)
+            EllesmereUI.MakeRoundedCard(listFrame, 0.10, 0.50)
+            if #list == 0 then
+                local emptyFs = EllesmereUI.MakeFont(listFrame, 12, nil, 1, 1, 1, 0.40)
+                emptyFs:SetPoint("CENTER")
+                emptyFs:SetText(EllesmereUI.L("No backups yet."))
+            else
+                for i, entry in ipairs(list) do
+                    BuildBackupRow(listFrame, i, entry, totalW)
+                end
+            end
+
+            mainPage:Hide()
+            pastePage:Hide()
+            importPage:Hide()
+            backupsPage:Show()
+        end
+    end
+
 
     -------------------------------------------------------------------
     --  TOP SECTION: Import | Popular Presets (2 action cards)
@@ -1612,6 +1838,9 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
           onClick = function()
               if EllesmereUI.VideoGuides then EllesmereUI.VideoGuides.Show("presets_website") end
           end },
+        { icon = MEDIA .. "icons\\undo.png",
+          title = EllesmereUI.L("Automatic Backups"), desc = EllesmereUI.L("Restore a state from before a reset or import."),
+          onClick = function() ShowBackupsPage() end },
     })
 
     -------------------------------------------------------------------
@@ -2514,6 +2743,7 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
     EllesmereUI._ProfilesResetToMain = function()
         importPage:Hide()
         pastePage:Hide()
+        backupsPage:Hide()
         mainPage:Show()
     end
 
