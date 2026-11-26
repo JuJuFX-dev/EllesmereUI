@@ -2337,6 +2337,19 @@ function EllesmereUI.ApplyBlizzSkinGlobals(bundle)
     end
 end
 
+-- Export deflate: the client's native compressor when it has one (a raw
+-- deflate stream, the format LibDeflate writes and both decoders read), else
+-- LibDeflate. Native is far faster on large profiles, which matters where an
+-- export runs inside a reload click (automatic backups).
+local function DeflateForExport(serialized)
+    if C_EncodingUtil and C_EncodingUtil.CompressString
+       and Enum and Enum.CompressionMethod and Enum.CompressionMethod.Deflate then
+        local ok, out = pcall(C_EncodingUtil.CompressString, serialized, Enum.CompressionMethod.Deflate)
+        if ok and type(out) == "string" and #out > 0 then return out end
+    end
+    return LibDeflate:CompressDeflate(serialized)
+end
+
 function EllesmereUI.ExportProfile(profileName, includedFolders, includeLayout, includeCDM, cdmSpecs, includeGlobals, includeOverrides, includeBlizzSkin)
     if includeLayout == nil then includeLayout = true end  -- default ON
     -- Overrides (value stores + groups + unlock-layer forks + BM forks)
@@ -2527,7 +2540,7 @@ function EllesmereUI.ExportProfile(profileName, includedFolders, includeLayout, 
     payload.meta = EllesmereUI.ScreenStamp(profileName == (db.activeProfile or "Default"))
     local serialized = Serializer.Serialize(payload)
     if not LibDeflate then return nil end
-    local compressed = LibDeflate:CompressDeflate(serialized)
+    local compressed = DeflateForExport(serialized)
     local encoded = LibDeflate:EncodeForPrint(compressed)
     return EXPORT_PREFIX .. encoded
 end
@@ -2743,7 +2756,7 @@ function EllesmereUI.ExportFullAccountData(profileName)
     }
     EllesmereUI.StampPayloadClient(payload)
     local serialized = Serializer.Serialize(payload)
-    local compressed = LibDeflate:CompressDeflate(serialized)
+    local compressed = DeflateForExport(serialized)
     return EXPORT_PREFIX .. LibDeflate:EncodeForPrint(compressed)
 end
 
