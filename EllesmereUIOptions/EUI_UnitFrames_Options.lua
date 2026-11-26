@@ -3324,6 +3324,7 @@ initFrame:SetScript("OnEvent", function(self)
         if msg == "reset" then
             -- The reload first (RequestReload); the reset lands before it.
             EllesmereUI.RequestReload()
+            if EllesmereUI.ProfileBackup_Take then EllesmereUI.ProfileBackup_Take("reset", "EllesmereUIUnitFrames", "profile") end
             db:ResetProfile()
             return
         end

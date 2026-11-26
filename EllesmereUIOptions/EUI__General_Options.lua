@@ -1304,6 +1304,8 @@ initFrame:SetScript("OnEvent", function(self)
 
         -- Reset ALL's wipe: every EUI addon back to its defaults.
         local function ResetAllNow()
+            -- Automatic backup first: the active profile and the account settings.
+            if EllesmereUI.ProfileBackup_Take then EllesmereUI.ProfileBackup_Take("resetAll", nil, "account") end
             -- Nuclear wipe: same logic as the beta-exit popup
             local svNames = {
                 "EllesmereUIActionBarsDB",
@@ -1359,10 +1361,12 @@ initFrame:SetScript("OnEvent", function(self)
             -- before EUI (Uninstall EUI) and Optimize Graphics' Restore values.
             local oldRestore = EllesmereUIDB.restoreOnUninstall
             local oldGfx = EllesmereUIDB.gfxBackup
+            local oldBackups = EllesmereUIDB.profileBackups
             _G["EllesmereUIDB"] = {}
             EllesmereUIDB = _G["EllesmereUIDB"]
             EllesmereUIDB.restoreOnUninstall = oldRestore
             EllesmereUIDB.gfxBackup = oldGfx
+            EllesmereUIDB.profileBackups = oldBackups
             if oldScale then EllesmereUIDB.ppUIScale = oldScale end
             if oldScaleAuto ~= nil then EllesmereUIDB.ppUIScaleAuto = oldScaleAuto end
             if savedFriends then

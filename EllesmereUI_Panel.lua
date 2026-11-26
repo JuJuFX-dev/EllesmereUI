@@ -5138,7 +5138,13 @@ local function ConfirmModuleReset(key, name)
         onConfirm     = function()
             EllesmereUI.RequestReload(title, EllesmereUI.L("Reload to finish the reset."), function()
                 local c = modules[key]
-                if c and c.onReset then c.onReset() end
+                if c and c.onReset then
+                    -- Automatic backup of what the reset clears (Profiles page).
+                    if EllesmereUI.ProfileBackup_Take then
+                        EllesmereUI.ProfileBackup_Take("reset", key, c.resetScope == "account" and "account" or "profile")
+                    end
+                    c.onReset()
+                end
             end)
         end,
     })

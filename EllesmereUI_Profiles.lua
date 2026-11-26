@@ -2632,6 +2632,7 @@ local FULL_EXPORT_EXCLUDED = {
     -- Game settings from before EllesmereUI, put back by Uninstall EUI
     restoreOnUninstall    = true, -- EllesmereUI_Uninstall.lua
     gfxBackup             = true, -- Optimize My FPS and Graphics' Restore values
+    profileBackups        = true, -- Automatic Backups (Profiles page): the player's own, and each holds a full export
     friendlyPlateVisSaved = true, -- friendly plates hidden in a follower dungeon
     chatTellMuted         = true, -- whisper sound Chat muted
     chatClassColorWas     = true, -- the game's chatClassColorOverride before Chat's Name of Chatter hold
@@ -2687,7 +2688,7 @@ local FULL_IMPORT_MERGE = {
 }
 
 --- Builds a full-account export string, or nil.
-function EllesmereUI.ExportFullAccountData()
+function EllesmereUI.ExportFullAccountData(profileName)
     if not EllesmereUIDB then return nil end
     if not LibDeflate then return nil end
     -- Same freshness boundary the profile export uses: bank live override
@@ -2706,16 +2707,21 @@ function EllesmereUI.ExportFullAccountData()
     -- ONLY the active profile travels; the exporter's other profiles are
     -- their own business and would overwrite same-named profiles on import.
     out.profiles = {}
-    local prof = db.profiles and db.profiles[activeName]
+    -- profileName (optional, the backups' only use): carry that profile
+    -- instead of the active one. Only the active one is freshened from live.
+    local carried = (profileName and db.profiles and db.profiles[profileName]) and profileName or activeName
+    local prof = db.profiles and db.profiles[carried]
     if prof then
         local copy = DeepCopy(prof)
         -- Freshen profile-global appearance and the unlock layout from live,
         -- mirroring what ExportProfile does for the active profile -- but on
         -- the COPY. A full export never mutates stored data.
-        copy.fonts        = DeepCopy(EllesmereUI.GetFontsDB())
-        copy.customColors = DeepCopy(EllesmereUI.GetCustomColorsDB())
-        copy.darkMode     = DeepCopy(EllesmereUI.GetDarkModeDB())
-        copy.unlockLayout = SnapshotUnlockLayout()
+        if carried == activeName then
+            copy.fonts        = DeepCopy(EllesmereUI.GetFontsDB())
+            copy.customColors = DeepCopy(EllesmereUI.GetCustomColorsDB())
+            copy.darkMode     = DeepCopy(EllesmereUI.GetDarkModeDB())
+            copy.unlockLayout = SnapshotUnlockLayout()
+        end
         -- Recipient-local import bookkeeping never rides a string.
         copy._importEstablishPending = nil
         copy._abSpellsImported = nil
@@ -2724,15 +2730,15 @@ function EllesmereUI.ExportFullAccountData()
         -- profile can still carry them there, and they are excluded from a
         -- full export at every address they have ever lived at.
         StripPrivateAddonData(copy.addons)
-        out.profiles[activeName] = copy
+        out.profiles[carried] = copy
     end
-    out.activeProfile = activeName
-    out.profileOrder  = { activeName }
+    out.activeProfile = carried
+    out.profileOrder  = { carried }
     local payload = {
         version     = EllesmereUI.LayoutExportVersion(out),
         type        = FULL_EXPORT_TYPE,
         fullExport  = true,     -- the routing stamp the import flow reads
-        profileName = activeName,
+        profileName = carried,
         data        = out,
     }
     EllesmereUI.StampPayloadClient(payload)
@@ -2763,6 +2769,10 @@ function EllesmereUI.ImportFullAccountData(payload)
     if EllesmereUI.SpecOverrides_CloseEditSessions then EllesmereUI.SpecOverrides_CloseEditSessions() end
     if EllesmereUI.SpecOverrides_HarvestCurrent then EllesmereUI.SpecOverrides_HarvestCurrent() end
     local activeName = data.activeProfile or payload.profileName or "Default"
+    -- Automatic backup: the account settings and the profile this replaces
+    -- (the active one when the carried name is new here).
+    EllesmereUI.ProfileBackup_Take("fullImport", nil, "account",
+        type(EllesmereUIDB.profiles) == "table" and EllesmereUIDB.profiles[activeName] and activeName or nil)
 
     -- 1) Account globals, wholesale. profiles/profileOrder/activeProfile are
     --    handled below; the excluded per-character blobs are refused on the
@@ -2876,6 +2886,119 @@ function EllesmereUI.ImportFullAccountData(payload)
         end
     end
     return true
+end
+
+-------------------------------------------------------------------------------
+--  AUTOMATIC BACKUPS (Profiles page > Automatic Backups)
+--  The state a reset or import replaces, kept as an export string in
+--  EllesmereUIDB.profileBackups (newest first): { t, kind, reason, arg,
+--  profile, ver, str }. A module reset keeps only that module and replaces
+--  its older backup. Runs inside the reload click (RequestReload), so it is
+--  synchronous; a failure never stops the reset or import.
+-------------------------------------------------------------------------------
+do
+    local MAX_BACKUPS = 3
+    local MAX_LEN = 1000000
+    local CDM_FOLDER = "EllesmereUICooldownManager"
+
+    local function List()
+        if type(EllesmereUIDB.profileBackups) ~= "table" then EllesmereUIDB.profileBackups = {} end
+        return EllesmereUIDB.profileBackups
+    end
+
+    local function Take(reason, arg, kind, profileName)
+        local db = GetProfilesDB()
+        local name = profileName or db.activeProfile or "Default"
+        if not db.profiles[name] then return end
+        -- Bank live override edits first, so the string holds the base values
+        -- with the overrides in their stores (as ImportProfile does).
+        if EllesmereUI.SpecOverrides_CloseEditSessions then EllesmereUI.SpecOverrides_CloseEditSessions() end
+        if EllesmereUI.SpecOverrides_HarvestCurrent then EllesmereUI.SpecOverrides_HarvestCurrent() end
+        local str
+        if kind == "account" then
+            str = EllesmereUI.ExportFullAccountData(name)
+        elseif reason == "reset" then
+            local addons = db.profiles[name].addons
+            if not (arg and type(addons) == "table" and addons[arg] ~= nil) then return end
+            -- That module only: its layout and overrides, no global look,
+            -- no account skins.
+            str = EllesmereUI.ExportProfile(name, { [arg] = true }, true, arg == CDM_FOLDER, nil, false, true, false)
+        else
+            str = EllesmereUI.ExportProfile(name)
+        end
+        if type(str) ~= "string" then
+            EllesmereUI.Print(EllesmereUI.L("Automatic backup failed. Your change goes ahead."))
+            return
+        end
+        if #str > MAX_LEN then
+            EllesmereUI.Print(EllesmereUI.L("Automatic backup skipped: the profile is too large."))
+            return
+        end
+        local list = List()
+        if reason == "reset" then
+            for i = #list, 1, -1 do
+                local e = list[i]
+                if e.reason == "reset" and e.arg == arg and e.profile == name then table.remove(list, i) end
+            end
+        end
+        table.insert(list, 1, { t = time(), kind = kind, reason = reason, arg = arg,
+            profile = name, ver = EllesmereUI.VERSION, str = str })
+        for i = #list, MAX_BACKUPS + 1, -1 do list[i] = nil end
+    end
+
+    function EllesmereUI.ProfileBackup_Take(reason, arg, kind, profileName)
+        if type(EllesmereUIDB) ~= "table" then return end
+        if not pcall(Take, reason, arg, kind or "profile", profileName) then
+            EllesmereUI.Print(EllesmereUI.L("Automatic backup failed. Your change goes ahead."))
+        end
+    end
+
+    function EllesmereUI.ProfileBackup_List()
+        if type(EllesmereUIDB) ~= "table" then return {} end
+        return List()
+    end
+
+    function EllesmereUI.ProfileBackup_Delete(index)
+        local list = EllesmereUI.ProfileBackup_List()
+        if list[index] then table.remove(list, index) end
+    end
+
+    -- A decoded account backup, retargeted at newName before
+    -- ImportFullAccountData: its profile and every root store keyed by or
+    -- pointing at that profile's name follow it (the RenameProfile list), so
+    -- the restore adds a profile instead of replacing the one of that name.
+    function EllesmereUI.ProfileBackup_RenameAccountPayload(payload, newName)
+        local data = type(payload) == "table" and payload.data
+        if type(data) ~= "table" or type(newName) ~= "string" then return end
+        local old = data.activeProfile or payload.profileName or "Default"
+        if old == newName then return end
+        if type(data.profiles) == "table" then
+            data.profiles[newName] = data.profiles[old]
+            data.profiles[old] = nil
+        end
+        data.activeProfile = newName
+        data.profileOrder = { newName }
+        payload.profileName = newName
+        local sa = data.spellAssignments
+        if type(sa) == "table" and type(sa.profiles) == "table" then
+            sa.profiles[newName] = sa.profiles[old]
+            sa.profiles[old] = nil
+        end
+        if type(data.profileKeybinds) == "table" then
+            data.profileKeybinds[newName] = data.profileKeybinds[old]
+            data.profileKeybinds[old] = nil
+        end
+        for _, k in ipairs({ "specProfiles", "colorsSectionPullFrom" }) do
+            local t = data[k]
+            if type(t) == "table" then
+                for key, n in pairs(t) do
+                    if n == old then t[key] = newName end
+                end
+            end
+        end
+        if data.colorsPullFrom == old then data.colorsPullFrom = newName end
+        if data.lastNonSpecProfile == old then data.lastNonSpecProfile = newName end
+    end
 end
 
 -------------------------------------------------------------------------------
@@ -3592,6 +3715,10 @@ function EllesmereUI.ImportProfile(importStr, profileName)
         end
         if EllesmereUI.SpecOverrides_HarvestCurrent then
             EllesmereUI.SpecOverrides_HarvestCurrent()
+        end
+        -- Automatic backup when this import replaces an existing profile.
+        if db.profiles[profileName] then
+            EllesmereUI.ProfileBackup_Take("import", nil, "profile", profileName)
         end
         -- WoW Forever: the one-time buff clear runs on the payload itself, before
         -- the merge copy and the raw re-apply below (EllesmereUI_Migration.lua).
@@ -5406,6 +5533,9 @@ function EllesmereUI.ImportProfileSilent(opts)
     if opts.cleanSlate ~= false then
         local db = GetProfilesDB()
         if db.profiles and db.profiles[profileName] then
+            -- Automatic backup of the profile about to be replaced; the
+            -- import below then no longer finds the name (no second one).
+            EllesmereUI.ProfileBackup_Take("import", nil, "profile", profileName)
             EllesmereUI.DeleteProfile(profileName)
         end
     end
