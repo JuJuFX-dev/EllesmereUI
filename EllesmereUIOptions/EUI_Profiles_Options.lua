@@ -247,6 +247,47 @@ local function MakeAccentFade(btn, lbl, brd)
     end
 end
 
+-- The subpages' Back button (arrow, accent icon, hover fade) at x, y on page.
+local function BuildBackButton(page, x, y, w, h, onClick)
+    local EG = EllesmereUI.ELLESMERE_GREEN
+    local backBtn = CreateFrame("Button", nil, page)
+    PP.Size(backBtn, w, h)
+    PP.Point(backBtn, "TOPLEFT", page, "TOPLEFT", x, y)
+    backBtn:SetFrameLevel(page:GetFrameLevel() + 2)
+
+    local backBg = backBtn:CreateTexture(nil, "BACKGROUND")
+    backBg:SetAllPoints()
+    backBg:SetColorTexture(0.077, 0.068, 0.058, 0.50)
+    local backBrd = EllesmereUI.MakeRoundedBorder(backBtn, 1, 1, 1, 0.12, backBg)
+
+    local backIcon = backBtn:CreateTexture(nil, "ARTWORK")
+    backIcon:SetSize(14, 14)
+    PP.Point(backIcon, "LEFT", backBtn, "LEFT", 10, 0)
+    backIcon:SetTexture("Interface\\AddOns\\EllesmereUI\\media\\icons\\eui-arrow-left.png")
+    backIcon:SetVertexColor(EG.r, EG.g, EG.b)
+    backIcon:SetAlpha(0.6)
+    if backIcon.SetSnapToPixelGrid then backIcon:SetSnapToPixelGrid(false); backIcon:SetTexelSnappingBias(0) end
+
+    local backLbl = EllesmereUI.MakeFont(backBtn, 12, nil, 1, 1, 1, 0.55)
+    PP.Point(backLbl, "LEFT", backIcon, "RIGHT", 6, 0)
+    backLbl:SetText(EllesmereUI.L("Back"))
+
+    backBtn:SetScript("OnEnter", function()
+        backBg:SetColorTexture(0.119, 0.111, 0.104, 0.50)
+        backBrd:SetColor(1, 1, 1, 0.22)
+        backIcon:SetAlpha(0.85)
+        backLbl:SetAlpha(0.85)
+    end)
+    backBtn:SetScript("OnLeave", function()
+        backBg:SetColorTexture(0.077, 0.068, 0.058, 0.50)
+        backBrd:SetColor(1, 1, 1, 0.12)
+        backIcon:SetAlpha(0.6)
+        backLbl:SetAlpha(0.55)
+    end)
+    backBtn:SetScript("OnClick", onClick)
+    return backBtn
+end
+
 -- A profile's keybind popup: built on its first open and kept across page
 -- builds; each open points it at that profile (ShowProfileKeybindPopup).
 local profileKeybindPopup
@@ -610,41 +651,7 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
         local iy = -30
 
         local BACK_W, BACK_H = 80, 32
-        local backBtn = CreateFrame("Button", nil, importPage)
-        PP.Size(backBtn, BACK_W, BACK_H)
-        PP.Point(backBtn, "TOPLEFT", importPage, "TOPLEFT", PAD, iy)
-        backBtn:SetFrameLevel(importPage:GetFrameLevel() + 2)
-
-        local backBg = backBtn:CreateTexture(nil, "BACKGROUND")
-        backBg:SetAllPoints()
-        backBg:SetColorTexture(0.077, 0.068, 0.058, 0.50)
-        local backBrd = EllesmereUI.MakeRoundedBorder(backBtn, 1, 1, 1, 0.12, backBg)
-
-        local backIcon = backBtn:CreateTexture(nil, "ARTWORK")
-        backIcon:SetSize(14, 14)
-        PP.Point(backIcon, "LEFT", backBtn, "LEFT", 10, 0)
-        backIcon:SetTexture(MEDIA .. "icons\\eui-arrow-left.png")
-        backIcon:SetVertexColor(EG.r, EG.g, EG.b)
-        backIcon:SetAlpha(0.6)
-        if backIcon.SetSnapToPixelGrid then backIcon:SetSnapToPixelGrid(false); backIcon:SetTexelSnappingBias(0) end
-
-        local backLbl = EllesmereUI.MakeFont(backBtn, 12, nil, 1, 1, 1, 0.55)
-        PP.Point(backLbl, "LEFT", backIcon, "RIGHT", 6, 0)
-        backLbl:SetText(EllesmereUI.L("Back"))
-
-        backBtn:SetScript("OnEnter", function()
-            backBg:SetColorTexture(0.119, 0.111, 0.104, 0.50)
-            backBrd:SetColor(1, 1, 1, 0.22)
-            backIcon:SetAlpha(0.85)
-            backLbl:SetAlpha(0.85)
-        end)
-        backBtn:SetScript("OnLeave", function()
-            backBg:SetColorTexture(0.077, 0.068, 0.058, 0.50)
-            backBrd:SetColor(1, 1, 1, 0.12)
-            backIcon:SetAlpha(0.6)
-            backLbl:SetAlpha(0.55)
-        end)
-        backBtn:SetScript("OnClick", function()
+        BuildBackButton(importPage, PAD, iy, BACK_W, BACK_H, function()
             importPage:Hide()
             mainPage:Show()
         end)
@@ -1410,41 +1417,7 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
         local py = -30
 
         local BACK_W, BACK_H = 80, 32
-        local backBtn = CreateFrame("Button", nil, pastePage)
-        PP.Size(backBtn, BACK_W, BACK_H)
-        PP.Point(backBtn, "TOPLEFT", pastePage, "TOPLEFT", PAD, py)
-        backBtn:SetFrameLevel(pastePage:GetFrameLevel() + 2)
-
-        local backBg = backBtn:CreateTexture(nil, "BACKGROUND")
-        backBg:SetAllPoints()
-        backBg:SetColorTexture(0.077, 0.068, 0.058, 0.50)
-        local backBrd = EllesmereUI.MakeRoundedBorder(backBtn, 1, 1, 1, 0.12, backBg)
-
-        local backIcon = backBtn:CreateTexture(nil, "ARTWORK")
-        backIcon:SetSize(14, 14)
-        PP.Point(backIcon, "LEFT", backBtn, "LEFT", 10, 0)
-        backIcon:SetTexture(MEDIA .. "icons\\eui-arrow-left.png")
-        backIcon:SetVertexColor(EG.r, EG.g, EG.b)
-        backIcon:SetAlpha(0.6)
-        if backIcon.SetSnapToPixelGrid then backIcon:SetSnapToPixelGrid(false); backIcon:SetTexelSnappingBias(0) end
-
-        local backLbl = EllesmereUI.MakeFont(backBtn, 12, nil, 1, 1, 1, 0.55)
-        PP.Point(backLbl, "LEFT", backIcon, "RIGHT", 6, 0)
-        backLbl:SetText(EllesmereUI.L("Back"))
-
-        backBtn:SetScript("OnEnter", function()
-            backBg:SetColorTexture(0.119, 0.111, 0.104, 0.50)
-            backBrd:SetColor(1, 1, 1, 0.22)
-            backIcon:SetAlpha(0.85)
-            backLbl:SetAlpha(0.85)
-        end)
-        backBtn:SetScript("OnLeave", function()
-            backBg:SetColorTexture(0.077, 0.068, 0.058, 0.50)
-            backBrd:SetColor(1, 1, 1, 0.12)
-            backIcon:SetAlpha(0.6)
-            backLbl:SetAlpha(0.55)
-        end)
-        backBtn:SetScript("OnClick", function()
+        BuildBackButton(pastePage, PAD, py, BACK_W, BACK_H, function()
             pastePage:Hide()
             mainPage:Show()
         end)
@@ -1612,12 +1585,13 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
     local ShowBackupsPage
     do
         local ROW_H, BTN_W, BTN_H, BTN_GAP = 64, 80, 26, 8
-        -- Resets whose onReset also clears account or character data that
-        -- no export carries (loadouts, sign up note, loot feed history).
+        -- Profile-scope resets whose onReset also clears account or character
+        -- data a profile export does not carry (loadouts, sign up note, bag
+        -- categories and pins).
         local PARTIAL_RESET = {
             EllesmereUIAuraBuffReminders = true,
             EllesmereUIGroupFinder       = true,
-            EllesmereUIForeverEssentials = true,
+            EllesmereUIBags              = true,
         }
         local restoreRun
 
@@ -1669,8 +1643,10 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
                     local name = FreeBackupName(base)
                     EllesmereUI:ShowConfirmPopup({
                         title = EllesmereUI.L("Restore Backup"),
-                        message = EllesmereUI.Lf("This puts your account-wide settings back as they were in this backup, including Quality of Life, HoverCast bindings, Cooldown Manager spell setups, unlock anchors, UI scale, and spec assignments. Changes you made to them since then are lost. The profile comes back as a new profile named %1$s; your existing profiles are not changed.", name),
-                        disclaimer = EllesmereUI.L("A backup of your current settings is taken first."),
+                        message = ((entry.reason == "reset")
+                                and (EllesmereUI.L("This backup was made before a module reset, but restoring it puts back all account-wide settings, not only that module's.") .. "\n\n") or "")
+                            .. EllesmereUI.Lf("The account-wide settings saved in this backup replace yours, including Quality of Life, HoverCast bindings, Cooldown Manager spell setups, unlock anchors, UI scale, and spec assignments. The profile comes back as a new profile named %1$s; your existing profiles are not changed.", name),
+                        disclaimer = EllesmereUI.L("A backup of your current settings is taken first. With 3 backups, the oldest one is removed."),
                         typeToConfirm = "Confirm",
                         confirmText = EllesmereUI.L("Restore & Reload"),
                         cancelText = EllesmereUI.L("Cancel"),
@@ -1740,7 +1716,9 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
             if entry.ver and entry.ver ~= EllesmereUI.VERSION then
                 notes[#notes + 1] = EllesmereUI.Lf("Made with version %1$s", tostring(entry.ver))
             end
-            if entry.reason == "reset" and PARTIAL_RESET[entry.arg] then
+            if entry.reason == "reset" and entry.kind == "account" then
+                notes[#notes + 1] = EllesmereUI.L("Character data and game settings are not in the backup.")
+            elseif entry.reason == "reset" and PARTIAL_RESET[entry.arg] then
                 notes[#notes + 1] = EllesmereUI.L("Account and character parts of this reset are not in the backup.")
             end
             local noteFs = EllesmereUI.MakeFont(rowFrame, 11, nil, 1, 0.82, 0.30, 0.75)
@@ -1777,11 +1755,10 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
             local py = -30
 
             local BACK_H = 32
-            local backBtn = EllesmereUI.BuildPopupButton(backupsPage, 80, BACK_H, EllesmereUI.L("Back"), function()
+            BuildBackButton(backupsPage, PAD, py, 80, BACK_H, function()
                 backupsPage:Hide()
                 mainPage:Show()
             end)
-            PP.Point(backBtn, "TOPLEFT", backupsPage, "TOPLEFT", PAD, py)
 
             local titleFs = EllesmereUI.MakeFont(backupsPage, 16, nil, 1, 1, 1, 0.95)
             PP.Point(titleFs, "TOP", backupsPage, "TOP", 0, py - BACK_H / 2 + 8)
@@ -1821,7 +1798,7 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
 
 
     -------------------------------------------------------------------
-    --  TOP SECTION: Import | Popular Presets (2 action cards)
+    --  TOP SECTION: Import | Popular Presets | Automatic Backups (3 action cards)
     --  Exporting lives solely in the per-addon "Export Profile" section below -- all modules checked is the full export.
     -------------------------------------------------------------------
     _, h = W:Spacer(parent, y, 10);  y = y - h
@@ -1838,7 +1815,7 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
           onClick = function()
               if EllesmereUI.VideoGuides then EllesmereUI.VideoGuides.Show("presets_website") end
           end },
-        { icon = MEDIA .. "icons\\undo.png",
+        { icon = EllesmereUI.UNDO_ICON,
           title = EllesmereUI.L("Automatic Backups"), desc = EllesmereUI.L("Restore a state from before a reset or import."),
           onClick = function() ShowBackupsPage() end },
     })

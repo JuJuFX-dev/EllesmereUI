@@ -2701,7 +2701,7 @@ local FULL_IMPORT_MERGE = {
 }
 
 --- Builds a full-account export string, or nil.
-function EllesmereUI.ExportFullAccountData(profileName)
+function EllesmereUI.ExportFullAccountData()
     if not EllesmereUIDB then return nil end
     if not LibDeflate then return nil end
     -- Same freshness boundary the profile export uses: bank live override
@@ -2720,21 +2720,16 @@ function EllesmereUI.ExportFullAccountData(profileName)
     -- ONLY the active profile travels; the exporter's other profiles are
     -- their own business and would overwrite same-named profiles on import.
     out.profiles = {}
-    -- profileName (optional, the backups' only use): carry that profile
-    -- instead of the active one. Only the active one is freshened from live.
-    local carried = (profileName and db.profiles and db.profiles[profileName]) and profileName or activeName
-    local prof = db.profiles and db.profiles[carried]
+    local prof = db.profiles and db.profiles[activeName]
     if prof then
         local copy = DeepCopy(prof)
         -- Freshen profile-global appearance and the unlock layout from live,
         -- mirroring what ExportProfile does for the active profile -- but on
         -- the COPY. A full export never mutates stored data.
-        if carried == activeName then
-            copy.fonts        = DeepCopy(EllesmereUI.GetFontsDB())
-            copy.customColors = DeepCopy(EllesmereUI.GetCustomColorsDB())
-            copy.darkMode     = DeepCopy(EllesmereUI.GetDarkModeDB())
-            copy.unlockLayout = SnapshotUnlockLayout()
-        end
+        copy.fonts        = DeepCopy(EllesmereUI.GetFontsDB())
+        copy.customColors = DeepCopy(EllesmereUI.GetCustomColorsDB())
+        copy.darkMode     = DeepCopy(EllesmereUI.GetDarkModeDB())
+        copy.unlockLayout = SnapshotUnlockLayout()
         -- Recipient-local import bookkeeping never rides a string.
         copy._importEstablishPending = nil
         copy._abSpellsImported = nil
@@ -2743,15 +2738,15 @@ function EllesmereUI.ExportFullAccountData(profileName)
         -- profile can still carry them there, and they are excluded from a
         -- full export at every address they have ever lived at.
         StripPrivateAddonData(copy.addons)
-        out.profiles[carried] = copy
+        out.profiles[activeName] = copy
     end
-    out.activeProfile = carried
-    out.profileOrder  = { carried }
+    out.activeProfile = activeName
+    out.profileOrder  = { activeName }
     local payload = {
         version     = EllesmereUI.LayoutExportVersion(out),
         type        = FULL_EXPORT_TYPE,
         fullExport  = true,     -- the routing stamp the import flow reads
-        profileName = carried,
+        profileName = activeName,
         data        = out,
     }
     EllesmereUI.StampPayloadClient(payload)
@@ -2782,10 +2777,13 @@ function EllesmereUI.ImportFullAccountData(payload)
     if EllesmereUI.SpecOverrides_CloseEditSessions then EllesmereUI.SpecOverrides_CloseEditSessions() end
     if EllesmereUI.SpecOverrides_HarvestCurrent then EllesmereUI.SpecOverrides_HarvestCurrent() end
     local activeName = data.activeProfile or payload.profileName or "Default"
-    -- Automatic backup: the account settings and the profile this replaces
-    -- (the active one when the carried name is new here).
-    EllesmereUI.ProfileBackup_Take("fullImport", nil, "account",
-        type(EllesmereUIDB.profiles) == "table" and EllesmereUIDB.profiles[activeName] and activeName or nil)
+    -- Automatic backup: the account settings with the active profile, and
+    -- the same-named profile this replaces when it is another one.
+    EllesmereUI.ProfileBackup_Take("fullImport", nil, "account")
+    if type(EllesmereUIDB.profiles) == "table" and EllesmereUIDB.profiles[activeName]
+       and activeName ~= (EllesmereUIDB.activeProfile or "Default") then
+        EllesmereUI.ProfileBackup_Take("import", nil, "profile", activeName)
+    end
 
     -- 1) Account globals, wholesale. profiles/profileOrder/activeProfile are
     --    handled below; the excluded per-character blobs are refused on the
@@ -2929,13 +2927,13 @@ do
         if EllesmereUI.SpecOverrides_HarvestCurrent then EllesmereUI.SpecOverrides_HarvestCurrent() end
         local str
         if kind == "account" then
-            str = EllesmereUI.ExportFullAccountData(name)
+            str = EllesmereUI.ExportFullAccountData()
         elseif reason == "reset" then
             local addons = db.profiles[name].addons
             if not (arg and type(addons) == "table" and addons[arg] ~= nil) then return end
-            -- That module only: its layout and overrides, no global look,
-            -- no account skins.
-            str = EllesmereUI.ExportProfile(name, { [arg] = true }, true, arg == CDM_FOLDER, nil, false, true, false)
+            -- That module only: its layout, no overrides (a reset leaves them),
+            -- no global look, no account skins.
+            str = EllesmereUI.ExportProfile(name, { [arg] = true }, true, arg == CDM_FOLDER, nil, false, false, false)
         else
             str = EllesmereUI.ExportProfile(name)
         end
