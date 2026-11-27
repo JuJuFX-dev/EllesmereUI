@@ -1704,7 +1704,7 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
             -- entry.profile: the profile active when the backup was taken.
             local profileName = entry.profile or "Default"
             local desc = (entry.kind == "account")
-                and EllesmereUI.Lf("Whole account, active profile: %1$s", profileName)
+                and EllesmereUI.Lf("Full account, active profile: %1$s", profileName)
                 or EllesmereUI.Lf("Profile: %1$s", profileName)
             desc = desc .. ", " .. date("%Y-%m-%d %H:%M", entry.t or 0)
             local descFs = EllesmereUI.MakeFont(rowFrame, 11, nil, 1, 1, 1, 0.35)

@@ -802,6 +802,7 @@ From
 Frost Res
 Full Moon
 Full Preview
+Full account, active profile: %1$s
 Fury of the Aspects (Evoker)
 GLOBAL
 GLOBAL OPTIONS
@@ -1984,7 +1985,6 @@ When %1$s Is
 When your bags hold none of the potion the icon tracks, it tracks the next potion in the priority order that you own.
 Whisper
 Whistle
-Whole account, active profile: %1$s
 Width
 Width %
 Width matched to %1$s. Unmatch in Unlock Mode to edit.
