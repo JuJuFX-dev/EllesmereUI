@@ -2908,7 +2908,7 @@ end
 --  synchronous; a failure never stops the reset or import.
 -------------------------------------------------------------------------------
 do
-    local MAX_BACKUPS = 3
+    local MAX_BACKUPS = 8
     local MAX_LEN = 1000000
     local CDM_FOLDER = "EllesmereUICooldownManager"
 

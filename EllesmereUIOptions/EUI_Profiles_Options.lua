@@ -1609,15 +1609,15 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
             return EllesmereUI.L("Backup")
         end
 
-        -- First "<profile> (Backup)" name no profile has yet: the account
+        -- First "<profile> (Restored)" name no profile has yet: the account
         -- restore has no name box, and a taken name would be replaced.
         local function FreeBackupName(base)
             local _, profiles = EllesmereUI.GetProfileList()
             profiles = profiles or {}
-            local name = EllesmereUI.Lf("%1$s (Backup)", base)
+            local name = EllesmereUI.Lf("%1$s (Restored)", base)
             local n = 2
             while profiles[name] do
-                name = EllesmereUI.Lf("%1$s (Backup %2$d)", base, n)
+                name = EllesmereUI.Lf("%1$s (Restored %2$d)", base, n)
                 n = n + 1
             end
             return name
@@ -1646,7 +1646,7 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
                         message = ((entry.reason == "reset")
                                 and (EllesmereUI.L("This backup was made before a module reset, but restoring it puts back all account-wide settings, not only that module's.") .. "\n\n") or "")
                             .. EllesmereUI.Lf("The account-wide settings saved in this backup replace yours, including Quality of Life, HoverCast bindings, Cooldown Manager spell setups, unlock anchors, UI scale, and spec assignments. The profile comes back as a new profile named %1$s; your existing profiles are not changed.", name),
-                        disclaimer = EllesmereUI.L("A backup of your current settings is taken first. With 3 backups, the oldest one is removed."),
+                        disclaimer = EllesmereUI.L("A backup of your current settings is taken first. With 8 backups, the oldest one is removed."),
                         typeToConfirm = "Confirm",
                         confirmText = EllesmereUI.L("Restore & Reload"),
                         cancelText = EllesmereUI.L("Cancel"),
@@ -1663,7 +1663,7 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
                 backupsPage:Hide()
                 MaybeConfirmUIScale(payload, function(applyScale)
                     if not SameDress(backupsPage, pageGen) then return end
-                    ShowImportPage(entry.str, payload, EllesmereUI.Lf("%1$s (Backup)", base), nil, nil, applyScale)
+                    ShowImportPage(entry.str, payload, EllesmereUI.Lf("%1$s (Restored)", base), nil, nil, applyScale)
                 end)
             end)
         end
@@ -1701,10 +1701,12 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
             nameFs:SetWordWrap(false)
             nameFs:SetText(ReasonText(entry))
 
-            local desc = (entry.profile or "Default") .. ", " .. date("%Y-%m-%d %H:%M", entry.t or 0)
-            if entry.kind == "account" then
-                desc = desc .. ", " .. EllesmereUI.L("profile and account settings")
-            end
+            -- entry.profile: the profile active when the backup was taken.
+            local profileName = entry.profile or "Default"
+            local desc = (entry.kind == "account")
+                and EllesmereUI.Lf("Whole account, active profile: %1$s", profileName)
+                or EllesmereUI.Lf("Profile: %1$s", profileName)
+            desc = desc .. ", " .. date("%Y-%m-%d %H:%M", entry.t or 0)
             local descFs = EllesmereUI.MakeFont(rowFrame, 11, nil, 1, 1, 1, 0.35)
             PP.Point(descFs, "TOPLEFT", nameFs, "BOTTOMLEFT", 0, -5)
             PP.Point(descFs, "RIGHT", nameFs, "RIGHT", 0, 0)
@@ -1771,7 +1773,7 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
             PP.Point(descFs, "RIGHT", backupsPage, "RIGHT", -PAD, 0)
             descFs:SetJustifyH("LEFT")
             descFs:SetWordWrap(true)
-            descFs:SetText(EllesmereUI.L("EllesmereUI keeps your last 3 profile states from before an import or a reset. Restore adds the backup as a new profile; nothing you have now is overwritten."))
+            descFs:SetText(EllesmereUI.L("EllesmereUI keeps your last 8 profile states from before an import or a reset. Restore adds the backup as a new profile; nothing you have now is overwritten."))
             py = py - 40
 
             local list = EllesmereUI.ProfileBackup_List and EllesmereUI.ProfileBackup_List() or {}
