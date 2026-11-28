@@ -688,7 +688,7 @@ function ns.UFO_BuildCastBarSection(parent, y, ctx)
     local castTextPosValues = { none = "None", left = "Left", right = "Right", center = "Center" }
     local castTextPosOrder = { "none", "left", "right", "center" }
     castTextRow, h = W:DualRow(parent, y,
-        { type="dropdown", text="Spell Name", values=castTextPosValues, order=castTextPosOrder,
+        { type="dropdown", text="Spell Name", noUndo=true, values=castTextPosValues, order=castTextPosOrder,
           getValue=function() return SValSupported("castSpellNameSide", "left") end,
           setValue=function(v)
             local s = UNIT_DB_MAP[optState.selectedUnit]()

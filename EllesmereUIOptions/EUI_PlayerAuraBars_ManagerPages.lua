@@ -73,6 +73,7 @@ local pabInhSel = nil
 -- would be dropped back to the default tile. Same move as the inherited pane's
 -- "Edit in <group>" link.
 EllesmereUI._setPABSelection = function(kind, id, bucket)
+    EllesmereUI._UndoWipe()
     pabSel = { kind = kind, id = id or "default" }
     pabInhSel = nil
     if bucket then
@@ -2854,6 +2855,7 @@ local function ShowAddBarPopup(anchorBtn, kind, fontPath)
         end
         popup:Hide()
         if bar then
+            EllesmereUI._UndoWipe()
             pabSel = { kind = kind, id = bar.id }
             pabInhSel = nil
             Apply(kind == "buff", bar.id)
@@ -3283,6 +3285,7 @@ function ns.PABMP_BuildPage(pageName, parent, yOffset)
                     enabled = (not disHere) and true or false,
                     showToggle = true,
                     onSelect = function()
+                        EllesmereUI._UndoWipe()
                         pabInhSel = { kind = kind, group = gkey, id = bar.id }
                         EllesmereUI:RefreshPage(true)
                     end,
@@ -3329,7 +3332,7 @@ function ns.PABMP_BuildPage(pageName, parent, yOffset)
                 if ns.PAB_RegisterUnlock then ns.PAB_RegisterUnlock() end
                 EllesmereUI:RefreshPage(true)
             end,
-            onSelect = function() pabSel = { kind = "buff", id = "default" }; pabInhSel = nil; EllesmereUI:RefreshPage(true) end,
+            onSelect = function() EllesmereUI._UndoWipe(); pabSel = { kind = "buff", id = "default" }; pabInhSel = nil; EllesmereUI:RefreshPage(true) end,
         })
         end
         tileY = BuildInheritedBarTiles(sidebarChild, tileY, true)
@@ -3343,7 +3346,7 @@ function ns.PABMP_BuildPage(pageName, parent, yOffset)
                     and not pabInhSel) and true or false,
                 enabled = bar.enabled and true or false,
                 showToggle = true,
-                onSelect = function() pabSel = { kind = "buff", id = bar.id }; pabInhSel = nil; EllesmereUI:RefreshPage(true) end,
+                onSelect = function() EllesmereUI._UndoWipe(); pabSel = { kind = "buff", id = bar.id }; pabInhSel = nil; EllesmereUI:RefreshPage(true) end,
                 -- Right-click: copy this bar into another editing-spec
                 -- bucket (full clone, fresh id; the source stays).
                 onContext = function(tileFrame)
@@ -3433,7 +3436,7 @@ function ns.PABMP_BuildPage(pageName, parent, yOffset)
                 if ns.PAB_RegisterUnlock then ns.PAB_RegisterUnlock() end
                 EllesmereUI:RefreshPage(true)
             end,
-            onSelect = function() pabSel = { kind = "debuff", id = "default" }; pabInhSel = nil; EllesmereUI:RefreshPage(true) end,
+            onSelect = function() EllesmereUI._UndoWipe(); pabSel = { kind = "debuff", id = "default" }; pabInhSel = nil; EllesmereUI:RefreshPage(true) end,
         })
         end
 
@@ -3448,7 +3451,7 @@ function ns.PABMP_BuildPage(pageName, parent, yOffset)
                     and not pabInhSel) and true or false,
                 enabled = bar.enabled and true or false,
                 showToggle = true,
-                onSelect = function() pabSel = { kind = "debuff", id = bar.id }; pabInhSel = nil; EllesmereUI:RefreshPage(true) end,
+                onSelect = function() EllesmereUI._UndoWipe(); pabSel = { kind = "debuff", id = bar.id }; pabInhSel = nil; EllesmereUI:RefreshPage(true) end,
                 -- Right-click: copy this bar into another editing-spec
                 -- bucket (full clone, fresh id; the source stays).
                 onContext = function(tileFrame)
@@ -3558,6 +3561,7 @@ function ns.PABMP_BuildPage(pageName, parent, yOffset)
         local jumpKind, jumpGroup, jumpId = pabInhSel.kind, pabInhSel.group, pabInhSel.id
         link:SetScript("OnClick", function()
             pabSpecSel = jumpGroup
+            EllesmereUI._UndoWipe()
             pabSel = { kind = jumpKind, id = jumpId }
             pabInhSel = nil
             EllesmereUI:RefreshPage(true)

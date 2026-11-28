@@ -881,6 +881,8 @@ local function BuildXPBarPage(pageName, parent, yOffset)
         arrow:SetPoint("LEFT", label, "LEFT", math.ceil(label:GetStringWidth()) + 6, -1)
         btn:SetPoint("TOPLEFT", label, "TOPLEFT", -4, 5)
         btn:SetPoint("BOTTOMRIGHT", arrow, "BOTTOMRIGHT", 2, -2)
+        -- The move rewrites two slots; undo would restore only one.
+        btn._noUndo = true
         local menu
         -- The name takes the chevron's color while lit (its own white back).
         local function Lit(on)

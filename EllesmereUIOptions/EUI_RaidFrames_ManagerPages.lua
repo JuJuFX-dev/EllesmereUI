@@ -1585,6 +1585,7 @@ local function DmPvClick(self)
                     local gl = ns.DM_BucketTiles and ns.DM_BucketTiles(inhG[gi])
                     for i = 1, #(gl or {}) do
                         if gl[i].id == id then
+                            EllesmereUI._UndoWipe()
                             dmInhSel = { group = inhG[gi], id = id }
                             EllesmereUI:RefreshPage(true)
                             return
@@ -1594,6 +1595,7 @@ local function DmPvClick(self)
             end
         end
     end
+    EllesmereUI._UndoWipe()
     dmSel = id
     dmInhSel = nil
     EllesmereUI:RefreshPage(true)
@@ -2256,6 +2258,7 @@ function ns.DMP_BuildPage(pageName, parent, yOffset)
                     enabled = (not disHere) and true or false,
                     showToggle = true,
                     onSelect = function()
+                        EllesmereUI._UndoWipe()
                         dmInhSel = { group = gkey, id = t.id }
                         EllesmereUI:RefreshPage(true)
                     end,
@@ -2292,6 +2295,7 @@ function ns.DMP_BuildPage(pageName, parent, yOffset)
             enabled = t.enabled and true or false,
             showToggle = true,
             onSelect = function()
+                EllesmereUI._UndoWipe()
                 dmSel = t.id
                 dmInhSel = nil
                 EllesmereUI:RefreshPage(true)

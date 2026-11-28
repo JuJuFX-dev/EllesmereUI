@@ -1376,7 +1376,7 @@ function ns.UFO_BuildPortraitSection(parent, y, ctx)
     -- Row 1: Portrait Mode + Art Style
     local sharedPortraitModeRow
     sharedPortraitModeRow, h = W:DualRow(parent, y,
-        EllesmereUI.BlizzStyle.Gate("unitframes", { type="dropdown", text="Portrait Mode", values=portraitModeValues2, order=portraitModeOrder2,
+        EllesmereUI.BlizzStyle.Gate("unitframes", { type="dropdown", text="Portrait Mode", noUndo=true, values=portraitModeValues2, order=portraitModeOrder2,
           getValue=function()
               -- Blizzard Style always renders the attached portrait.
               if EllesmereUI.BlizzStyle.Get("unitframes") then return "attached" end
@@ -1408,7 +1408,7 @@ function ns.UFO_BuildPortraitSection(parent, y, ctx)
               end
               C_Timer.After(0, function() local rl = EllesmereUI._widgetRefreshList; if rl then for i = 1, #rl do rl[i]() end end end)
           end }),
-        { type="dropdown", text="Art Style", values=portraitArtValues, order=portraitArtOrder,
+        { type="dropdown", text="Art Style", noUndo=true, values=portraitArtValues, order=portraitArtOrder,
           -- Blizzard Style renders the portrait whatever the saved mode says.
           disabled=function() return not EllesmereUI.BlizzStyle.Get("unitframes") and SVal("portraitStyle", "attached") == "none" end,
           disabledTooltip="Portrait Mode is set to None", rawTooltip=true,

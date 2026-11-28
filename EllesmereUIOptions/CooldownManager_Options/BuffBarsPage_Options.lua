@@ -25,6 +25,7 @@ local function InitBuffBarsPage(PP, DB, Refresh, FONT_PATH, GetCDMOptOutline, Ga
     local _tbbSelectedGroup      -- nil = editing a bar; gid = editing that group
     -- Deep-link helper (Global Settings > Glows): select a tracking bar by index.
     function ns._TBBSelectBar(idx)
+        EllesmereUI._UndoWipe()
         _tbbSelectedBar = idx
         _tbbSelectedGroup = nil
     end
@@ -111,6 +112,7 @@ local function InitBuffBarsPage(PP, DB, Refresh, FONT_PATH, GetCDMOptOutline, Ga
             btn:SetFrameLevel(wrap:GetFrameLevel() + 30)
             btn._tip = EllesmereUI.L("Click to edit this bar")
             btn._onNav = function()
+                EllesmereUI._UndoWipe()
                 _tbbSelectedBar = barIdx
                 _tbbSelectedGroup = nil
                 EllesmereUI:RefreshPage(true)
@@ -1320,6 +1322,7 @@ local function InitBuffBarsPage(PP, DB, Refresh, FONT_PATH, GetCDMOptOutline, Ga
     -- Select a bar and open its buff picker anchored to the management dropdown (used by
     -- the dropdown's bar rows); page refresh runs first so the picker anchors to the fresh button.
     local function OpenBuffPickerForBar(idx)
+        EllesmereUI._UndoWipe()
         _tbbSelectedBar = idx
         _tbbSelectedGroup = nil
         EllesmereUI:RefreshPage(true)
@@ -1823,6 +1826,7 @@ local function InitBuffBarsPage(PP, DB, Refresh, FONT_PATH, GetCDMOptOutline, Ga
                 local src = ns.TBBGroupStyleSource(gid)
                 if src and src ~= cfg then ns.CopyTBBStyle(src, cfg) end
             end
+            EllesmereUI._UndoWipe()
             _tbbSelectedBar = idx
             _tbbSelectedGroup = nil
             ns.BuildTrackedBuffBars()
@@ -2307,6 +2311,7 @@ local function InitBuffBarsPage(PP, DB, Refresh, FONT_PATH, GetCDMOptOutline, Ga
                     end)
                     item:SetScript("OnClick", function()
                         menu:Hide()
+                        EllesmereUI._UndoWipe()
                         _tbbSelectedGroup = gid
                         EllesmereUI:RefreshPage(true)
                     end)
@@ -2451,6 +2456,7 @@ local function InitBuffBarsPage(PP, DB, Refresh, FONT_PATH, GetCDMOptOutline, Ga
                             -- No buff yet: go straight to the buff picker.
                             OpenBuffPickerForBar(idx)
                         else
+                            EllesmereUI._UndoWipe()
                             _tbbSelectedBar = idx
                             _tbbSelectedGroup = nil
                             EllesmereUI:RefreshPage(true)
@@ -3692,7 +3698,7 @@ local function InitBuffBarsPage(PP, DB, Refresh, FONT_PATH, GetCDMOptOutline, Ga
 
         local nameRow
         nameRow, h = W:DualRow(parent, y,
-            { type = "dropdown", text = "Name Text",
+            { type = "dropdown", text = "Name Text", noUndo = true,
               values = TBB_POS_VALUES, order = TBB_POS_ORDER,
               disabled = function()
                   local bd = SelectedTBB()
@@ -3711,7 +3717,7 @@ local function InitBuffBarsPage(PP, DB, Refresh, FONT_PATH, GetCDMOptOutline, Ga
                   bd.showName = (v ~= "none")
                   RefreshTBB(); EllesmereUI:RefreshPage()
               end },
-            { type = "dropdown", text = "Duration Text",
+            { type = "dropdown", text = "Duration Text", noUndo = true,
               values = TBB_POS_VALUES, order = TBB_POS_ORDER,
               getValue = function()
                   local bd = SelectedTBB(); if not bd then return "right" end
@@ -3903,7 +3909,7 @@ local function InitBuffBarsPage(PP, DB, Refresh, FONT_PATH, GetCDMOptOutline, Ga
         -- Stacks Text (dropdown + resize cog: size, x, y) | Bar Strata
         local stacksRow
         stacksRow, h = W:DualRow(parent, y,
-            { type = "dropdown", text = "Stacks Text",
+            { type = "dropdown", text = "Stacks Text", noUndo = true,
               values = TBB_POS_VALUES, order = TBB_POS_ORDER,
               getValue = function() local bd = SelectedTBB(); return bd and bd.stacksPosition or "center" end,
               setValue = function(v)

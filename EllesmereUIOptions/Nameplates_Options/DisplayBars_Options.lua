@@ -1137,7 +1137,7 @@ local function BuildDisplayBars(parent, y, ctx)
     local castTextPosOrder = { "none", "left", "right", "center" }
     local spellNameRow
     spellNameRow, h = W:DualRow(parent, y,
-        { type="dropdown", text="Spell Name", values=castTextPosValues, order=castTextPosOrder,
+        { type="dropdown", text="Spell Name", noUndo=true, values=castTextPosValues, order=castTextPosOrder,
           getValue=function() return (DB() and DB().castNameSide) or defaults.castNameSide end,
           setValue=function(v)
             DB().castNameSide = v
@@ -1149,7 +1149,7 @@ local function BuildDisplayBars(parent, y, ctx)
             UpdatePreview()
             EllesmereUI:RefreshPage()
           end },
-        { type="dropdown", text="Spell Target", values=castTextPosValues, order=castTextPosOrder,
+        { type="dropdown", text="Spell Target", noUndo=true, values=castTextPosValues, order=castTextPosOrder,
           disabled=function() return DBVal("castCombineNameTarget") == true end,
           disabledTooltip="This option requires Combine Spell Name and Target to be disabled.",
           getValue=function() return (DB() and DB().castTargetSide) or defaults.castTargetSide end,

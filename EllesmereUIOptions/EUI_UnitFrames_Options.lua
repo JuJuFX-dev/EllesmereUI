@@ -1167,10 +1167,14 @@ initFrame:SetScript("OnEvent", function(self)
     optState.selectedUnit = "player"
 
     -- External unit pre-select: direct setter + pending override consumed at page build.
-    EllesmereUI._setUnitFrameUnit = function(unit) optState.selectedUnit = unit end
+    EllesmereUI._setUnitFrameUnit = function(unit)
+        if unit ~= optState.selectedUnit then EllesmereUI._UndoWipe() end
+        optState.selectedUnit = unit
+    end
     EllesmereUI._consumePendingUnitSelect = function()
         local pending = EllesmereUI._pendingUnitSelect
         if pending then
+            if pending ~= optState.selectedUnit then EllesmereUI._UndoWipe() end
             optState.selectedUnit = pending
             EllesmereUI._pendingUnitSelect = nil
         end
@@ -2607,6 +2611,8 @@ initFrame:SetScript("OnEvent", function(self)
                     -- rebuild since the header relayout can clobber the live value.
                     -- Settings sit below the fixed header, so the same offset lands on the same section for any unit.
                     local savedScroll = EllesmereUI.GetContentScroll and EllesmereUI.GetContentScroll() or 0
+                    -- Rows edit the selected unit: undo steps of another unit end here.
+                    if v ~= optState.selectedUnit then EllesmereUI._UndoWipe() end
                     optState.selectedUnit = v
                     -- One pass builds the page and its header together (buildPage
                     -- sets the header for the new unit).
@@ -2819,10 +2825,14 @@ initFrame:SetScript("OnEvent", function(self)
     -- Allow Unlock Mode's "Element Options" to pre-select a mini unit before the
     -- Mini Frames page builds (mirrors the Main Frames _setUnitFrameUnit /
     -- _pendingUnitSelect mechanism). Field assignments -- no new locals.
-    EllesmereUI._setMiniUnit = function(unit) selectedMiniUnit = unit end
+    EllesmereUI._setMiniUnit = function(unit)
+        if unit ~= selectedMiniUnit then EllesmereUI._UndoWipe() end
+        selectedMiniUnit = unit
+    end
     EllesmereUI._consumePendingMiniSelect = function()
         local pending = EllesmereUI._pendingMiniSelect
         if pending then
+            if pending ~= selectedMiniUnit then EllesmereUI._UndoWipe() end
             selectedMiniUnit = pending
             EllesmereUI._pendingMiniSelect = nil
         end
@@ -2861,6 +2871,7 @@ initFrame:SetScript("OnEvent", function(self)
                 miniUnitLabels, miniUnitOrder,
                 function() return selectedMiniUnit end,
                 function(v)
+                    if v ~= selectedMiniUnit then EllesmereUI._UndoWipe() end
                     selectedMiniUnit = v
                     -- One pass builds the page and its header together.
                     EllesmereUI:RefreshPage(true)

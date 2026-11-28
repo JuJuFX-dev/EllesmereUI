@@ -185,6 +185,7 @@ local function HeaderBuilder(hdr)
         getChecked = function(key) return key == selectedType end,
         onToggle   = function(key)
             if key == selectedType then return end
+            EllesmereUI._UndoWipe()
             selectedType = key
             headerRefresh()
             EllesmereUI:RefreshPage()

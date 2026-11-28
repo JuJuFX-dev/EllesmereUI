@@ -526,6 +526,7 @@ initFrame:SetScript("OnEvent", function(self)
                     item:SetScript("OnClick", function()
                         menu:Hide()
                         local p = Profile()
+                        EllesmereUI._UndoWipe()
                         if p then p.selectedBarId = item._bar.id end
                         HardRefresh()
                     end)

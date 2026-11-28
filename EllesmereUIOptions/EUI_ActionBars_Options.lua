@@ -144,12 +144,18 @@ initFrame:SetScript("OnEvent", function(self)
     -- value consumed at build time. Both ignore non-dropdown keys (Micro/Bag/XP/Rep)
     -- so the selector never blanks.
     EllesmereUI._setActionBarKey = function(key)
-        if barLabels[key] then _selectedBarKey = key end
+        if barLabels[key] then
+            if key ~= _selectedBarKey then EllesmereUI._UndoWipe() end
+            _selectedBarKey = key
+        end
     end
     EllesmereUI._consumePendingActionBarSelect = function()
         local pending = EllesmereUI._pendingActionBarSelect
         EllesmereUI._pendingActionBarSelect = nil
-        if pending and barLabels[pending] then _selectedBarKey = pending end
+        if pending and barLabels[pending] then
+            if pending ~= _selectedBarKey then EllesmereUI._UndoWipe() end
+            _selectedBarKey = pending
+        end
     end
 
     ---------------------------------------------------------------------------
@@ -773,6 +779,8 @@ initFrame:SetScript("OnEvent", function(self)
                 barLabels, barOrder,
                 function() return SelectedKey() end,
                 function(v)
+                    -- Rows edit the selected bar: undo steps of another bar end here.
+                    if v ~= _selectedBarKey then EllesmereUI._UndoWipe() end
                     _selectedBarKey = v
                     -- Always force a full rebuild: visibility-only bars and StanceBar share visOnly/dataBar flags, so a conditional misses transitions.
                     -- The rebuild builds this header as well (BuildBarDisplayPage sets it), so no header is built here first.

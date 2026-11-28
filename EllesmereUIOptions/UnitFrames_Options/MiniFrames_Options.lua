@@ -2120,7 +2120,7 @@ function ns.UFO_BuildBossOptions(W, parent, y)
             or not db.profile.boss.simpleBuffShowCooldownText
         end
         simpleBuffRow, hh = Ww:DualRow(pp, yy,
-            { type="dropdown", text="Simple Buff Display",
+            { type="dropdown", text="Simple Buff Display", noUndo=true,
               disabled = function()
                   return BossBuffLocationActive()
               end,
@@ -2262,7 +2262,7 @@ function ns.UFO_BuildBossOptions(W, parent, y)
             or not db.profile.boss.simpleDebuffShowCooldownText
         end
         simpleRow, hh = Ww:DualRow(pp, yy,
-            { type="dropdown", text="Simple Debuff Display",
+            { type="dropdown", text="Simple Debuff Display", noUndo=true,
               disabled = function()
                   return BossDebuffLocationActive()
               end,

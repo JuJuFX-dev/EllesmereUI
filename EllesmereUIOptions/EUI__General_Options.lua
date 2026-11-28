@@ -1721,7 +1721,7 @@ initFrame:SetScript("OnEvent", function(self)
 
         -- Row 2: UI Scale | EUI Options Language
         _, h = W:DualRow(parent, y,
-            { type="slider", text="UI Scale",
+            { type="slider", text="UI Scale", noUndo=true,
               min=0.40, max=1.00, step=0.01,
               tooltip="Sets the scale of the whole game UI. 0.53 = 0.5333 and 0.71 = 0.7111",
               tooltipOnControl=true,

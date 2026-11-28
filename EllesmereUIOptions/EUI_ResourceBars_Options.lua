@@ -3146,6 +3146,7 @@ initFrame:SetScript("OnEvent", function(self)
                     if #ids == 0 then return end
                     if not bd.thresholdSpecs then bd.thresholdSpecs = {} end
                     bd.thresholdSpecs[#bd.thresholdSpecs + 1] = NewEntry(ids, bd)
+                    EllesmereUI._UndoWipe()
                     _selectedIdx = #bd.thresholdSpecs
                     wipe(_tempSpecSel)
                     WrappedRefresh()
@@ -3883,6 +3884,7 @@ initFrame:SetScript("OnEvent", function(self)
                         copy.talentSpellID = nil
                         copy.talentName = nil
                         table.insert(specs, ef._entryIdx + 1, copy)
+                        EllesmereUI._UndoWipe()
                         _selectedIdx = ef._entryIdx + 1
                         RefreshSpecEntries()
                         RedrawDetail()
@@ -3902,6 +3904,7 @@ initFrame:SetScript("OnEvent", function(self)
                     -- Whole row selects this entry: repaint + refresh the detail pane with no list rebuild, so the scroll never jumps
                     ef:SetScript("OnClick", function(self)
                         if not self._entryIdx then return end
+                        EllesmereUI._UndoWipe()
                         _selectedIdx = self._entryIdx
                         RepaintRows()
                         RedrawDetail()

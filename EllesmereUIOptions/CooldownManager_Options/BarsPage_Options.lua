@@ -811,6 +811,7 @@ local function BuildCDMBarsPage(pageName, parent, yOffset)
                 end)
                 item:SetScript("OnClick", function()
                     menu:Hide()
+                    EllesmereUI._UndoWipe()
                     optState.selectedCDMBarIndex = idx
                     -- The rebuild builds this page's header with the page,
                     -- once (no other page's header shows the selection).
@@ -987,7 +988,7 @@ local function BuildCDMBarsPage(pageName, parent, yOffset)
           end },
         -- Number of Rows moved up into the slot the Visibility Options dropdown
         -- left behind; its Row Icons cog moved with it.
-        { type="slider", text="Number of Rows",
+        { type="slider", text="Number of Rows", noUndo=true,
           min=1, max=6, step=1,
           getValue=function() return BD().numRows or 1 end,
           setValue=function(v)
