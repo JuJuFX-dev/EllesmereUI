@@ -24,6 +24,7 @@ EllesmereUI_Widgets_AuraPopups.lua
 EllesmereUI_Widgets_CheckboxDropdowns.lua
 EllesmereUI_Widgets_Visibility.lua
 EllesmereUI_Widgets_PageParts.lua
+EUI_Options_Undo.lua
 EllesmereUI_GlowOptions.lua
 EllesmereUI_TalentConditionsPopup.lua
 EUI_Colors_Options.lua
