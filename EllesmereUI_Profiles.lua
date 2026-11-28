@@ -2909,6 +2909,7 @@ end
 -------------------------------------------------------------------------------
 do
     local MAX_BACKUPS = 8
+    EllesmereUI.PROFILE_BACKUPS_MAX = MAX_BACKUPS  -- the Profiles page texts name it
     local MAX_LEN = 1000000
     local CDM_FOLDER = "EllesmereUICooldownManager"
 

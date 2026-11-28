@@ -1543,9 +1543,8 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
                                 .. ((EllesmereUI.PayloadFromOtherClient(payload) and type(payload.data) == "table"
                                     and payload.data.spellAssignments ~= nil)
                                     and ("\n\n" .. EllesmereUI.L("Its Cooldown Manager spells come from the other game client and will not be imported.")) or ""),
-                            disclaimer = EllesmereUI.ProfileBackup_Take
-                                and EllesmereUI.L("A backup of your current settings is kept on the Profiles page under Automatic Backups.")
-                                or EllesmereUI.L("This cannot be undone. Export your own profile as a backup first."),
+                            disclaimer = EllesmereUI.L("This cannot be undone. Export your own profile as a backup first.")
+                                .. " " .. EllesmereUI.L("An automatic backup is usually kept on the Profiles page, but a very large account can be skipped."),
                             typeToConfirm = "Confirm",
                             confirmText = EllesmereUI.L("Import & Reload"),
                             cancelText = EllesmereUI.L("Cancel"),
@@ -1646,7 +1645,7 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
                         message = ((entry.reason == "reset")
                                 and (EllesmereUI.L("This backup was made before a module reset, but restoring it puts back all account-wide settings, not only that module's.") .. "\n\n") or "")
                             .. EllesmereUI.Lf("The account-wide settings saved in this backup replace yours, including Quality of Life, HoverCast bindings, Cooldown Manager spell setups, unlock anchors, UI scale, and spec assignments. The profile comes back as a new profile named %1$s; your existing profiles are not changed.", name),
-                        disclaimer = EllesmereUI.L("A backup of your current settings is taken first. With 8 backups, the oldest one is removed."),
+                        disclaimer = EllesmereUI.Lf("A backup of your current settings is taken first. With %1$d backups, the oldest one is removed.", EllesmereUI.PROFILE_BACKUPS_MAX or 8),
                         typeToConfirm = "Confirm",
                         confirmText = EllesmereUI.L("Restore & Reload"),
                         cancelText = EllesmereUI.L("Cancel"),
@@ -1663,7 +1662,7 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
                 backupsPage:Hide()
                 MaybeConfirmUIScale(payload, function(applyScale)
                     if not SameDress(backupsPage, pageGen) then return end
-                    ShowImportPage(entry.str, payload, EllesmereUI.Lf("%1$s (Restored)", base), nil, nil, applyScale)
+                    ShowImportPage(entry.str, payload, FreeBackupName(base), nil, nil, applyScale)
                 end)
             end)
         end
@@ -1750,6 +1749,7 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
                     child:SetParent(nil)
                 end
             end
+            if restoreRun and restoreRun.Cancel then restoreRun.Cancel() end
             restoreRun = nil
 
             local PAD = EllesmereUI.CONTENT_PAD
@@ -1773,7 +1773,7 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
             PP.Point(descFs, "RIGHT", backupsPage, "RIGHT", -PAD, 0)
             descFs:SetJustifyH("LEFT")
             descFs:SetWordWrap(true)
-            descFs:SetText(EllesmereUI.L("EllesmereUI keeps your last 8 profile states from before an import or a reset. Restore adds the backup as a new profile; nothing you have now is overwritten."))
+            descFs:SetText(EllesmereUI.Lf("EllesmereUI keeps your last %1$d profile states from before an import or a reset. Restore adds the backup as a new profile; a full account backup also replaces your account-wide settings.", EllesmereUI.PROFILE_BACKUPS_MAX or 8))
             py = py - 40
 
             local list = EllesmereUI.ProfileBackup_List and EllesmereUI.ProfileBackup_List() or {}
@@ -1783,7 +1783,7 @@ function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
             EllesmereUI.MakeRoundedCard(listFrame, 0.10, 0.50)
             if #list == 0 then
                 local emptyFs = EllesmereUI.MakeFont(listFrame, 12, nil, 1, 1, 1, 0.40)
-                emptyFs:SetPoint("CENTER")
+                PP.Point(emptyFs, "CENTER", listFrame, "CENTER", 0, 0)
                 emptyFs:SetText(EllesmereUI.L("No backups yet."))
             else
                 for i, entry in ipairs(list) do

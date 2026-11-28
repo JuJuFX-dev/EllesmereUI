@@ -134,8 +134,7 @@
 1H
 2H
 ? = unknown (offline, dead or out of range)
-A backup of your current settings is kept on the Profiles page under Automatic Backups.
-A backup of your current settings is taken first. With 8 backups, the oldest one is removed.
+A backup of your current settings is taken first. With %1$d backups, the oldest one is removed.
 A bar per group member with their kick's cooldown, read from their talents
 A bonus roll can only be confirmed out of combat.
 A crit at the right moment
@@ -250,6 +249,7 @@ Also fills: %s
 Alts
 Always casts your highest rank.
 Always shows every element's position, not only while it is hovered, dragged or selected.
+An automatic backup is usually kept on the Profiles page, but a very large account can be skipped.
 An early Bloodlust
 An icon with its cooldown beside the enemy each player kicked
 An older SimpleLootCouncil addon is enabled, so the Simple Loot Council module is off until that addon is disabled or updated.
@@ -675,7 +675,7 @@ Elite, Rare, or Rare Elite (abbr: +, R, R+)
 Elixirs of Fortitude
 Ellesmere's Twitch stream
 EllesmereUI Style, Blizzard Style and Classic WoW UI reload the UI once to apply. Each module can be switched separately later.
-EllesmereUI keeps your last 8 profile states from before an import or a reset. Restore adds the backup as a new profile; nothing you have now is overwritten.
+EllesmereUI keeps your last %1$d profile states from before an import or a reset. Restore adds the backup as a new profile; a full account backup also replaces your account-wide settings.
 EllesmereUI's features work with every look. Change your mind any time under Global Settings > Style.
 EllesmereUI:|r Kick Tracker announcement reset. It fires on your next /reload.
 Else: Variant %d
