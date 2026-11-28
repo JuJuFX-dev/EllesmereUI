@@ -1098,7 +1098,10 @@ function WidgetFactory:TripleRow(parent, yOffset, leftCfg, midCfg, rightCfg, spl
             btn:SetScript("OnClick", function()
                 local gen = PoolGen(btn)
                 local v = not cfg.getValue()
+                local UB = EllesmereUI._UndoBegin
+                local u = UB and UB(btn, cfg.getValue, cfg.setValue, "toggle")
                 cfg.setValue(v)
+                if u then EllesmereUI._UndoEnd(u) end
                 EllesmereUI._settingsChanged = true
                 -- A setter that rebuilt the page dressed this checkbox again
                 -- (page reuse): that dress painted itself.

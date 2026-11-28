@@ -145,9 +145,12 @@ local function BuildToggleControl(parent, frameLevel, getValue, setValue, opts)
     do
         local _s = setValue
         setValue = function(...)
+            local UB = EllesmereUI._UndoBegin
+            local u = UB and UB(parent, getValue, _s, "toggle")
             local snap = EllesmereUI._SOAttribution(parent)
             _s(...)
             EllesmereUI._NotifySettingWrite(parent, snap)
+            if u then EllesmereUI._UndoEnd(u) end
         end
     end
     do local _r = setValue; setValue = function(...) _r(...); EllesmereUI._settingsChanged = true end end
@@ -472,6 +475,8 @@ local function BuildDropdownMenu(ddBtn, menuW, order, values, getValue, setValue
     do
         local _r = setValue
         setValue = function(...)
+            local UB = EllesmereUI._UndoBegin
+            local u = UB and UB(ddBtn, getValue, _r, "dropdown", values)
             -- Spec Overrides auto-capture (see BuildToggleControl): dropdown button sits inside the host slot's region.
             local snap = EllesmereUI._SOAttribution(ddBtn)
             -- The slot's Apply to link stays a few seconds after the pick (read before
@@ -480,6 +485,7 @@ local function BuildDropdownMenu(ddBtn, menuW, order, values, getValue, setValue
             _r(...)
             EllesmereUI._settingsChanged = true
             EllesmereUI._NotifySettingWrite(ddBtn, snap)
+            if u then EllesmereUI._UndoEnd(u) end
         end
     end
     local isWide = (style == "wide")
@@ -1595,9 +1601,12 @@ local function BuildSliderCore(parent, trackW, trackH, thumbSz, inputW, inputH, 
     do
         local _s = setValue
         setValue = function(...)
+            local UB = EllesmereUI._UndoBegin
+            local u = UB and UB(parent, getValue, _s, "slider", step)
             local snap = EllesmereUI._SOAttribution(parent)
             _s(...)
             EllesmereUI._NotifySettingWrite(parent, snap)
+            if u then EllesmereUI._UndoEnd(u) end
         end
     end
     do local _r = setValue; setValue = function(...) _r(...); EllesmereUI._settingsChanged = true end end
@@ -2538,7 +2547,10 @@ function WidgetFactory:Checkbox(parent, text, yOffset, getValue, setValue, toolt
         local v = not getValue()
         -- Stands down when the setter rebuilt the page and dressed this row again (the rebuild painted it).
         local g = PoolGen(btn)
+        local UB = EllesmereUI._UndoBegin
+        local u = UB and UB(frame, getValue, setValue, "toggle")
         setValue(v)
+        if u then EllesmereUI._UndoEnd(u) end
         if PoolGen(btn) ~= g then return end
         ApplyVisual()
     end)

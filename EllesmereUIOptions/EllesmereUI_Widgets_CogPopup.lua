@@ -561,7 +561,10 @@ local function BuildCogPopup(opts)
                 UpdateToggleVisual()
                 cogToggle:SetScript("OnClick", function()
                     local cur = row.get()
+                    local UB = EllesmereUI._UndoBegin
+                    local u = UB and UB(pf, row.get, row.set, "toggle")
                     row.set(not cur)
+                    if u then EllesmereUI._UndoEnd(u) end
                     UpdateToggleVisual()
                     if pf._refresh then pf._refresh() end
                 end)

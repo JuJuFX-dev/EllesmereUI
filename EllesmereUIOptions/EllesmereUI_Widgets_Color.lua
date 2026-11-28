@@ -802,9 +802,12 @@ local function BuildColorSwatch(parentFrame, baseLevel, getValue, setValue, hasA
     do
         local _s = setValue
         setValue = function(...)
+            local UB = EllesmereUI._UndoBegin
+            local u = UB and UB(parentFrame, getValue, _s, "color")
             local snap = EllesmereUI._SOAttribution(parentFrame)
             _s(...)
             EllesmereUI._NotifySettingWrite(parentFrame, snap)
+            if u then EllesmereUI._UndoEnd(u) end
         end
     end
     do local _r = setValue; setValue = function(...) _r(...); EllesmereUI._settingsChanged = true end end
@@ -857,6 +860,7 @@ local function BuildColorSwatch(parentFrame, baseLevel, getValue, setValue, hasA
         -- every write names it, whatever a rebuild has made of the swatch
         -- since (dressed again for another slot, or left on a parked row).
         local openSlot = EllesmereUI._SOAttribution(parentFrame, {})
+        local undoGroup = {}   -- one undo step per opening (Cancel writes it back to the start)
         -- A bound picker owns the record and its rollback for this opening.
         local writeColor, restoreColor = userSet
         if bindPicker then writeColor, restoreColor = bindPicker() end
@@ -867,9 +871,15 @@ local function BuildColorSwatch(parentFrame, baseLevel, getValue, setValue, hasA
         -- named (it may hold another slot now).
         local function Write(fn, cr, cg, cb, ca)
             local same = SameDress()
-            if fn(cr, cg, cb, ca) == false then return false end
+            local UB = not bindPicker and same and EllesmereUI._UndoBegin
+            local u = UB and UB(parentFrame, getValue, userSet, "color", nil, undoGroup)
+            if fn(cr, cg, cb, ca) == false then
+                if u then EllesmereUI._UndoEnd(u) end
+                return false
+            end
             EllesmereUI._NotifySettingWrite(same and parentFrame or nil, openSlot)
             EllesmereUI._settingsChanged = true
+            if u then EllesmereUI._UndoEnd(u) end
             return true, same and SameDress()
         end
         local function OnColorChanged()
