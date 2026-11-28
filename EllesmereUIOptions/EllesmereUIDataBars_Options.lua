@@ -192,6 +192,7 @@ initFrame:SetScript("OnEvent", function(self)
             cancelText = "Cancel",
             onConfirm = function()
                 ns.DeleteBar(cfg.id)
+                EllesmereUI._UndoWipe()
                 local p = Profile()
                 local bars = ns.BarsInOrder()
                 if p and bars[1] then p.selectedBarId = bars[1].id end
@@ -526,7 +527,7 @@ initFrame:SetScript("OnEvent", function(self)
                     item:SetScript("OnClick", function()
                         menu:Hide()
                         local p = Profile()
-                        EllesmereUI._UndoWipe()
+                        if p and p.selectedBarId ~= item._bar.id then EllesmereUI._UndoWipe() end
                         if p then p.selectedBarId = item._bar.id end
                         HardRefresh()
                     end)

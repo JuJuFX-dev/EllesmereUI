@@ -3842,6 +3842,7 @@ initFrame:SetScript("OnEvent", function(self)
                     delBtn:SetScript("OnClick", function()
                         local bd2 = cfg.getBarData(); if not (bd2 and ef._entryIdx) then return end
                         table.remove(bd2.thresholdSpecs, ef._entryIdx)
+                        EllesmereUI._UndoWipe()
                         local n = #bd2.thresholdSpecs
                         if n == 0 then _selectedIdx = nil
                         elseif _selectedIdx and _selectedIdx > n then _selectedIdx = n end
@@ -3904,7 +3905,7 @@ initFrame:SetScript("OnEvent", function(self)
                     -- Whole row selects this entry: repaint + refresh the detail pane with no list rebuild, so the scroll never jumps
                     ef:SetScript("OnClick", function(self)
                         if not self._entryIdx then return end
-                        EllesmereUI._UndoWipe()
+                        if self._entryIdx ~= _selectedIdx then EllesmereUI._UndoWipe() end
                         _selectedIdx = self._entryIdx
                         RepaintRows()
                         RedrawDetail()
@@ -3982,6 +3983,7 @@ initFrame:SetScript("OnEvent", function(self)
             wipe(_tempSpecSel)
             _specDDRefresh()
             -- Re-pick the resolver's active entry each open, then scroll to it
+            EllesmereUI._UndoWipe()
             _selectedIdx = nil
             RefreshSpecEntries(true)
             RefreshDetail()

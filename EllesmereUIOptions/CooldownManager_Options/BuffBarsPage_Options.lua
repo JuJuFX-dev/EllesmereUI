@@ -25,7 +25,7 @@ local function InitBuffBarsPage(PP, DB, Refresh, FONT_PATH, GetCDMOptOutline, Ga
     local _tbbSelectedGroup      -- nil = editing a bar; gid = editing that group
     -- Deep-link helper (Global Settings > Glows): select a tracking bar by index.
     function ns._TBBSelectBar(idx)
-        EllesmereUI._UndoWipe()
+        if idx ~= _tbbSelectedBar or _tbbSelectedGroup then EllesmereUI._UndoWipe() end
         _tbbSelectedBar = idx
         _tbbSelectedGroup = nil
     end
@@ -112,7 +112,7 @@ local function InitBuffBarsPage(PP, DB, Refresh, FONT_PATH, GetCDMOptOutline, Ga
             btn:SetFrameLevel(wrap:GetFrameLevel() + 30)
             btn._tip = EllesmereUI.L("Click to edit this bar")
             btn._onNav = function()
-                EllesmereUI._UndoWipe()
+                if barIdx ~= _tbbSelectedBar or _tbbSelectedGroup then EllesmereUI._UndoWipe() end
                 _tbbSelectedBar = barIdx
                 _tbbSelectedGroup = nil
                 EllesmereUI:RefreshPage(true)
@@ -1322,7 +1322,7 @@ local function InitBuffBarsPage(PP, DB, Refresh, FONT_PATH, GetCDMOptOutline, Ga
     -- Select a bar and open its buff picker anchored to the management dropdown (used by
     -- the dropdown's bar rows); page refresh runs first so the picker anchors to the fresh button.
     local function OpenBuffPickerForBar(idx)
-        EllesmereUI._UndoWipe()
+        if idx ~= _tbbSelectedBar or _tbbSelectedGroup then EllesmereUI._UndoWipe() end
         _tbbSelectedBar = idx
         _tbbSelectedGroup = nil
         EllesmereUI:RefreshPage(true)
@@ -1826,7 +1826,7 @@ local function InitBuffBarsPage(PP, DB, Refresh, FONT_PATH, GetCDMOptOutline, Ga
                 local src = ns.TBBGroupStyleSource(gid)
                 if src and src ~= cfg then ns.CopyTBBStyle(src, cfg) end
             end
-            EllesmereUI._UndoWipe()
+            if idx ~= _tbbSelectedBar or _tbbSelectedGroup then EllesmereUI._UndoWipe() end
             _tbbSelectedBar = idx
             _tbbSelectedGroup = nil
             ns.BuildTrackedBuffBars()
@@ -2311,7 +2311,7 @@ local function InitBuffBarsPage(PP, DB, Refresh, FONT_PATH, GetCDMOptOutline, Ga
                     end)
                     item:SetScript("OnClick", function()
                         menu:Hide()
-                        EllesmereUI._UndoWipe()
+                        if gid ~= _tbbSelectedGroup then EllesmereUI._UndoWipe() end
                         _tbbSelectedGroup = gid
                         EllesmereUI:RefreshPage(true)
                     end)
@@ -2456,7 +2456,7 @@ local function InitBuffBarsPage(PP, DB, Refresh, FONT_PATH, GetCDMOptOutline, Ga
                             -- No buff yet: go straight to the buff picker.
                             OpenBuffPickerForBar(idx)
                         else
-                            EllesmereUI._UndoWipe()
+                            if idx ~= _tbbSelectedBar or _tbbSelectedGroup then EllesmereUI._UndoWipe() end
                             _tbbSelectedBar = idx
                             _tbbSelectedGroup = nil
                             EllesmereUI:RefreshPage(true)

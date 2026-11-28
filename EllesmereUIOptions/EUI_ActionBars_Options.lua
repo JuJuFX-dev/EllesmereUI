@@ -144,10 +144,7 @@ initFrame:SetScript("OnEvent", function(self)
     -- value consumed at build time. Both ignore non-dropdown keys (Micro/Bag/XP/Rep)
     -- so the selector never blanks.
     EllesmereUI._setActionBarKey = function(key)
-        if barLabels[key] then
-            if key ~= _selectedBarKey then EllesmereUI._UndoWipe() end
-            _selectedBarKey = key
-        end
+        if barLabels[key] then _selectedBarKey = key end
     end
     EllesmereUI._consumePendingActionBarSelect = function()
         local pending = EllesmereUI._pendingActionBarSelect

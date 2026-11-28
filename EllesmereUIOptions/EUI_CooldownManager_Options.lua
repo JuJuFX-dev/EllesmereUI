@@ -902,7 +902,7 @@ initFrame:SetScript("OnEvent", function(self)
                     item:SetScript("OnLeave", function() iLbl:SetTextColor(tDimR,tDimG,tDimB,tDimA); iHl:SetAlpha(isCurrent and selA or 0) end)
                     item:SetScript("OnClick", function()
                         menu:Hide()
-                        EllesmereUI._UndoWipe()
+                        if entryVal ~= bgData.selectedBar then EllesmereUI._UndoWipe() end
                         bgData.selectedBar = entryVal
                         bgData.selectedButton = nil
                         _glowSelectedButton = nil
@@ -1746,7 +1746,6 @@ initFrame:SetScript("OnEvent", function(self)
         if not bars then return end
         for bi, bb in ipairs(bars) do
             if bb.key == keyOrType or bb.barType == keyOrType then
-                EllesmereUI._UndoWipe()
                 optState.selectedCDMBarIndex = bi
                 return
             end

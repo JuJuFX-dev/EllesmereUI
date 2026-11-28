@@ -756,6 +756,7 @@ local function BuildCDMBarsPage(pageName, parent, yOffset)
                             cancelText = "Cancel",
                             onConfirm = function()
                                 ns.RemoveCDMBar(delKey)
+                                EllesmereUI._UndoWipe()
                                 -- Select the cooldowns bar after deletion
                                 optState.selectedCDMBarIndex = 1
                                 for bi, bb in ipairs(bars) do
@@ -811,7 +812,7 @@ local function BuildCDMBarsPage(pageName, parent, yOffset)
                 end)
                 item:SetScript("OnClick", function()
                     menu:Hide()
-                    EllesmereUI._UndoWipe()
+                    if idx ~= optState.selectedCDMBarIndex then EllesmereUI._UndoWipe() end
                     optState.selectedCDMBarIndex = idx
                     -- The rebuild builds this page's header with the page,
                     -- once (no other page's header shows the selection).
@@ -868,6 +869,7 @@ local function BuildCDMBarsPage(pageName, parent, yOffset)
                     addItem:SetScript("OnClick", function()
                         menu:Hide()
                         ns.AddCDMBar(bType)
+                        EllesmereUI._UndoWipe()
                         optState.selectedCDMBarIndex = #p.cdmBars.bars
                         Refresh()
                         -- Other pages' saved headers name the bars; this

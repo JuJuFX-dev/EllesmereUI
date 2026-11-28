@@ -71,13 +71,15 @@ local function SlotOf(frame)
         if n._noUndo then noUndo = true end
         local cc = n._captureCfg
         if not label and (cc or n._labelText) then
-            if cc and cc.noUndo then noUndo = true end
+            -- A slot with a swatch or cog promotes its cfg into a "multi" one; the row's own cfg is its first accessor.
+            local own = cc and cc.accessors and cc.accessors[1] or cc
+            if own and own.noUndo then noUndo = true end
             label = cc and cc.text or n._labelText
             local row = n._isOptionRow and n or (n.GetParent and n:GetParent())
             local hdr = row and row._sectionHeader
             section = hdr and hdr._sectionName
         end
-        if n == _G.EllesmereUIFrame or n._euiOptionsPopup or n == EllesmereUI._colorPickerPopup then
+        if n == _G.EllesmereUIFrame or n == EllesmereUI._colorPickerPopup then
             inPanel = true
         end
         n = (n._euiOptionsPopup and n._owner) or (n.GetParent and n:GetParent()) or nil
@@ -85,6 +87,8 @@ local function SlotOf(frame)
     end
     return label, section, inPanel, noUndo
 end
+
+local function ReadInto(t, get) Pack(t, get()) end
 
 local function Trim()
     while #list > MAX_STEPS do table.remove(list, 1) end
@@ -125,7 +129,9 @@ function EllesmereUI._UndoBegin(frame, get, set, kind, fmt, group)
         or (kind == "slider" and not group and top.set == set and top.t and now - top.t < SLIDER_MERGE)) then
         e = top
     else
-        e = { set = set, get = get, old = Pack({}, get()), new = { n = 0 }, kind = kind, fmt = fmt,
+        local old = {}
+        if not pcall(ReadInto, old, get) then return nil end
+        e = { set = set, get = get, old = old, new = { n = 0 }, kind = kind, fmt = fmt,
               group = group, label = label, section = section,
               module = EllesmereUI:GetActiveModule(), page = EllesmereUI:GetActivePage(),
               profile = EllesmereUI.GetActiveProfileName(), fresh = true }
@@ -142,8 +148,11 @@ function EllesmereUI._UndoEnd(e)
     if e.blocked or e.gen ~= gen then
         drop = true
     else
-        Pack(e.new, e.get())
-        drop = Same(e.old, e.new) ~= false
+        local same
+        if pcall(ReadInto, e.new, e.get) then same = Same(e.old, e.new) end
+        drop = same ~= false
+        -- Not comparable (secret, table) or unreadable: a write undo cannot replay.
+        if same == nil then e.blocked = true end
     end
     e.t = GetTime()
     if drop then
@@ -178,6 +187,12 @@ end)
 for _, name in ipairs({ "SwitchProfile", "ApplyProfileData", "SpecOverrides_OnSpecChanged" }) do
     if EllesmereUI[name] then hooksecurefunc(EllesmereUI, name, Wipe) end
 end
+-- A deep link that pre-selects a unit, bar or type (search, Unlock Mode, What's New):
+-- the page's rows then edit another element. The selector setters themselves stay
+-- free of it, since the search prebuild runs them for every variant.
+hooksecurefunc(EllesmereUI, "NavigateToElementSettings", function(_, _, _, _, preSelectFn)
+    if preSelectFn then Wipe() end
+end)
 
 -------------------------------------------------------------------------------
 --  Text
@@ -248,7 +263,6 @@ end)
 -------------------------------------------------------------------------------
 --  Undo
 -------------------------------------------------------------------------------
-local function ReadInto(e) Pack(scratch, e.get()) end
 
 function EllesmereUI.UndoLast()
     if InCombatLockdown() or applying or SessionActive() then return end
@@ -279,7 +293,7 @@ function EllesmereUI.UndoLast()
     end
     -- Changed since by something that writes outside the widgets (Unlock Mode,
     -- presets, import, Apply to All): never overwrite that.
-    if not pcall(ReadInto, e) or Same(scratch, e.new) ~= true then
+    if not pcall(ReadInto, scratch, e.get) or Same(scratch, e.new) ~= true then
         Notice(EllesmereUI.Lf("%1$s was changed elsewhere and was skipped.", Crumb(e)))
         UpdateButton()
         return

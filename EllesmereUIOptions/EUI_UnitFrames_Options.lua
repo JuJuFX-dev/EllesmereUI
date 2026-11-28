@@ -1167,10 +1167,7 @@ initFrame:SetScript("OnEvent", function(self)
     optState.selectedUnit = "player"
 
     -- External unit pre-select: direct setter + pending override consumed at page build.
-    EllesmereUI._setUnitFrameUnit = function(unit)
-        if unit ~= optState.selectedUnit then EllesmereUI._UndoWipe() end
-        optState.selectedUnit = unit
-    end
+    EllesmereUI._setUnitFrameUnit = function(unit) optState.selectedUnit = unit end
     EllesmereUI._consumePendingUnitSelect = function()
         local pending = EllesmereUI._pendingUnitSelect
         if pending then
@@ -2825,10 +2822,7 @@ initFrame:SetScript("OnEvent", function(self)
     -- Allow Unlock Mode's "Element Options" to pre-select a mini unit before the
     -- Mini Frames page builds (mirrors the Main Frames _setUnitFrameUnit /
     -- _pendingUnitSelect mechanism). Field assignments -- no new locals.
-    EllesmereUI._setMiniUnit = function(unit)
-        if unit ~= selectedMiniUnit then EllesmereUI._UndoWipe() end
-        selectedMiniUnit = unit
-    end
+    EllesmereUI._setMiniUnit = function(unit) selectedMiniUnit = unit end
     EllesmereUI._consumePendingMiniSelect = function()
         local pending = EllesmereUI._pendingMiniSelect
         if pending then
